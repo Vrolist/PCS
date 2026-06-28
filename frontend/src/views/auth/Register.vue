@@ -26,12 +26,29 @@
             <div class="logo-icon"><ServerIcon :size="22" /></div>
             <span class="logo-text">PVE<span class="accent">Scan</span></span>
           </div>
-          <h2 class="brand-title">欢迎回来</h2>
-          <p class="brand-desc">登录后即可管理你的 PVE 集群，查看监控数据与检测报告。</p>
-          <div class="brand-features">
-            <div v-for="item in brandItems" :key="item.label" class="brand-feature">
-              <el-icon :size="16" color="#409eff"><component :is="item.icon" /></el-icon>
-              <span>{{ item.label }}</span>
+          <h2 class="brand-title">开始免费使用</h2>
+          <p class="brand-desc">注册即享完整的 PVE 集群监控能力，无需信用卡。</p>
+          <div class="brand-benefits">
+            <div class="benefit-row">
+              <el-icon :size="18" color="#67c23a"><CircleCheckFilled /></el-icon>
+              <div>
+                <strong>多集群管理</strong>
+                <p>同时管理多个 PVE 集群</p>
+              </div>
+            </div>
+            <div class="benefit-row">
+              <el-icon :size="18" color="#67c23a"><CircleCheckFilled /></el-icon>
+              <div>
+                <strong>实时告警</strong>
+                <p>秒级检测异常并通知</p>
+              </div>
+            </div>
+            <div class="benefit-row">
+              <el-icon :size="18" color="#67c23a"><CircleCheckFilled /></el-icon>
+              <div>
+                <strong>历史趋势</strong>
+                <p>数据归档，趋势可回溯</p>
+              </div>
             </div>
           </div>
         </div>
@@ -40,8 +57,8 @@
       <!-- Right: Form -->
       <div class="auth-form-panel">
         <div class="form-card">
-          <h2 class="form-title">登录账户</h2>
-          <p class="form-subtitle">请输入你的登录信息</p>
+          <h2 class="form-title">创建账号</h2>
+          <p class="form-subtitle">填写以下信息完成注册</p>
 
           <el-form
             ref="formRef"
@@ -50,13 +67,21 @@
             label-width="0"
             size="large"
             class="auth-form"
-            @keyup.enter="handleLogin"
+            @keyup.enter="handleRegister"
           >
             <el-form-item prop="username">
               <el-input
                 v-model="form.username"
                 placeholder="用户名"
                 :prefix-icon="User"
+              />
+            </el-form-item>
+
+            <el-form-item prop="email">
+              <el-input
+                v-model="form.email"
+                placeholder="邮箱（选填）"
+                :prefix-icon="Message"
               />
             </el-form-item>
 
@@ -70,22 +95,32 @@
               />
             </el-form-item>
 
+            <el-form-item prop="confirmPassword">
+              <el-input
+                v-model="form.confirmPassword"
+                type="password"
+                placeholder="确认密码"
+                :prefix-icon="Lock"
+                show-password
+              />
+            </el-form-item>
+
             <el-form-item>
               <el-button
                 type="primary"
                 :loading="loading"
-                @click="handleLogin"
+                @click="handleRegister"
                 class="submit-btn"
                 round
               >
-                {{ loading ? '登录中...' : '登录' }}
+                {{ loading ? '注册中...' : '创建账号' }}
               </el-button>
             </el-form-item>
           </el-form>
 
           <div class="form-footer">
-            <span>还没有账号？</span>
-            <router-link to="/register" class="form-link">立即注册</router-link>
+            <span>已有账号？</span>
+            <router-link to="/login" class="form-link">立即登录</router-link>
           </div>
         </div>
       </div>
@@ -97,44 +132,61 @@
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { User, Lock } from '@element-plus/icons-vue'
-import { useAuthStore } from '@/stores/auth'
+import { User, Lock, Message, CircleCheckFilled } from '@element-plus/icons-vue'
 import { useThemeStore } from '@/stores/theme'
-import { login } from '@/api/auth'
+import { register } from '@/api/auth'
 
 const router = useRouter()
-const authStore = useAuthStore()
 const themeStore = useThemeStore()
 const loading = ref(false)
 const formRef = ref()
 
 const form = reactive({
   username: '',
+  email: '',
   password: '',
+  confirmPassword: '',
 })
 
-const rules = {
-  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-  password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
+const validateConfirm = (_rule: any, value: string, callback: any) => {
+  if (value !== form.password) {
+    callback(new Error('两次输入的密码不一致'))
+  } else {
+    callback()
+  }
 }
 
-const brandItems = [
-  { icon: 'Search', label: '自动发现集群资源' },
-  { icon: 'Monitor', label: '实时监控节点状态' },
-  { icon: 'WarningFilled', label: '智能告警检测' },
-  { icon: 'Connection', label: '多 Agent 架构' },
-]
+const rules = {
+  username: [
+    { required: true, message: '请输入用户名', trigger: 'blur' },
+    { min: 2, max: 32, message: '用户名长度 2-32 位', trigger: 'blur' },
+  ],
+  email: [
+    { type: 'email', message: '邮箱格式不正确', trigger: 'blur' },
+  ],
+  password: [
+    { required: true, message: '请输入密码', trigger: 'blur' },
+    { min: 6, message: '密码至少 6 位', trigger: 'blur' },
+  ],
+  confirmPassword: [
+    { required: true, message: '请确认密码', trigger: 'blur' },
+    { validator: validateConfirm, trigger: 'blur' },
+  ],
+}
 
-async function handleLogin() {
+async function handleRegister() {
   const valid = await formRef.value.validate().catch(() => false)
   if (!valid) return
 
   loading.value = true
   try {
-    const res: any = await login(form)
-    authStore.setToken(res.access)
-    ElMessage.success('登录成功')
-    router.push('/dashboard')
+    await register({
+      username: form.username,
+      password: form.password,
+      email: form.email || undefined,
+    })
+    ElMessage.success('注册成功，请登录')
+    router.push('/login')
   } catch {
     // error handled by request interceptor
   } finally {
@@ -245,7 +297,7 @@ async function handleLogin() {
   display: flex;
   width: 900px;
   max-width: 94vw;
-  min-height: 560px;
+  min-height: 600px;
   border-radius: 20px;
   overflow: hidden;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.12);
@@ -297,17 +349,26 @@ async function handleLogin() {
   line-height: 1.7;
   margin-bottom: 32px;
 }
-.brand-features {
+.brand-benefits {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 20px;
 }
-.brand-feature {
+.benefit-row {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.8);
+  gap: 12px;
+  align-items: flex-start;
+}
+.benefit-row strong {
+  display: block;
+  font-size: 15px;
+  color: #fff;
+  margin-bottom: 2px;
+}
+.benefit-row p {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0;
 }
 
 /* Right Form Panel */
@@ -333,11 +394,11 @@ async function handleLogin() {
 .form-subtitle {
   font-size: 14px;
   color: var(--text-muted);
-  margin-bottom: 32px;
+  margin-bottom: 28px;
 }
 
 .auth-form .el-form-item {
-  margin-bottom: 20px;
+  margin-bottom: 18px;
 }
 
 .submit-btn {
@@ -349,7 +410,7 @@ async function handleLogin() {
 
 .form-footer {
   text-align: center;
-  margin-top: 24px;
+  margin-top: 20px;
   font-size: 14px;
   color: var(--text-muted);
 }

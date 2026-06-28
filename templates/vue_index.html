@@ -1,0 +1,14 @@
+{% load django_vite %}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PVE 集群扫描平台</title>
+  {% vite_hmr_client %}
+</head>
+<body>
+  <div id="app"></div>
+  {% vite_asset 'src/main.ts' %}
+</body>
+</html>

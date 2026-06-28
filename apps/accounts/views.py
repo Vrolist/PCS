@@ -1,3 +1,6 @@
 from django.shortcuts import render
 
-# Create your views here.
+
+def index(request):
+    """Vue SPA 入口页"""
+    return render(request, 'vue_index.html')

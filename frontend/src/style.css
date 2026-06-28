@@ -1,15 +1,88 @@
+:root {
+  /* Light theme */
+  --bg-primary: #f5f7fa;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --bg-navbar: rgba(255, 255, 255, 0.85);
+  --bg-navbar-border: #ebeef5;
+  --text-primary: #303133;
+  --text-secondary: #606266;
+  --text-muted: #909399;
+  --text-heading: #1a1a2e;
+  --border-color: #ebeef5;
+  --hero-bg-start: #e8f4ff;
+  --hero-bg-mid: #f0f0ff;
+  --hero-bg-end: #fff5e8;
+  --card-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
+  --card-hover-shadow: 0 12px 32px rgba(0, 0, 0, 0.06);
+  --footer-bg: #1a1a2e;
+  --step-bg: #409eff;
+  --danger-color: #f56c6c;
+  --success-color: #67c23a;
+  --warning-color: #e6a23c;
+  --primary-color: #409eff;
+}
+
+.dark {
+  --bg-primary: #0a0a1a;
+  --bg-secondary: #14142a;
+  --bg-card: #1a1a3e;
+  --bg-navbar: rgba(15, 15, 35, 0.92);
+  --bg-navbar-border: #2a2a50;
+  --text-primary: #e0e0f0;
+  --text-secondary: #a0a0c0;
+  --text-muted: #707090;
+  --text-heading: #e8e8ff;
+  --border-color: #2a2a50;
+  --hero-bg-start: #0d0d2b;
+  --hero-bg-mid: #1a1035;
+  --hero-bg-end: #0d1a2b;
+  --card-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  --card-hover-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+  --footer-bg: #08081a;
+  --step-bg: #409eff;
+}
+
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-html, body, #app {
-  height: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+html {
+  transition: background-color 0.3s, color 0.3s;
 }
 
-/* Element Plus 自定义 */
-.el-menu--vertical {
-  border-right: none;
+html.dark {
+  background-color: var(--bg-primary);
+  color-scheme: dark;
+}
+
+html, body, #app {
+  height: 100%;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background-color 0.3s, color 0.3s;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+
+/* Element Plus overrides for dark mode */
+.dark .el-menu {
+  --el-menu-bg-color: var(--bg-secondary) !important;
+  --el-menu-text-color: var(--text-secondary) !important;
+}
+.dark .el-card {
+  --el-card-bg-color: var(--bg-card) !important;
+  --el-card-border-color: var(--border-color) !important;
 }

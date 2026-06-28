@@ -23,6 +23,7 @@ THIRD_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
+    'django_vite',
 ]
 
 LOCAL_APPS = [
@@ -108,7 +109,20 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 
 STATIC_URL = 'static/'
-STATICFILES_DIRS = [BASE_DIR / 'static']
+STATICFILES_DIRS = [
+    BASE_DIR / 'static',
+]
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# django-vite
+DJANGO_VITE = {
+    "default": {
+        "dev_mode": DEBUG,
+        "dev_server_host": "127.0.0.1",
+        "dev_server_port": 5173,
+        "static_url_prefix": "frontend",
+    }
+}
 
 # Media files
 MEDIA_URL = 'media/'

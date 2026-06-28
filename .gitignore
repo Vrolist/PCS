@@ -15,6 +15,11 @@ db.sqlite3
 media/
 staticfiles/
 *.mo
+static/frontend/
+
+# Node
+frontend/node_modules/
+frontend/dist/
 
 # IDE
 .idea/

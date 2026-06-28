@@ -1,6 +1,6 @@
 <template>
   <div class="dashboard">
-    <h2 class="page-title">首页总览</h2>
+    <h2 class="page-title">控制台</h2>
 
     <!-- 统计卡片 -->
     <el-row :gutter="20" class="stat-cards">
