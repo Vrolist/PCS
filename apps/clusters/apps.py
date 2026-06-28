@@ -1,0 +1,8 @@
+from django.apps import AppConfig
+
+
+class ClustersConfig(AppConfig):
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'apps.clusters'
+    label = 'clusters'
+    verbose_name = '集群管理'

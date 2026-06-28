@@ -1,0 +1,8 @@
+from django.apps import AppConfig
+
+
+class ScannerConfig(AppConfig):
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'apps.scanner'
+    label = 'scanner'
+    verbose_name = '扫描数据'
