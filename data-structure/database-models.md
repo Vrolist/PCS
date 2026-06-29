@@ -102,6 +102,8 @@
 | `rootfs_avail_gb` | `/nodes/{node}/status` → `rootfs.avail` | ✅ |
 | `swap_total_mb` | `/nodes/{node}/status` → `swap.total` | ✅ |
 | `swap_used_mb` | `/nodes/{node}/status` → `swap.used` | ✅ |
+| `disk_io_delay_ms` | `/nodes/{node}/status` → `diskstat[].io_ms` 汇总 | ✅ |
+| `diskstat` | `/nodes/{node}/status` → `diskstat` 数组 | ✅ |
 | `ip_address` | `/cluster/status` → `ip` 或 DNS 解析 | ⚠️ 需确认来源 |
 | `mac_address` | `/nodes/{node}/network` → 对应接口的 MAC | ⚠️ API 无直接 MAC 字段 |
 | `is_ceph_node` | `/nodes/{node}/ceph` 检查 | ✅ |

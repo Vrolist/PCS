@@ -23,6 +23,8 @@
 | `rootfs_avail_gb` | `rootfs.avail` | bytes ÷ 1073741824 → GB | ✅ |
 | `swap_total_mb` | `swap.total` | bytes ÷ 1048576 → MB | ✅ |
 | `swap_used_mb` | `swap.used` | bytes ÷ 1048576 → MB | ✅ |
+| `disk_io_delay_ms` | `diskstat[].io_ms` | 汇总所有磁盘的 io_ms（毫秒） |
+| `diskstat` | `diskstat` 数组 | JSONField 存储每个磁盘设备的 I/O 统计 |
 | `ip_address` | `/cluster/status` → `ip` | 从集群状态获取 | ⚠️ |
 | `mac_address` | - | Agent shell 命令获取 | ⚠️ |
 | `is_ceph_node` | `/nodes/{node}/ceph` 存在 | 检查响应非空 | ⚠️ |

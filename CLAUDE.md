@@ -18,6 +18,12 @@ pve-cluster-scan/
 │   │   └── admin.py
 │   ├── clusters/           # 集群管理
 │   ├── agent_api/          # Agent 通信 & 多 Agent 管理
+│   │   ├── models.py       #   - AgentInstance / ScanTask
+│   │   ├── serializers.py  #   - Register / Heartbeat / ScanUpload / Tasks
+│   │   ├── views.py        #   - 注册 / 心跳 / 扫描上传 / 任务下发
+│   │   ├── urls.py         #   - /api/agent/ 路由
+│   │   ├── tests.py        #   - 40 个测试用例
+│   │   └── admin.py
 │   └── scanner/            # 扫描数据 & 自动检测
 ├── frontend/               # Vue 3 + Vite 前端
 │   ├── src/
@@ -55,6 +61,16 @@ pve-cluster-scan/
 │   │   └── style.css                 # CSS 变量 / 亮暗色值
 │   ├── package.json
 │   └── vite.config.ts
+├── agent/                    # Agent CLI 工具（独立 Python 包）
+│   ├── pyproject.toml          # 打包配置
+│   └── agent/
+│       ├── __init__.py
+│       ├── cli.py              # CLI 入口（click）
+│       ├── config.py           # 配置管理（~/.config/pve-agent/config.yaml）
+│       ├── pve_client.py       # PVE API 客户端
+│       ├── scanner.py          # 数据采集 + 单位转换
+│       ├── uploader.py         # 上报到 Django 平台
+│       └── scheduler.py        # 心跳 + 扫描调度器
 ├── data-structure/           # PVE 数据结构分析文档
 │   ├── README.md             # 分析说明与 License 声明
 │   ├── database-models.md    # 数据库模型与 PVE 字段映射
@@ -114,6 +130,53 @@ python manage.py makemigrations <app_name>
 
 # 执行迁移
 python manage.py migrate
+
+# 运行测试
+python manage.py test apps.agent_api --verbosity=2
+```
+
+## Agent CLI 工具
+
+独立 Python 包，安装在 PVE 节点上运行。
+
+```bash
+# 安装
+cd agent && pip install -e .
+
+# 初始化（注册到平台）
+pve-agent init \
+  --platform-url http://your-platform:8000 \
+  --token <agent_token> \
+  --pve-endpoint https://192.168.1.100:8006 \
+  --pve-username root@pam \
+  --pve-password xxx
+
+# 启动守护进程（心跳 60s + 扫描 3600s）
+pve-agent start
+
+# 单次扫描
+pve-agent scan
+
+# 查看状态
+pve-agent status
+
+# 修改配置
+pve-agent config --scan-interval 1800
+```
+
+**配置文件**：`~/.config/pve-agent/config.yaml`
+
+**执行流程**：
+```
+pve-agent start
+  → PVE API 认证
+  → 心跳循环 (每 60s)
+  → 扫描循环 (每 3600s)
+    → 调用 PVE API 采集所有节点
+    → 数据清洗 (bytes→MB/GB, CPU→%)
+    → POST /api/agent/scan/upload/
+    → Django 事务性入库 (10 个模型)
+    → 检查下发任务
 ```
 
 ## API 端点
@@ -139,6 +202,46 @@ POST /api/auth/login/
 ```
 1. POST /api/auth/password-reset/  →  {"email": "..."}  → 返回 dev_code（开发模式）
 2. POST /api/auth/password-reset/confirm/  →  {"code": "...", "new_password": "...", "new_password2": "..."}
+```
+
+### Agent 通信 `/api/agent/`
+
+| 方法 | 路径 | 说明 | 认证 |
+|------|------|------|------|
+| POST | `/api/agent/register/` | Agent 注册（agent_token 鉴权） | ❌ |
+| POST | `/api/agent/heartbeat/` | Agent 心跳上报 | ❌ |
+| POST | `/api/agent/scan/upload/` | 扫描数据上传入库 | ❌ |
+| GET | `/api/agent/tasks/` | 查询下发任务 | ❌ |
+
+**Agent 注册：**
+```json
+POST /api/agent/register/
+{"agent_token": "...", "pve_api_endpoint": "https://...", "pve_username": "root@pam", "pve_password": "...", "hostname": "pve-1", "scan_interval": 3600}
+→ {"agent_id": "hex-uuid", "scan_interval": 3600, "status": "online"}
+```
+
+**心跳上报：**
+```json
+POST /api/agent/heartbeat/
+{"agent_id": "hex-uuid", "status": "online", "current_task": ""}
+→ {"ok": true}
+```
+
+**扫描上传：**
+```json
+POST /api/agent/scan/upload/
+{
+  "agent_id": "hex-uuid", "cluster_id": "int", "scanned_at": "ISO8601", "version": "pve-manager/8.2.4",
+  "nodes": [{ "name": "pve-1", "cpu_load": 35.0, "disk_io_delay_ms": 12.5, "diskstat": [...], "vms": [...], "containers": [...], "storages": [...], "networks": [...] }],
+  "ceph": { "health": "HEALTH_OK", "total_osds": 12, ... }
+}
+→ {"ok": true, "scan_task_id": 1}
+```
+
+**任务查询：**
+```
+GET /api/agent/tasks/?agent_id=hex-uuid
+→ [{"id": 1, "task_type": "full_scan", "status": "running", "created_at": "..."}]
 ```
 
 ## 页面路由
@@ -202,7 +305,7 @@ POST /api/auth/login/
 - **ScanTask** - 每次扫描任务记录
 
 ### scanner (扫描数据与检测)
-- **ClusterNode** - PVE 节点（CPU/内存/磁盘/网络）
+- **ClusterNode** - PVE 节点（CPU/内存/磁盘/磁盘I/O延迟/网络）
 - **VM** - 虚拟机 QEMU
 - **LXC** - LXC 容器
 - **Storage** - 存储
@@ -244,7 +347,7 @@ GET  /cluster/ceph/status        → Ceph 健康状态 (如有)
 
 | DB 模型 | API 端点 | 核心字段映射 |
 |---------|---------|-------------|
-| ClusterNode | `/nodes/{node}/status` | `cpu`(0~1) → `cpu_load`, `memory.total`(bytes→MB), `rootfs.total`(bytes→GB), `uptime` |
+| ClusterNode | `/nodes/{node}/status` | `cpu`(0~1) → `cpu_load`, `memory.total`(bytes→MB), `rootfs.total`(bytes→GB), `diskstat[].io_ms` → `disk_io_delay_ms`, `uptime` |
 | VM | `/nodes/{node}/qemu` | `vmid`, `maxcpu`(cores), `cpu`(0~1), `maxmem`(bytes→MB), `netin/netout`(bps) |
 | LXC | `/nodes/{node}/lxc` | `vmid`, `maxcpu`, `cpu`(0~1), `maxmem`(bytes→MB), `maxswap`(bytes→MB) |
 | Storage | `/nodes/{node}/storage` | `storage`, `type`, `used/available/total`(bytes→GB), `content`, `shared` |
@@ -294,10 +397,11 @@ PVE 节点 (Agent) → PVE API (HTTPS :8006) → Agent 数据清洗 → POST /ap
 
 一个集群可部署多个 AgentInstance，每个 Agent 独立运行并上报数据：
 
-1. Agent 安装时向 `/api/agent/register/` 注册，获得 agent_id
-2. 每隔 N 秒发送心跳 `POST /api/agent/heartbeat/`
-3. 定时执行扫描任务，上报到 `POST /api/agent/scan/upload/`
-4. Web 端可向特定 Agent 下发任务 `GET /api/agent/tasks/`
+1. Agent 安装时向 `/api/agent/register/` 注册，获得 agent_id（已有实现）
+2. 每隔 60s 发送心跳 `POST /api/agent/heartbeat/`（已有实现）
+3. 定时执行扫描任务，上报到 `POST /api/agent/scan/upload/`（已有实现）
+4. Web 端可向特定 Agent 下发任务 `GET /api/agent/tasks/`（已有实现）
+5. 后端 40 个测试用例覆盖完整流程：`python manage.py test apps.agent_api`
 
 ## 管理员
 
@@ -310,9 +414,9 @@ PVE 节点 (Agent) → PVE API (HTTPS :8006) → Agent 数据清洗 → POST /ap
 1. ~~认证 API~~ ✅ 已完成（登录/注册/密码重置）
 2. ~~前端页面框架~~ ✅ 已完成（7 个后台页面 + 路由 + 侧边栏）
 3. ~~仪表盘 UI~~ ✅ 已完成（统计卡片 + 告警列表 + 趋势图 + 节点表格）
-4. 集群 CRUD API + 前端对接
-5. Agent CLI 工具开发
-6. Agent 上报接口与数据入库
+4. ~~Agent 上报接口与数据入库~~ ✅ 已完成（注册/心跳/扫描上传/任务下发 + 40 个测试）
+5. ~~Agent CLI 工具~~ ✅ 已完成（pve-agent：init/start/scan/status/config）
+6. 集群 CRUD API + 前端对接
 7. 自动检测引擎
 8. 仪表盘真实数据接入
 9. 各管理页面功能实现（节点/虚拟机/容器/告警等）

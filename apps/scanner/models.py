@@ -38,6 +38,12 @@ class ClusterNode(models.Model):
     swap_total_mb = models.BigIntegerField("Swap总量(MB)", null=True, blank=True)
     swap_used_mb = models.BigIntegerField("Swap已用(MB)", null=True, blank=True)
 
+    # 磁盘 I/O
+    disk_io_delay_ms = models.FloatField("I/O延迟(ms)", null=True, blank=True,
+        help_text="节点级 I/O 延迟（毫秒），从 diskstat 汇总")
+    diskstat = models.JSONField("磁盘I/O统计", default=list, blank=True,
+        help_text='每个磁盘设备的 I/O 统计，如 [{"dev":"sda","read":123,"write":456,"read_ios":10,"write_ios":20,"io_ms":50}]')
+
     # 网络
     ip_address = models.GenericIPAddressField("IP地址", null=True, blank=True)
     mac_address = models.CharField("MAC地址", max_length=32, blank=True)

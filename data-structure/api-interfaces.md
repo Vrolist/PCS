@@ -84,7 +84,17 @@ PVE 版本信息。
 
 ### `GET /nodes/{node}/status`
 
-节点详细状态（CPU/内存/磁盘/Swap/内核/运行时长）。
+节点详细状态（CPU/内存/磁盘/Swap/磁盘I/O统计/内核/运行时长）。
+
+**返回字段中与 I/O 延迟相关的 `diskstat` 数组：**
+```json
+{
+  "diskstat": [
+    {"dev": "sda", "read": 1234567890, "write": 9876543210, "read_ios": 50000, "write_ios": 80000, "io_ms": 12.5}
+  ]
+}
+```
+- `io_ms`: I/O 等待时间（毫秒），即该磁盘设备的 I/O 延迟
 
 ### `GET /nodes/{node}/config`
 

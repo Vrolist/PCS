@@ -134,6 +134,10 @@ Agent 扫描完成后，通过 `POST /api/agent/scan/upload/` 上传数据，格
       "rootfs_avail_gb": 54.8,
       "swap_total_mb": 4096,
       "swap_used_mb": 128,
+      "disk_io_delay_ms": 12.5,
+      "diskstat": [
+        {"dev": "sda", "read": 1234567890, "write": 9876543210, "read_ios": 50000, "write_ios": 80000, "io_ms": 12.5}
+      ],
       "ip_address": "192.168.1.10",
       "uptime_seconds": 1209600,
       "is_ceph_node": true,
