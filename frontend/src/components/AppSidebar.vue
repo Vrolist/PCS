@@ -25,7 +25,7 @@
     </div>
 
     <div class="menu-section">
-      <span v-if="!appStore.sidebarCollapsed" class="menu-label">导航</span>
+      <span v-if="!appStore.sidebarCollapsed" class="menu-label">集群</span>
     </div>
 
     <el-menu-item index="/dashboard" class="sidebar-item">

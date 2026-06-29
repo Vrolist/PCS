@@ -21,11 +21,23 @@
           <span class="username">{{ authStore.user?.username || 'buladou' }}</span>
         </div>
         <template #dropdown>
-          <el-dropdown-menu>
-            <el-dropdown-item @click="$router.push('/settings')">用户信息</el-dropdown-item>
-            <el-dropdown-item @click="$router.push('/forgot-password')">修改密码</el-dropdown-item>
-            <el-dropdown-item divided v-if="authStore.user?.is_superuser" @click="goAdmin">管理后台</el-dropdown-item>
-            <el-dropdown-item divided @click="handleLogout">退出登录</el-dropdown-item>
+          <el-dropdown-menu class="header-dropdown">
+            <el-dropdown-item @click="$router.push('/settings')">
+              <el-icon><User /></el-icon>
+              <span>用户信息</span>
+            </el-dropdown-item>
+            <el-dropdown-item @click="$router.push('/change-password')">
+              <el-icon><Key /></el-icon>
+              <span>修改密码</span>
+            </el-dropdown-item>
+            <el-dropdown-item divided v-if="authStore.user?.is_superuser" @click="goAdmin">
+              <el-icon><Setting /></el-icon>
+              <span>管理后台</span>
+            </el-dropdown-item>
+            <el-dropdown-item divided @click="handleLogout">
+              <el-icon><SwitchButton /></el-icon>
+              <span>退出登录</span>
+            </el-dropdown-item>
           </el-dropdown-menu>
         </template>
       </el-dropdown>
@@ -39,6 +51,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
+import { createAdminSession } from '@/api/auth'
+import { Fold, Expand, Sunny, Moon, User, Key, Setting, SwitchButton } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -59,7 +73,12 @@ function handleLogout() {
   router.push('/login')
 }
 
-function goAdmin() {
+async function goAdmin() {
+  try {
+    await createAdminSession()
+  } catch {
+    // session 创建失败也允许跳转（可能已存在）
+  }
   window.open('/admin/', '_blank')
 }
 </script>
@@ -135,5 +154,39 @@ function goAdmin() {
   font-size: 13px;
   color: var(--text-secondary);
   font-weight: 500;
+}
+
+/* ===== 下拉菜单美化 ===== */
+:deep(.header-dropdown) {
+  min-width: 160px;
+  border-radius: 12px;
+  padding: 6px;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+:deep(.header-dropdown .el-dropdown-menu__item) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  transition: all 0.15s ease;
+}
+:deep(.header-dropdown .el-dropdown-menu__item .el-icon) {
+  font-size: 16px;
+  color: var(--text-muted);
+}
+:deep(.header-dropdown .el-dropdown-menu__item:hover) {
+  background: rgba(64, 158, 255, 0.08);
+  color: var(--primary-color);
+}
+:deep(.header-dropdown .el-dropdown-menu__item:hover .el-icon) {
+  color: var(--primary-color);
+}
+:deep(.header-dropdown .el-dropdown-menu__item--divided) {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color);
 }
 </style>

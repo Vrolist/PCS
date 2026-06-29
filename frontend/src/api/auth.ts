@@ -19,3 +19,11 @@ export function passwordReset(data: { email: string }) {
 export function passwordResetConfirm(data: { code: string; new_password: string; new_password2: string }) {
   return request.post('/auth/password-reset/confirm/', data)
 }
+
+export function changePassword(data: { new_password: string; new_password2: string }) {
+  return request.post('/auth/change-password/', data)
+}
+
+export function createAdminSession() {
+  return request.post('/auth/create-admin-session/', {}, { withCredentials: true })
+}

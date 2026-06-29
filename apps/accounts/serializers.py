@@ -88,3 +88,14 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
             raise serializers.ValidationError("验证码已过期或已使用")
         data["reset_code"] = reset_code
         return data
+
+
+class ChangePasswordSerializer(serializers.Serializer):
+    """登录状态下修改密码"""
+    new_password = serializers.CharField(write_only=True, validators=[validate_password])
+    new_password2 = serializers.CharField(write_only=True, label="确认新密码")
+
+    def validate(self, data):
+        if data["new_password"] != data["new_password2"]:
+            raise serializers.ValidationError("两次密码不一致")
+        return data

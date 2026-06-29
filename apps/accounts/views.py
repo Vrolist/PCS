@@ -14,9 +14,32 @@ from .serializers import (
     UserSerializer,
     PasswordResetSerializer,
     PasswordResetConfirmSerializer,
+    ChangePasswordSerializer,
 )
 
 logger = logging.getLogger(__name__)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def change_password_view(request):
+    """登录用户修改密码"""
+    serializer = ChangePasswordSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    request.user.set_password(serializer.validated_data["new_password"])
+    request.user.save()
+    return Response({"detail": "密码修改成功"})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def create_admin_session_view(request):
+    """超级管理员点击「管理后台」时，创建 Django session 以便免登录进入 /admin/"""
+    if not request.user.is_superuser:
+        return Response({"detail": "无权限"}, status=status.HTTP_403_FORBIDDEN)
+    from django.contrib.auth import login
+    login(request, request.user)
+    return Response({"detail": "session 已创建"})
 
 
 def index(request):

@@ -134,8 +134,16 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
 # CORS
-CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOWED_ORIGINS = [
+    # localhost
+    'http://localhost:5173',
+    'http://localhost:8000',
+    # 127.0.0.1
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:8000',
+]
+CORS_ALLOW_ALL_ORIGINS = DEBUG  # 开发模式允许所有来源（支持 192.168 等动态 IP）
 
 
 # REST Framework

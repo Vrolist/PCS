@@ -37,6 +37,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '控制台', icon: 'Monitor' },
       },
       {
+        path: 'change-password',
+        name: 'ChangePassword',
+        component: () => import('@/views/dashboard/ChangePassword.vue'),
+        meta: { title: '修改密码', icon: 'Key' },
+      },
+      {
         path: 'clusters',
         name: 'Clusters',
         component: () => import('@/views/clusters/index.vue'),
