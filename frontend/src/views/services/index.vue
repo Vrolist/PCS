@@ -6,7 +6,9 @@
         <p class="page-desc">管理远程运维服务订阅</p>
       </div>
     </div>
-    <el-empty description="暂无运维服务订阅" />
+    <el-card shadow="hover">
+      <el-empty description="暂无运维服务订阅" />
+    </el-card>
   </div>
 </template>
 
@@ -16,6 +18,7 @@
 <style scoped>
 .page-container {
   max-width: 1400px;
+  margin: 0 auto;
 }
 .page-header {
   display: flex;

@@ -6,7 +6,9 @@
         <p class="page-desc">查看集群告警记录和处理状态</p>
       </div>
     </div>
-    <el-empty description="暂无告警记录" />
+    <el-card shadow="hover">
+      <el-empty description="暂无告警记录" />
+    </el-card>
   </div>
 </template>
 
@@ -16,6 +18,7 @@
 <style scoped>
 .page-container {
   max-width: 1400px;
+  margin: 0 auto;
 }
 .page-header {
   display: flex;

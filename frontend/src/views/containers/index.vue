@@ -6,7 +6,9 @@
         <p class="page-desc">查看和管理所有 PVE LXC 容器</p>
       </div>
     </div>
-    <el-empty description="暂无容器数据，请先部署 Agent 采集数据" />
+    <el-card shadow="hover">
+      <el-empty description="暂无容器数据，请先部署 Agent 采集数据" />
+    </el-card>
   </div>
 </template>
 
@@ -16,6 +18,7 @@
 <style scoped>
 .page-container {
   max-width: 1400px;
+  margin: 0 auto;
 }
 .page-header {
   display: flex;

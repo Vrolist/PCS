@@ -19,7 +19,8 @@ const showCreate = ref(false)
 
 <style scoped>
 .clusters-page {
-  max-width: 1200px;
+  max-width: 1400px;
+  margin: 0 auto;
 }
 .page-header {
   display: flex;
