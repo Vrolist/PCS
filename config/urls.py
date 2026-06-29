@@ -9,6 +9,7 @@ urlpatterns = [
     path('api/agent/', include('apps.agent_api.urls')),
     path('api/clusters/', include('apps.clusters.urls')),
     path('api/dashboard/', include('apps.dashboard.urls')),
+    path('api/scanner/', include('apps.scanner.urls')),
 ]
 
 # 所有非 API 路径都指向 Vue SPA

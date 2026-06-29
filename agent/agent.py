@@ -271,7 +271,7 @@ def _scan_node(pve, name, info):
 
     return {
         "name": name,
-        "status": status.get("status", "unknown"),
+        "status": info.get("status", "unknown"),
         "pve_version": status.get("pveversion", ""),
         "kernel_version": status.get("kversion", ""),
         "cpu_model": cpuinfo.get("model", ""),
