@@ -17,3 +17,17 @@
 - Agent CLI 工具开发
 - API 序列化器实现
 - 数据采集与入库逻辑
+
+## 兼容性评估
+
+数据库模型与 PVE API 整体匹配度约 **90%**，核心数据（节点、VM、LXC、Ceph）接入无障碍。
+
+### 已知问题
+
+| 问题 | 影响 | 建议修复 |
+|------|------|---------|
+| `rootfs_*_gb`、`disk_gb`、Storage `*_gb` 使用 `BigIntegerField` | 存储容量转 GB 后浮点数被截断（如 48.5→48） | 改为 `FloatField` 或改用 MB 单位 + `BigIntegerField` |
+| Storage 缺少 `enabled` 字段 | PVE API 返回此字段，模型未收录 | 新增 `BooleanField(default=True)` |
+| NetworkInterface 缺少 `mtu`/`bridge_ports`/`bond_mode` | 无法完整存储 Bridge/Bond 配置 | 按需补充 |
+
+> 详细分析见 [database-models.md](database-models.md) 改进建议章节和 [field-mapping.md](field-mapping.md) 通用转换规则。

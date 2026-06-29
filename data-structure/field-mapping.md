@@ -149,3 +149,5 @@
 | CPU 0~1 | 百分比 (FloatField) | `round(value * 100, 1)` |
 | 0/1 integer | BooleanField | `bool(value)` |
 | Unix 时间戳 | DateTimeField | `datetime.fromtimestamp(value)` |
+
+> ⚠️ **精度警告**：当前数据库模型中 `ClusterNode.rootfs_*_gb`、`VM.disk_gb/max_disk_gb`、`Storage.*_gb` 实际使用了 `BigIntegerField`，但磁盘容量转 GB 后为浮点数（如 48.5GB），会导致小数被截断。建议将这些字段改为 `FloatField`，或统一用 MB 单位存储（`BigIntegerField` 存储 MB 整数不会丢失精度）。

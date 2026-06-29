@@ -22,19 +22,31 @@ pve-cluster-scan/
 ├── frontend/               # Vue 3 + Vite 前端
 │   ├── src/
 │   │   ├── views/
-│   │   │   ├── Home.vue              # Landing Page
-│   │   │   ├── auth/Login.vue        # 登录（用户名/邮箱通用）
-│   │   │   ├── auth/Register.vue     # 注册（邮箱必填）
-│   │   │   ├── auth/ForgotPassword.vue # 找回密码（两步流程）
-│   │   │   ├── dashboard/            # 控制台
-│   │   │   └── clusters/             # 集群管理
+│   │   │   ├── Home.vue                       # Landing Page
+│   │   │   ├── auth/
+│   │   │   │   ├── Login.vue                  # 登录（用户名/邮箱通用）
+│   │   │   │   ├── Register.vue               # 注册（邮箱必填）
+│   │   │   │   └── ForgotPassword.vue         # 找回密码（两步流程）
+│   │   │   ├── dashboard/
+│   │   │   │   ├── index.vue                  # 控制台主布局
+│   │   │   │   ├── StatCards.vue              # 统计卡片组件（水平压缩）
+│   │   │   │   ├── AlertList.vue              # 最近告警列表（固定高度+滚动）
+│   │   │   │   ├── TrendChart.vue             # 资源趋势 ECharts 折线图
+│   │   │   │   └── NodeTable.vue              # 节点详情表格
+│   │   │   ├── clusters/index.vue             # 集群管理（空状态+el-card）
+│   │   │   ├── nodes/index.vue                # 节点管理（空状态+el-card）
+│   │   │   ├── vms/index.vue                  # 虚拟机（空状态+el-card）
+│   │   │   ├── containers/index.vue           # 容器（空状态+el-card）
+│   │   │   ├── alerts/index.vue               # 告警中心（空状态+el-card）
+│   │   │   ├── services/index.vue             # 运维服务（空状态+el-card）
+│   │   │   └── settings/index.vue             # 系统设置（空状态+el-card）
 │   │   ├── components/
-│   │   │   ├── AppSidebar.vue        # 侧边栏导航
+│   │   │   ├── AppSidebar.vue        # 侧边栏导航（含折叠图标居中）
 │   │   │   └── AppHeader.vue         # 顶栏（含主题切换）
-│   │   ├── layouts/MainLayout.vue
+│   │   ├── layouts/MainLayout.vue    # 后台主布局（侧边栏+顶栏+内容区）
 │   │   ├── router/index.ts           # 路由 + 守卫
 │   │   ├── stores/
-│   │   │   ├── app.ts                # 全局状态
+│   │   │   ├── app.ts                # 全局状态（侧边栏折叠）
 │   │   │   ├── auth.ts               # JWT 认证
 │   │   │   └── theme.ts              # 亮暗主题（默认暗色）
 │   │   ├── api/
@@ -43,6 +55,12 @@ pve-cluster-scan/
 │   │   └── style.css                 # CSS 变量 / 亮暗色值
 │   ├── package.json
 │   └── vite.config.ts
+├── data-structure/           # PVE 数据结构分析文档
+│   ├── README.md             # 分析说明与 License 声明
+│   ├── database-models.md    # 数据库模型与 PVE 字段映射
+│   ├── api-interfaces.md     # PVE API 接口清单
+│   ├── field-mapping.md      # 字段对照表
+│   └── data-flow.md          # 数据采集与入库流程
 ├── templates/
 │   └── vue_index.html                # Django 模板（django-vite 入口）
 ├── static/                           # Vite 构建输出
@@ -58,6 +76,7 @@ pve-cluster-scan/
 | 后端 | Python 3.12 + Django 5.0 + DRF |
 | 前端 | Vue 3 + TypeScript + Vite |
 | UI | Element Plus + Pinia + Vue Router |
+| 图表 | ECharts + vue-echarts |
 | 集成 | django-vite（Vite HMR 内嵌到 Django 模板） |
 | 认证 | SimpleJWT（access + refresh token） |
 | 主题 | CSS 变量 + Element Plus dark 模式 |
@@ -130,9 +149,33 @@ POST /api/auth/login/
 | `/login` | 登录 | 左右分栏布局 + 品牌展示 | ❌ |
 | `/register` | 注册 | 表单校验（用户名/邮箱/密码/确认） | ❌ |
 | `/forgot-password` | 找回密码 | 两步流程：邮箱→验证码+新密码 | ❌ |
-| `/dashboard` | 控制台 | 统计卡片 + 集群列表 | ✅ |
+| `/dashboard` | 控制台 | 统计卡片 + 告警+趋势 + 节点表格 | ✅ |
 | `/clusters` | 集群管理 | 集群 CRUD（待实现） | ✅ |
+| `/nodes` | 节点管理 | PVE 节点监控（待实现） | ✅ |
+| `/vms` | 虚拟机 | 虚拟机实例管理（待实现） | ✅ |
+| `/containers` | 容器 | LXC 容器管理（待实现） | ✅ |
+| `/alerts` | 告警中心 | 告警记录与处理（待实现） | ✅ |
+| `/services` | 运维服务 | 远程运维订阅（待实现） | ✅ |
+| `/settings` | 系统设置 | 账户和系统配置（待实现） | ✅ |
 | `/admin/` | Django Admin | 后台管理 | 管理员 |
+
+## 控制台布局（dashboard）
+
+```
+┌─────────────────────────────────────────────┐
+│  控制台                                        │
+├──────────┬──────────┬──────────┬─────────────┤
+│ 集群总数  │ 在线节点  │ 告警数    │ Agent 数    │  ← StatCards（水平排列）
+├──────────┴──────────┴──────────┴─────────────┤
+│ ┌──────────┐ ┌──────────────────────────────┐│
+│ │ 最近告警   │ │ 资源趋势 (ECharts)           ││  ← dash-row-split（grid）
+│ │ (固定高度) │ │ CPU / 内存使用率折线         ││
+│ │ 可滚动    │ │ 7d / 15d 切换               ││
+│ └──────────┘ └──────────────────────────────┘│
+├──────────────────────────────────────────────┤
+│  节点详情（表格：名称/CPU/内存/磁盘/IP/版本/状态）│  ← NodeTable
+└──────────────────────────────────────────────┘
+```
 
 ## 亮暗主题
 
@@ -141,6 +184,7 @@ POST /api/auth/login/
 - 通过 CSS 变量 (`--bg-primary`, `--bg-secondary` 等) 实现双色值
 - 存入 localStorage，用户偏好持久化
 - 相邻组件用交替背景色形成明显分层（`bg-primary` / `bg-secondary`）
+- 侧边栏使用独立渐变背景色（亮色/暗色各一套）
 
 ## 数据模型总览
 
@@ -168,6 +212,84 @@ POST /api/auth/login/
 - **DetectionRule** - 自动检测规则配置
 - **DetectionResult** - 检测结果
 
+> 完整 PVE 数据结构分析文档见 `data-structure/` 目录。
+
+## PVE 数据结构参考
+
+### PVE API 认证
+
+```
+POST https://{host}:8006/api2/json/access/ticket
+{"username": "root@pam", "password": "xxx"}
+→ {"data": {"ticket": "PVE:...", "CSRFPreventionToken": "..."}}
+```
+
+### Agent 扫描流程（调用 PVE API）
+
+```
+POST /access/ticket → 获取票据
+GET  /version                    → 集群版本
+GET  /cluster/status             → 节点列表
+for each node:
+  GET /nodes/{node}/status       → 节点状态 (CPU/内存/磁盘/Swap/运行时长)
+  GET /nodes/{node}/config       → 节点配置
+  GET /nodes/{node}/qemu         → VM 列表 (含实时性能)
+  GET /nodes/{node}/lxc          → LXC 列表
+  GET /nodes/{node}/storage      → 存储列表
+  GET /nodes/{node}/network      → 网络接口
+GET  /cluster/ceph/status        → Ceph 健康状态 (如有)
+```
+
+### 关键字段映射（PVE API → DB）
+
+| DB 模型 | API 端点 | 核心字段映射 |
+|---------|---------|-------------|
+| ClusterNode | `/nodes/{node}/status` | `cpu`(0~1) → `cpu_load`, `memory.total`(bytes→MB), `rootfs.total`(bytes→GB), `uptime` |
+| VM | `/nodes/{node}/qemu` | `vmid`, `maxcpu`(cores), `cpu`(0~1), `maxmem`(bytes→MB), `netin/netout`(bps) |
+| LXC | `/nodes/{node}/lxc` | `vmid`, `maxcpu`, `cpu`(0~1), `maxmem`(bytes→MB), `maxswap`(bytes→MB) |
+| Storage | `/nodes/{node}/storage` | `storage`, `type`, `used/available/total`(bytes→GB), `content`, `shared` |
+| NetworkInterface | `/nodes/{node}/network` | `iface`(→name), `type`, `address`, `speed` |
+| CephStatus | `/cluster/ceph/status` | `health.status`, `osd.nr/up/in`, `pgmap.bytes_*`(bytes→GB) |
+
+### 单位转换规则
+
+| 原始 | DB | 公式 |
+|------|-----|------|
+| bytes (内存) | MB | `value // 1048576` |
+| bytes (磁盘) | GB | `round(value / 1073741824, 2)` |
+| CPU 0~1 | 百分比 | `round(value * 100, 1)` |
+
+### ⚠️ 已知兼容性问题
+
+1. **字段类型精度**：`ClusterNode.rootfs_*_gb`、`VM.disk_gb`、`Storage.*_gb` 使用了 `BigIntegerField`，但 bytes→GB 转换后为浮点数（如 48.5GB），会导致小数截断。**建议改为 `FloatField`**。
+2. **缺字段**：Storage 缺少 `enabled` 字段、NetworkInterface 缺少 `mtu`/`bridge_ports`/`bond_mode`（PVE API 均有返回）。
+3. **mac_address**：PVE API 不直接暴露 MAC 地址，需 Agent 通过 shell 命令获取。
+
+### 数据上传格式（Agent → Django API）
+
+```json
+POST /api/agent/scan/upload/
+{
+  "agent_id": "uuid",
+  "cluster_id": "uuid",
+  "scanned_at": "2026-06-29T10:30:00Z",
+  "version": "pve-manager/8.2.4",
+  "nodes": [{ "name": "pve-1", "status": "online", "cpu_load": 0.35, "vms": [...], "containers": [...], "storages": [...], "networks": [...] }],
+  "ceph": { "health": "HEALTH_OK", "total_osds": 12, ... }
+}
+```
+
+### 数据流
+
+```
+PVE 节点 (Agent) → PVE API (HTTPS :8006) → Agent 数据清洗 → POST /api/agent/scan/upload/
+→ Django 入库 (ClusterNode/VM/LXC/Storage/NetworkInterface/CephStatus/ScanHistory)
+→ 触发自动检测 (DetectionRule → DetectionResult)
+→ Web API → Vue 前端展示
+```
+
+
+
 ## 多 Agent 架构
 
 一个集群可部署多个 AgentInstance，每个 Agent 独立运行并上报数据：
@@ -186,8 +308,11 @@ POST /api/auth/login/
 ## 下一步待实现
 
 1. ~~认证 API~~ ✅ 已完成（登录/注册/密码重置）
-2. 集群 CRUD API + 前端页面
-3. Agent CLI 工具
-4. Agent 上报接口与数据入库
-5. 自动检测引擎
-6. 仪表盘数据可视化（ECharts）
+2. ~~前端页面框架~~ ✅ 已完成（7 个后台页面 + 路由 + 侧边栏）
+3. ~~仪表盘 UI~~ ✅ 已完成（统计卡片 + 告警列表 + 趋势图 + 节点表格）
+4. 集群 CRUD API + 前端对接
+5. Agent CLI 工具开发
+6. Agent 上报接口与数据入库
+7. 自动检测引擎
+8. 仪表盘真实数据接入
+9. 各管理页面功能实现（节点/虚拟机/容器/告警等）

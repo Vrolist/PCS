@@ -113,6 +113,8 @@
 - `mac_address`: PVE API `/nodes/{node}/network` 不直接返回 MAC 地址，需通过 `ip addr` 等方式获取或从 `/nodes/{node}/network` 的某些类型接口中提取（非标准）
 - `is_ha_node`: HA 信息可通过 `/cluster/ha/status` 获取
 
+**精度问题**: `rootfs_total_gb`、`rootfs_used_gb`、`rootfs_avail_gb` 当前使用 `BigIntegerField`，但 bytes→GB 转换后会产生浮点数（如 48.5GB），会导致小数截断。建议改为 `FloatField`。
+
 #### VM (QEMU 虚拟机)
 | 字段 | 数据来源 | 状态 |
 |------|---------|------|
@@ -141,6 +143,8 @@
 
 **评价**: 字段覆盖全面，与 PVE API 高度匹配。
 
+**精度问题**: `disk_gb`、`max_disk_gb` 当前使用 `BigIntegerField`，bytes→GB 转换后浮点数会被截断，建议改为 `FloatField`。
+
 #### LXC (容器)
 | 字段 | 数据来源 | 状态 |
 |------|---------|------|
@@ -165,7 +169,7 @@
 |------|---------|------|
 | `storage_name` | `/nodes/{node}/storage` → `storage` | ✅ |
 | `type` | `/nodes/{node}/storage` → `type` | ✅ |
-| `status` | / | ⚠️ 新增字段建议 |
+| `status` | / | ✅ 已有 (available/unavailable) |
 | `active` | `/nodes/{node}/storage` → `active` | ✅ |
 | `used_gb` | `/nodes/{node}/storage` → `used` (bytes→GB) | ✅ |
 | `avail_gb` | `/nodes/{node}/storage` → `available` (bytes→GB) | ✅ |
@@ -175,6 +179,8 @@
 | `shared` | `/nodes/{node}/storage` → `shared` | ✅ |
 
 **建议**: Storage 模型中缺少 `enabled` 字段，PVE API 返回此字段但当前模型未收录。
+
+**精度问题**: `used_gb`、`avail_gb`、`total_gb` 当前使用 `BigIntegerField`，bytes→GB 转换后浮点数会被截断，建议改为 `FloatField`。
 
 #### NetworkInterface
 | 字段 | 数据来源 | 状态 |
@@ -246,9 +252,18 @@ User ──< UserPlan >── Plan
 | NetworkInterface | `mtu` (Integer) | PVE API 返回，MTU 值对网络诊断有意义 |
 | NetworkInterface | `bridge_ports` (CharField) | 桥接接口的绑定端口 |
 | NetworkInterface | `bond_mode` (CharField) | Bond 接口的模式 |
-| Cluster | `version` (CharField) | 集群整体版本，从 `/version` 获取 |
 
-### 4.2 字段优化
+### 4.2 字段类型修复
+
+| 模型 | 当前字段 | 当前类型 | 问题 | 建议 |
+|------|---------|---------|------|------|
+| ClusterNode | `rootfs_total_gb` | BigIntegerField | PVE 返回 bytes，转 GB 后为浮点数，BigIntegerField 截断小数 | 改为 FloatField |
+| ClusterNode | `rootfs_used_gb` | BigIntegerField | 同上 | 改为 FloatField |
+| ClusterNode | `rootfs_avail_gb` | BigIntegerField | 同上 | 改为 FloatField |
+| VM | `disk_gb`, `max_disk_gb` | BigIntegerField | 同上 | 改为 FloatField |
+| Storage | `used_gb`, `avail_gb`, `total_gb` | BigIntegerField | 同上 | 改为 FloatField |
+
+### 4.3 字段优化
 
 | 模型 | 当前字段 | 建议 | 原因 |
 |------|---------|------|------|
