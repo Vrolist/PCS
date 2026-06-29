@@ -1,4 +1,4 @@
-from django.db.models import Max
+from django.db.models import Max, Q
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -11,8 +11,8 @@ def _user_cluster_ids(user):
     return Cluster.objects.filter(user=user).values_list("id", flat=True)
 
 
-def _latest_nodes(user):
-    """获取用户所有集群下每个节点的最新扫描记录"""
+def _latest_node_ids(user):
+    """获取每个物理节点最新扫描的 ClusterNode ID 列表"""
     cluster_ids = _user_cluster_ids(user)
     latest = (
         ClusterNode.objects
@@ -20,22 +20,21 @@ def _latest_nodes(user):
         .values("cluster_id", "node_name")
         .annotate(last_scan=Max("scanned_at"))
     )
-    filters = []
+    node_ids = []
     for item in latest:
-        filters.append(
-            ClusterNode.objects.filter(
+        pk = (
+            ClusterNode.objects
+            .filter(
                 cluster_id=item["cluster_id"],
                 node_name=item["node_name"],
                 scanned_at=item["last_scan"],
             )
+            .values_list("pk", flat=True)
+            .first()
         )
-    if not filters:
-        return ClusterNode.objects.none()
-    from django.db.models import Q
-    q = Q()
-    for f in filters:
-        q |= Q(pk__in=f.values("pk"))
-    return ClusterNode.objects.filter(q).select_related("cluster")
+        if pk:
+            node_ids.append(pk)
+    return node_ids
 
 
 class NodeListView(APIView):
@@ -43,7 +42,8 @@ class NodeListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        nodes = _latest_nodes(request.user)
+        node_ids = _latest_node_ids(request.user)
+        nodes = ClusterNode.objects.filter(pk__in=node_ids).select_related("cluster")
         data = [{
             "id": n.id,
             "cluster_id": n.cluster_id,
@@ -73,7 +73,7 @@ class NodeListView(APIView):
 
 
 class VMListView(APIView):
-    """GET /api/scanner/vms/ — 虚拟机列表（最新扫描数据）"""
+    """GET /api/scanner/vms/ — 虚拟机列表（每个 VM 只展示最新一条）"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -83,17 +83,23 @@ class VMListView(APIView):
         status_filter = request.query_params.get("status")
         search = request.query_params.get("search", "").strip()
 
-        # 获取每个 (node, vmid) 的最新扫描
+        # 只取最新扫描的节点 ID
+        node_ids = _latest_node_ids(request.user)
+
+        # 在最新节点中，按 (node_name, vmid) 去重取最新
         latest = (
             VM.objects
-            .filter(node__cluster_id__in=cluster_ids)
-            .values("node_id", "vmid")
+            .filter(node_id__in=node_ids)
+            .values("node__node_name", "vmid")
             .annotate(last_scan=Max("scanned_at"))
         )
-        from django.db.models import Q
         q = Q()
         for item in latest:
-            q |= Q(node_id=item["node_id"], vmid=item["vmid"], scanned_at=item["last_scan"])
+            q |= Q(
+                node__node_name=item["node__node_name"],
+                vmid=item["vmid"],
+                scanned_at=item["last_scan"],
+            )
         if not q:
             return Response([])
 
@@ -136,26 +142,30 @@ class VMListView(APIView):
 
 
 class LXCListView(APIView):
-    """GET /api/scanner/containers/ — 容器列表（最新扫描数据）"""
+    """GET /api/scanner/containers/ — 容器列表（每个容器只展示最新一条）"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        cluster_ids = _user_cluster_ids(request.user)
         cluster_filter = request.query_params.get("cluster_id")
         node_filter = request.query_params.get("node_id")
         status_filter = request.query_params.get("status")
         search = request.query_params.get("search", "").strip()
 
+        node_ids = _latest_node_ids(request.user)
+
         latest = (
             LXC.objects
-            .filter(node__cluster_id__in=cluster_ids)
-            .values("node_id", "vmid")
+            .filter(node_id__in=node_ids)
+            .values("node__node_name", "vmid")
             .annotate(last_scan=Max("scanned_at"))
         )
-        from django.db.models import Q
         q = Q()
         for item in latest:
-            q |= Q(node_id=item["node_id"], vmid=item["vmid"], scanned_at=item["last_scan"])
+            q |= Q(
+                node__node_name=item["node__node_name"],
+                vmid=item["vmid"],
+                scanned_at=item["last_scan"],
+            )
         if not q:
             return Response([])
 
