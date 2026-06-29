@@ -1,21 +1,21 @@
 :root {
-  /* Light theme */
-  --bg-primary: #f5f7fa;
+  /* Light theme — clearly layered */
+  --bg-primary: #e8ebf0;
   --bg-secondary: #ffffff;
   --bg-card: #ffffff;
-  --bg-navbar: rgba(255, 255, 255, 0.85);
-  --bg-navbar-border: #ebeef5;
-  --text-primary: #303133;
-  --text-secondary: #606266;
-  --text-muted: #909399;
-  --text-heading: #1a1a2e;
-  --border-color: #ebeef5;
-  --hero-bg-start: #e8f4ff;
-  --hero-bg-mid: #f0f0ff;
-  --hero-bg-end: #fff5e8;
-  --card-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
-  --card-hover-shadow: 0 12px 32px rgba(0, 0, 0, 0.06);
-  --footer-bg: #1a1a2e;
+  --bg-navbar: rgba(255, 255, 255, 0.88);
+  --bg-navbar-border: #d9dce4;
+  --text-primary: #1d1e24;
+  --text-secondary: #4e5159;
+  --text-muted: #787c8a;
+  --text-heading: #13141a;
+  --border-color: #e2e5ed;
+  --hero-bg-start: #dcecfb;
+  --hero-bg-mid: #e6e2ff;
+  --hero-bg-end: #fdebda;
+  --card-shadow: 0 20px 60px rgba(0, 0, 0, 0.10);
+  --card-hover-shadow: 0 16px 40px rgba(0, 0, 0, 0.09);
+  --footer-bg: #15152a;
   --step-bg: #409eff;
   --danger-color: #f56c6c;
   --success-color: #67c23a;
@@ -24,10 +24,10 @@
 }
 
 .dark {
-  --bg-primary: #0a0a1a;
-  --bg-secondary: #14142a;
-  --bg-card: #1a1a3e;
-  --bg-navbar: rgba(15, 15, 35, 0.92);
+  --bg-primary: #0a0a1e;
+  --bg-secondary: #16163a;
+  --bg-card: #1e1e48;
+  --bg-navbar: rgba(10, 10, 30, 0.92);
   --bg-navbar-border: #2a2a50;
   --text-primary: #e0e0f0;
   --text-secondary: #a0a0c0;
@@ -39,7 +39,7 @@
   --hero-bg-end: #0d1a2b;
   --card-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
   --card-hover-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
-  --footer-bg: #08081a;
+  --footer-bg: #0a0a1e;
   --step-bg: #409eff;
 }
 
@@ -64,6 +64,14 @@ html, body, #app {
   background-color: var(--bg-primary);
   color: var(--text-primary);
   transition: background-color 0.3s, color 0.3s;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Light: subtle text boost for readability */
+:root p, :root .section-desc, :root .text-muted {
+  font-weight: 420;
 }
 
 ::-webkit-scrollbar {

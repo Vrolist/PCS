@@ -106,24 +106,55 @@
       </div>
     </section>
 
+    <!-- Remote Ops Service -->
+    <section class="remote-service">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-tag">增值服务</span>
+          <h2 class="section-title">远程运维服务</h2>
+          <p class="section-desc">专业团队接管 PVE 集群日常运维，让你专注于业务</p>
+        </div>
+        <div class="service-cards">
+          <div class="service-card">
+            <div class="service-icon"><el-icon :size="28"><Monitor /></el-icon></div>
+            <h3>7×24 监控告警</h3>
+            <p>平台实时采集节点与 VM 数据，异常秒级检测，支持邮件/微信通知。</p>
+          </div>
+          <div class="service-card">
+            <div class="service-icon"><el-icon :size="28"><WarningFilled /></el-icon></div>
+            <h3>故障应急响应</h3>
+            <p>VM 宕机、存储满、Ceph OSD 异常等紧急问题，运维团队远程介入处理。</p>
+          </div>
+          <div class="service-card">
+            <div class="service-icon"><el-icon :size="28"><Connection /></el-icon></div>
+            <h3>安全与补丁管理</h3>
+            <p>定期检查 PVE 安全更新，协助制定补丁策略，降低漏洞风险。</p>
+          </div>
+          <div class="service-card">
+            <div class="service-icon"><el-icon :size="28"><TrendCharts /></el-icon></div>
+            <h3>健康报告</h3>
+            <p>定期输出集群健康报告，含资源趋势、风险预警与容量规划建议。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- How it works -->
     <section class="how-it-works">
       <div class="container">
         <div class="section-header">
           <span class="section-tag">工作流程</span>
-          <h2 class="section-title">三步完成接入</h2>
-          <p class="section-desc">从零到全面监控，只需三个步骤</p>
+          <h2 class="section-title">四步完成接入</h2>
+          <p class="section-desc">从零到全面监控，再到专业运维</p>
         </div>
         <div class="steps">
           <div v-for="(step, i) in steps" :key="i" class="step-card">
-            <div class="step-number">0{{ i + 1 }}</div>
+            <div class="step-badge">0{{ i + 1 }}</div>
             <div class="step-content">
               <h3>{{ step.title }}</h3>
               <p>{{ step.desc }}</p>
             </div>
-            <div v-if="i < steps.length - 1" class="step-connector">
-              <el-icon color="#409eff"><ArrowRight /></el-icon>
-            </div>
+            <div v-if="i < steps.length - 1" class="step-connector"></div>
           </div>
         </div>
       </div>
@@ -299,6 +330,10 @@ const steps = [
     title: '全面监控',
     desc: '平台自动展示集群拓扑、资源用量和检测结果，一切尽在掌握。',
   },
+  {
+    title: '运维服务',
+    desc: '需要时订阅远程运维服务，专业团队接管日常运维与应急响应。',
+  },
 ]
 </script>
 
@@ -324,14 +359,24 @@ const steps = [
   right: 0;
   z-index: 100;
   background: var(--bg-navbar);
-  backdrop-filter: blur(16px) saturate(180%);
-  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(200%);
+  -webkit-backdrop-filter: blur(20px) saturate(200%);
   border-bottom: 1px solid transparent;
-  transition: all 0.3s;
+  transition: all 0.4s;
 }
 .navbar.nav-scrolled {
-  border-bottom-color: var(--border-color);
+  border-bottom-color: transparent;
   box-shadow: 0 1px 8px rgba(0, 0, 0, 0.06);
+}
+:root .navbar.nav-scrolled {
+  border-bottom: 1px solid transparent;
+  background-image: linear-gradient(var(--bg-navbar), var(--bg-navbar)), linear-gradient(90deg, #409eff, #8b5cf6, #409eff);
+  background-origin: padding-box, border-box;
+  background-clip: padding-box, border-box;
+}
+.dark .navbar.nav-scrolled {
+  border-bottom-color: rgba(64, 158, 255, 0.12);
+  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.2);
 }
 .nav-container {
   display: flex;
@@ -597,13 +642,13 @@ const steps = [
   perspective: 800px;
 }
 .visual-card {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.10);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.20);
   border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.10);
   transform: rotateY(-8deg) rotateX(4deg);
   transition: transform 0.4s;
 }
@@ -613,6 +658,11 @@ const steps = [
 .dark .visual-card {
   background: rgba(255, 255, 255, 0.04);
   border-color: rgba(255, 255, 255, 0.08);
+}
+:root .visual-card {
+  background: rgba(255, 255, 255, 0.75);
+  border-color: rgba(200, 210, 230, 0.40);
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.08);
 }
 .vc-header {
   display: flex;
@@ -673,21 +723,56 @@ const steps = [
 .dark .vc-bar {
   opacity: 0.8;
 }
+:root .vc-bar {
+  opacity: 0.85;
+  background: linear-gradient(90deg, #409eff, #6d69d0);
+}
 .vc-label {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.7);
-  font-weight: 500;
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 600;
   flex-shrink: 0;
+  letter-spacing: 0.3px;
+}
+:root .vc-label {
+  color: #3a3d4a;
+}
+:root .vc-title {
+  color: #4e5159;
 }
 
 /* ============ Features ============ */
 .features {
   padding: 100px 0;
+  position: relative;
+}
+.features::before {
+  content: '';
+  position: absolute;
+  top: -60px;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: linear-gradient(180deg, transparent, var(--bg-primary));
+  pointer-events: none;
+  z-index: 1;
+}
+.features::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 15% 30%, rgba(64, 158, 255, 0.04) 0%, transparent 40%),
+    radial-gradient(circle at 85% 70%, rgba(139, 92, 246, 0.04) 0%, transparent 40%);
+  pointer-events: none;
+  z-index: 0;
 }
 
 .section-header {
   text-align: center;
   margin-bottom: 56px;
+  position: relative;
+  z-index: 1;
 }
 .section-tag {
   display: inline-flex;
@@ -716,6 +801,8 @@ const steps = [
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 24px;
+  position: relative;
+  z-index: 1;
 }
 
 .feature-card {
@@ -759,18 +846,106 @@ const steps = [
   color: var(--text-secondary);
 }
 
+/* ============ Remote Ops Service ============ */
+.remote-service {
+  padding: 100px 0;
+  background: var(--bg-secondary);
+  transition: background 0.3s;
+  position: relative;
+}
+.remote-service::before {
+  content: '';
+  position: absolute;
+  top: -60px;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: linear-gradient(180deg, transparent, var(--bg-secondary));
+  pointer-events: none;
+  z-index: 1;
+}
+.service-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+  margin-top: 48px;
+  position: relative;
+  z-index: 1;
+}
+.service-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 32px 24px;
+  text-align: center;
+  transition: all 0.3s;
+}
+.service-card:hover {
+  transform: translateY(-4px);
+  border-color: #409eff;
+  box-shadow: 0 12px 32px rgba(64, 158, 255, 0.12);
+}
+.service-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(64,158,255,0.12), rgba(139,92,246,0.12));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+  color: #409eff;
+}
+.service-card h3 {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-heading);
+  margin-bottom: 8px;
+}
+.service-card p {
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.7;
+  margin: 0;
+}
+@media (max-width: 992px) {
+  .service-cards { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 600px) {
+  .service-cards { grid-template-columns: 1fr; }
+}
+
 /* ============ How it works ============ */
 .how-it-works {
   padding: 100px 0;
-  background: var(--bg-secondary);
+  position: relative;
+}
+.how-it-works::before {
+  content: '';
+  position: absolute;
+  top: -60px;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: linear-gradient(180deg, transparent, var(--bg-primary));
+  pointer-events: none;
+  z-index: 1;
+}
+.dark .how-it-works {
+  background: transparent;
+}
+:root .how-it-works {
+  background: transparent;
 }
 
 .steps {
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  max-width: 680px;
+  gap: 20px;
+  max-width: 720px;
   margin: 0 auto;
+  position: relative;
+  z-index: 1;
 }
 
 .step-card {
@@ -781,28 +956,59 @@ const steps = [
   border: 1px solid var(--border-color);
   border-radius: 16px;
   padding: 28px 32px;
-  transition: all 0.3s;
+  transition: all 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   position: relative;
 }
 .step-card:hover {
-  border-color: rgba(64, 158, 255, 0.3);
-  box-shadow: var(--card-hover-shadow);
+  border-color: #409eff;
+  box-shadow: 0 8px 28px rgba(64, 158, 255, 0.12);
+  transform: translateX(4px);
 }
 
-.step-number {
-  font-size: 32px;
-  font-weight: 800;
-  color: rgba(64, 158, 255, 0.15);
-  line-height: 1;
+.step-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
   flex-shrink: 0;
-  font-feature-settings: 'tnum';
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #409eff, #7c5cfc);
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.25);
+  position: relative;
+  z-index: 1;
 }
-.dark .step-number {
-  color: rgba(64, 158, 255, 0.25);
+.step-card:nth-child(2) .step-badge {
+  background: linear-gradient(135deg, #67c23a, #36a86b);
+  box-shadow: 0 4px 12px rgba(103, 194, 58, 0.25);
+}
+.step-card:nth-child(3) .step-badge {
+  background: linear-gradient(135deg, #e6a23c, #d4842f);
+  box-shadow: 0 4px 12px rgba(230, 162, 60, 0.25);
+}
+.step-card:nth-child(4) .step-badge {
+  background: linear-gradient(135deg, #8b5cf6, #6366f1);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25);
+}
+:root .step-badge {
+  box-shadow: 0 4px 14px rgba(64, 158, 255, 0.18);
+}
+:root .step-card:nth-child(2) .step-badge {
+  box-shadow: 0 4px 14px rgba(103, 194, 58, 0.18);
+}
+:root .step-card:nth-child(3) .step-badge {
+  box-shadow: 0 4px 14px rgba(230, 162, 60, 0.18);
+}
+:root .step-card:nth-child(4) .step-badge {
+  box-shadow: 0 4px 14px rgba(139, 92, 246, 0.18);
 }
 
 .step-content {
   flex: 1;
+  padding-top: 4px;
 }
 .step-content h3 {
   font-size: 18px;
@@ -814,21 +1020,39 @@ const steps = [
   font-size: 14px;
   line-height: 1.7;
   color: var(--text-secondary);
+  margin: 0;
 }
 
 .step-connector {
   position: absolute;
-  bottom: -28px;
-  left: 56px;
-  transform: translateX(-50%);
-  color: #409eff;
-  opacity: 0.5;
-  font-size: 18px;
+  bottom: -20px;
+  left: 40px;
+  width: 2px;
+  height: 20px;
+  background: linear-gradient(180deg, #409eff, transparent);
+  opacity: 0.4;
+}
+.step-card:last-child .step-connector {
+  display: none;
 }
 
 /* ============ CTA ============ */
 .cta-section {
   padding: 80px 0;
+  position: relative;
+  background: var(--bg-secondary);
+  transition: background 0.3s;
+}
+.cta-section::before {
+  content: '';
+  position: absolute;
+  top: -60px;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: linear-gradient(180deg, transparent, var(--bg-secondary));
+  pointer-events: none;
+  z-index: 1;
 }
 .cta-container {
   position: relative;
