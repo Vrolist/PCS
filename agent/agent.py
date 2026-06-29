@@ -220,6 +220,12 @@ class PVEClient:
     def get_lxc_config(self, node, vmid):
         return self.get(f"/nodes/{node}/lxc/{vmid}/config")
 
+    def get_ha_resources(self):
+        try:
+            return self.get("/cluster/ha/resources")
+        except Exception:
+            return []
+
 
 # ============================================================
 # 数据采集
@@ -250,11 +256,15 @@ def scan_full(pve):
             logger.error(f"扫描节点 {name} 失败: {e}")
             nodes_data.append({"name": name, "status": "offline", "error": str(e)})
 
+    ceph = pve.get_ceph_status()
+    ha_resources = _scan_ha(pve)
+
     return {
         "scanned_at": datetime.now(timezone.utc).isoformat(),
         "version": version,
         "nodes": nodes_data,
-        "ceph": pve.get_ceph_status(),
+        "ceph": ceph,
+        "ha_resources": ha_resources,
     }
 
 
@@ -269,9 +279,21 @@ def _scan_node(pve, name, info):
     mem_total = _bytes_to_mb(mem.get("total", 0))
     mem_used = _bytes_to_mb(mem.get("used", 0))
 
+    # 扫描子资源
+    vm_list = _scan_vms(pve, name)
+    lxc_list = _scan_lxc(pve, name)
+
+    # 状态判断：有内存数据或有 VM/容器 → 在线；否则 → 未知
+    node_status = status.get("status", "") or info.get("status", "")
+    if not node_status:
+        if mem_total > 0 or vm_list or lxc_list:
+            node_status = "online"
+        else:
+            node_status = "unknown"
+
     return {
         "name": name,
-        "status": info.get("status", "unknown"),
+        "status": node_status,
         "pve_version": status.get("pveversion", ""),
         "kernel_version": status.get("kversion", ""),
         "cpu_model": cpuinfo.get("model", ""),
@@ -293,10 +315,12 @@ def _scan_node(pve, name, info):
         "is_ceph_node": False,
         "is_ha_node": False,
         "uptime_seconds": status.get("uptime", 0),
-        "vms": _scan_vms(pve, name),
-        "containers": _scan_lxc(pve, name),
+        "vms": vm_list,
+        "containers": lxc_list,
         "storages": _scan_storages(pve, name),
         "networks": _scan_networks(pve, name),
+        "vm_configs": _scan_vm_configs(pve, name, vm_list),
+        "lxc_configs": _scan_lxc_configs(pve, name, lxc_list),
     }
 
 
@@ -329,6 +353,7 @@ def _scan_vms(pve, node):
             "has_template": bool(vm.get("template", 0)),
             "tags": vm.get("tags", ""),
             "description": "",
+            "config": {},
         }
         try:
             config = pve.get_vm_config(node, vmid)
@@ -338,6 +363,64 @@ def _scan_vms(pve, node):
             pass
         vms.append(data)
     return vms
+
+
+def _scan_vm_configs(pve, node, vm_list):
+    """扫描每个 VM 的详细配置"""
+    configs = {}
+    for vm in vm_list:
+        vmid = vm.get("vmid")
+        if not vmid:
+            continue
+        try:
+            cfg = pve.get_vm_config(node, vmid)
+            configs[str(vmid)] = _parse_vm_config(cfg)
+        except Exception as e:
+            logger.warning(f"获取 VM {vmid} 配置失败: {e}")
+    return configs
+
+
+def _parse_vm_config(cfg):
+    """解析 VM 配置"""
+    result = {
+        "cpu_type": cfg.get("cpu", ""),
+        "cpu_cores": cfg.get("cores"),
+        "cpu_sockets": cfg.get("sockets"),
+        "memory_mb": cfg.get("memory"),
+        "balloon_min_mb": cfg.get("balloon"),
+        "os_type": cfg.get("ostype", ""),
+        "boot_order": cfg.get("boot", ""),
+        "agent_enabled": cfg.get("agent", "").startswith("1"),
+        "description": cfg.get("description", ""),
+        "tags": cfg.get("tags", ""),
+        "scsi_disks": [],
+        "ide_disks": [],
+        "net_devices": [],
+    }
+
+    # Parse storage devices
+    for key, val in cfg.items():
+        if key.startswith("scsi") and isinstance(val, str):
+            parts = val.split(",", 1)
+            storage_file = parts[0]
+            storage = storage_file.split(":")[0] if ":" in storage_file else ""
+            result["scsi_disks"].append({"slot": key, "storage": storage, "raw": val})
+        elif key.startswith("ide") and isinstance(val, str):
+            parts = val.split(",", 1)
+            storage_file = parts[0]
+            media = "cdrom" if "media=cdrom" in val else "disk"
+            storage = storage_file.split(":")[0] if ":" in storage_file else ""
+            result["ide_disks"].append({"slot": key, "storage": storage, "media": media, "raw": val})
+        elif key.startswith("net") and isinstance(val, str):
+            net_info = {}
+            for item in val.split(","):
+                if "=" in item:
+                    k, v = item.split("=", 1)
+                    net_info[k] = v
+            net_info["slot"] = key
+            result["net_devices"].append(net_info)
+
+    return result
 
 
 def _scan_lxc(pve, node):
@@ -364,6 +447,63 @@ def _scan_lxc(pve, node):
             "description": "",
         })
     return containers
+
+
+def _scan_lxc_configs(pve, node, lxc_list):
+    """扫描每个容器的详细配置"""
+    configs = {}
+    for ct in lxc_list:
+        vmid = ct.get("vmid")
+        if not vmid:
+            continue
+        try:
+            cfg = pve.get_lxc_config(node, vmid)
+            configs[str(vmid)] = _parse_lxc_config(cfg)
+        except Exception as e:
+            logger.warning(f"获取 LXC {vmid} 配置失败: {e}")
+    return configs
+
+
+def _parse_lxc_config(cfg):
+    """解析 LXC 配置"""
+    result = {
+        "hostname": cfg.get("hostname", ""),
+        "cpu_cores": cfg.get("cores"),
+        "memory_mb": cfg.get("memory"),
+        "swap_mb": cfg.get("swap"),
+        "os_type": cfg.get("ostype", ""),
+        "description": cfg.get("description", ""),
+        "tags": cfg.get("tags", ""),
+        "startup_order": cfg.get("startup", ""),
+        "rootfs": {},
+        "mount_points": [],
+        "net_devices": [],
+    }
+
+    # Parse rootfs
+    rootfs_val = cfg.get("rootfs", "")
+    if isinstance(rootfs_val, str) and rootfs_val:
+        parts = rootfs_val.split(",", 1)
+        storage = parts[0].split(":")[0] if ":" in parts[0] else ""
+        result["rootfs"] = {"storage": storage, "raw": rootfs_val}
+
+    # Parse mount points (mp0, mp1, ...)
+    for key, val in cfg.items():
+        if key.startswith("mp") and isinstance(val, str):
+            result["mount_points"].append({"slot": key, "raw": val})
+
+    # Parse network
+    for key, val in cfg.items():
+        if key.startswith("net") and isinstance(val, str):
+            net_info = {}
+            for item in val.split(","):
+                if "=" in item:
+                    k, v = item.split("=", 1)
+                    net_info[k] = v
+            net_info["slot"] = key
+            result["net_devices"].append(net_info)
+
+    return result
 
 
 def _scan_storages(pve, node):
@@ -400,6 +540,40 @@ def _scan_networks(pve, node):
         "gateway": net.get("gateway", ""),
         "speed_mbps": net.get("speed"),
     } for net in net_list]
+
+
+def _scan_ha(pve):
+    """扫描 HA 高可用资源"""
+    try:
+        resources = pve.get_ha_resources()
+    except Exception:
+        return []
+
+    result = []
+    for r in resources:
+        sid = r.get("sid", "")
+        rtype = "vm" if sid.startswith("vm:") else "ct" if sid.startswith("ct:") else "unknown"
+        vmid = None
+        if ":" in sid:
+            try:
+                vmid = int(sid.split(":")[1])
+            except (ValueError, IndexError):
+                pass
+        ha_data = r.get("ha", {})
+        result.append({
+            "sid": sid,
+            "type": rtype,
+            "vmid": vmid,
+            "node": r.get("node", ""),
+            "state": r.get("status", ""),
+            "ha_group": ha_data.get("group", ""),
+            "ha_status": ha_data.get("status", ""),
+            "crm_state": ha_data.get("crm_state", ""),
+            "max_restarts": ha_data.get("max_restart"),
+            "max_shutdown": ha_data.get("max_shutdown"),
+            "raw": r,
+        })
+    return result
 
 
 # ============================================================

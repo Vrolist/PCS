@@ -41,6 +41,7 @@ class ScanUploadSerializer(serializers.Serializer):
     version = serializers.CharField(help_text="PVE 版本")
     nodes = serializers.ListField(help_text="节点数据列表")
     ceph = serializers.DictField(required=False, default=None, allow_null=True, help_text="Ceph 状态")
+    ha_resources = serializers.ListField(required=False, default=list, help_text="HA 资源列表")
 
 
 class AgentTaskSerializer(serializers.ModelSerializer):

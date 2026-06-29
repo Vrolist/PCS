@@ -25,6 +25,31 @@ export interface VMInfo {
   scanned_at: string
 }
 
+export interface VMConfig {
+  cpu_type: string
+  cpu_cores: number
+  cpu_sockets: number
+  memory_mb: number
+  balloon_min_mb: number
+  os_type: string
+  boot_order: string
+  scsi_disks: Array<{ slot: string; storage: string; raw: string }>
+  ide_disks: Array<{ slot: string; storage: string; media: string; raw: string }>
+  net_devices: Array<Record<string, string>>
+  agent_enabled: boolean
+  description: string
+  tags: string
+}
+
+export interface VMDetail {
+  vm: VMInfo
+  config: VMConfig | null
+}
+
 export function getVMs(params?: { cluster_id?: number; node_id?: number; status?: string; search?: string }) {
   return request.get<any, VMInfo[]>('/scanner/vms/', { params })
+}
+
+export function getVMDetail(id: number) {
+  return request.get<any, VMDetail>(`/scanner/vms/${id}/detail/`)
 }

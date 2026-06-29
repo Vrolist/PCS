@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.clusters.models import Cluster
-from .models import ClusterNode, VM, LXC
+from .models import ClusterNode, VM, LXC, VMConfig, LXCConfig, HAResource
 
 
 def _user_cluster_ids(user):
@@ -200,4 +200,167 @@ class LXCListView(APIView):
             "tags": ct.tags,
             "scanned_at": ct.scanned_at,
         } for ct in containers]
+        return Response(data)
+
+
+class VMDetailView(APIView):
+    """GET /api/scanner/vms/<id>/detail/ — VM 详情（含配置）"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, vm_id):
+        try:
+            vm = VM.objects.select_related("node", "node__cluster").get(pk=vm_id)
+        except VM.DoesNotExist:
+            return Response({"error": "VM not found"}, status=404)
+
+        config = (
+            VMConfig.objects
+            .filter(vm=vm)
+            .order_by("-scanned_at")
+            .first()
+        )
+
+        data = {
+            "vm": {
+                "id": vm.id,
+                "vmid": vm.vmid,
+                "name": vm.name,
+                "status": vm.status,
+                "node_name": vm.node.node_name,
+                "cluster_name": vm.node.cluster.name,
+                "cpu_cores": vm.cpu_cores,
+                "cpu_usage": vm.cpu_usage,
+                "memory_mb": vm.memory_mb,
+                "memory_used_mb": vm.memory_used_mb,
+                "disk_gb": vm.disk_gb,
+                "max_disk_gb": vm.max_disk_gb,
+                "net_in_bps": vm.net_in_bps,
+                "net_out_bps": vm.net_out_bps,
+                "uptime_seconds": vm.uptime_seconds,
+                "os_type": vm.os_type,
+                "tags": vm.tags,
+                "scanned_at": vm.scanned_at,
+            },
+            "config": None,
+        }
+
+        if config:
+            data["config"] = {
+                "cpu_type": config.cpu_type,
+                "cpu_cores": config.cpu_cores,
+                "cpu_sockets": config.cpu_sockets,
+                "memory_mb": config.memory_mb,
+                "balloon_min_mb": config.balloon_min_mb,
+                "os_type": config.os_type,
+                "boot_order": config.boot_order,
+                "scsi_disks": config.scsi_disks,
+                "ide_disks": config.ide_disks,
+                "net_devices": config.net_devices,
+                "agent_enabled": config.agent_enabled,
+                "description": config.description,
+                "tags": config.tags,
+            }
+
+        return Response(data)
+
+
+class LXCDetailView(APIView):
+    """GET /api/scanner/containers/<id>/detail/ — LXC 详情（含配置）"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, ct_id):
+        try:
+            ct = LXC.objects.select_related("node", "node__cluster").get(pk=ct_id)
+        except LXC.DoesNotExist:
+            return Response({"error": "Container not found"}, status=404)
+
+        config = (
+            LXCConfig.objects
+            .filter(container=ct)
+            .order_by("-scanned_at")
+            .first()
+        )
+
+        data = {
+            "container": {
+                "id": ct.id,
+                "vmid": ct.vmid,
+                "name": ct.name,
+                "status": ct.status,
+                "node_name": ct.node.node_name,
+                "cluster_name": ct.node.cluster.name,
+                "cpu_cores": ct.cpu_cores,
+                "cpu_usage": ct.cpu_usage,
+                "memory_mb": ct.memory_mb,
+                "memory_used_mb": ct.memory_used_mb,
+                "swap_mb": ct.swap_mb,
+                "swap_used_mb": ct.swap_used_mb,
+                "disk_gb": ct.disk_gb,
+                "uptime_seconds": ct.uptime_seconds,
+                "tags": ct.tags,
+                "scanned_at": ct.scanned_at,
+            },
+            "config": None,
+        }
+
+        if config:
+            data["config"] = {
+                "hostname": config.hostname,
+                "cpu_cores": config.cpu_cores,
+                "memory_mb": config.memory_mb,
+                "swap_mb": config.swap_mb,
+                "os_type": config.os_type,
+                "rootfs": config.rootfs,
+                "mount_points": config.mount_points,
+                "net_devices": config.net_devices,
+                "description": config.description,
+                "tags": config.tags,
+                "startup_order": config.startup_order,
+            }
+
+        return Response(data)
+
+
+class HAListView(APIView):
+    """GET /api/scanner/ha/ — HA 高可用资源列表"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        cluster_ids = _user_cluster_ids(request.user)
+        resources = HAResource.objects.filter(
+            cluster_id__in=cluster_ids,
+            scanned_at__gte=Max("scanned_at"),
+        ).select_related("cluster")
+
+        # 只取每个 sid 的最新记录
+        latest = (
+            HAResource.objects
+            .filter(cluster_id__in=cluster_ids)
+            .values("sid")
+            .annotate(last_scan=Max("scanned_at"))
+        )
+        q = Q()
+        for item in latest:
+            q |= Q(sid=item["sid"], scanned_at=item["last_scan"])
+
+        if q:
+            resources = HAResource.objects.filter(q).select_related("cluster")
+        else:
+            resources = HAResource.objects.none()
+
+        data = [{
+            "id": r.id,
+            "sid": r.sid,
+            "resource_type": r.resource_type,
+            "vmid": r.vmid,
+            "node_name": r.node_name,
+            "cluster_name": r.cluster.name,
+            "state": r.state,
+            "ha_group": r.ha_group,
+            "ha_status": r.ha_status,
+            "crm_state": r.crm_state,
+            "max_restarts": r.max_restarts,
+            "max_shutdown": r.max_shutdown,
+            "scanned_at": r.scanned_at,
+        } for r in resources]
         return Response(data)

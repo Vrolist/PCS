@@ -22,6 +22,9 @@ from apps.scanner.models import (
     ScanHistory,
     Storage,
     VM,
+    VMConfig,
+    LXCConfig,
+    HAResource,
 )
 
 from .models import AgentInstance, ScanTask
@@ -159,6 +162,7 @@ class ScanUploadView(APIView):
         scanned_at = d["scanned_at"]
         nodes_data = d["nodes"]
         ceph_data = d.get("ceph")
+        ha_data = d.get("ha_resources", [])
 
         # 创建扫描任务记录
         # raw_data 需要序列化为 JSON 兼容格式（datetime → str）
@@ -180,6 +184,8 @@ class ScanUploadView(APIView):
                 self._save_nodes(cluster, scan_task, nodes_data, scanned_at)
                 if ceph_data:
                     self._save_ceph(cluster, scan_task, ceph_data, scanned_at)
+                if ha_data:
+                    self._save_ha(cluster, scan_task, ha_data, scanned_at)
                 self._save_scan_history(cluster, scan_task, nodes_data, scanned_at)
                 self._update_cluster_stats(cluster, nodes_data)
 
@@ -333,6 +339,54 @@ class ScanUploadView(APIView):
                     scanned_at=scanned_at,
                 )
 
+            # VM Configs
+            vm_configs = node_data.get("vm_configs", {})
+            for vm in VM.objects.filter(node=node, scanned_at=scanned_at):
+                cfg = vm_configs.get(str(vm.vmid), {})
+                if cfg:
+                    VMConfig.objects.create(
+                        vm=vm,
+                        scan=scan_task,
+                        cpu_type=cfg.get("cpu_type", ""),
+                        cpu_cores=cfg.get("cpu_cores"),
+                        cpu_sockets=cfg.get("cpu_sockets"),
+                        memory_mb=cfg.get("memory_mb"),
+                        balloon_min_mb=cfg.get("balloon_min_mb"),
+                        os_type=cfg.get("os_type", ""),
+                        boot_order=cfg.get("boot_order", ""),
+                        scsi_disks=cfg.get("scsi_disks", []),
+                        ide_disks=cfg.get("ide_disks", []),
+                        net_devices=cfg.get("net_devices", []),
+                        agent_enabled=cfg.get("agent_enabled", False),
+                        description=cfg.get("description", ""),
+                        tags=cfg.get("tags", ""),
+                        raw_config=cfg,
+                        scanned_at=scanned_at,
+                    )
+
+            # LXC Configs
+            lxc_configs = node_data.get("lxc_configs", {})
+            for ct in LXC.objects.filter(node=node, scanned_at=scanned_at):
+                cfg = lxc_configs.get(str(ct.vmid), {})
+                if cfg:
+                    LXCConfig.objects.create(
+                        container=ct,
+                        scan=scan_task,
+                        hostname=cfg.get("hostname", ""),
+                        cpu_cores=cfg.get("cpu_cores"),
+                        memory_mb=cfg.get("memory_mb"),
+                        swap_mb=cfg.get("swap_mb"),
+                        os_type=cfg.get("os_type", ""),
+                        rootfs=cfg.get("rootfs", {}),
+                        mount_points=cfg.get("mount_points", []),
+                        net_devices=cfg.get("net_devices", []),
+                        description=cfg.get("description", ""),
+                        tags=cfg.get("tags", ""),
+                        startup_order=cfg.get("startup_order", ""),
+                        raw_config=cfg,
+                        scanned_at=scanned_at,
+                    )
+
     def _save_ceph(self, cluster, scan_task, ceph_data, scanned_at):
         """保存 Ceph 状态"""
         CephStatus.objects.create(
@@ -349,6 +403,25 @@ class ScanUploadView(APIView):
             extra_data=ceph_data,
             scanned_at=scanned_at,
         )
+
+    def _save_ha(self, cluster, scan_task, ha_data, scanned_at):
+        """保存 HA 资源"""
+        for r in ha_data:
+            HAResource.objects.create(
+                cluster=cluster,
+                sid=r.get("sid", ""),
+                resource_type=r.get("type", ""),
+                vmid=r.get("vmid"),
+                node_name=r.get("node", ""),
+                state=r.get("state", ""),
+                ha_group=r.get("ha_group", ""),
+                ha_status=r.get("ha_status", ""),
+                crm_state=r.get("crm_state", ""),
+                max_restarts=r.get("max_restarts"),
+                max_shutdown=r.get("max_shutdown"),
+                raw_data=r.get("raw", {}),
+                scanned_at=scanned_at,
+            )
 
     def _save_scan_history(self, cluster, scan_task, nodes_data, scanned_at):
         """保存扫描历史快照"""

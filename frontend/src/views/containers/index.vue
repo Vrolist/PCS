@@ -61,23 +61,143 @@
         <el-table-column label="运行时长" min-width="100">
           <template #default="{ row }">{{ fmtUptime(row.uptime_seconds) }}</template>
         </el-table-column>
+        <el-table-column label="操作" width="80" align="center" fixed="right">
+          <template #default="{ row }">
+            <el-button type="primary" link size="small" @click="showDetail(row)">详情</el-button>
+          </template>
+        </el-table-column>
       </el-table>
       <el-empty v-if="!loading && !containers.length" description="暂无容器数据" />
     </el-card>
+
+    <!-- 详情对话框 -->
+    <el-dialog v-model="detailVisible" title="容器详情" width="680px" :close-on-click-modal="true">
+      <div v-if="detailLoading" class="loading-box">
+        <el-icon class="is-loading" :size="20"><Loading /></el-icon>
+        <span>加载中...</span>
+      </div>
+      <div v-else-if="detailData" class="detail-content">
+        <!-- 基本信息 -->
+        <div class="detail-section">
+          <h4 class="detail-section-title">基本信息</h4>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <span class="detail-label">VMID</span>
+              <span class="detail-value mono">{{ detailData.container.vmid }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">状态</span>
+              <el-tag :type="detailData.container.status === 'running' ? 'success' : 'danger'" size="small" disable-transitions>
+                {{ detailData.container.status === 'running' ? '运行中' : '已停止' }}
+              </el-tag>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">节点</span>
+              <span>{{ detailData.container.node_name }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">CPU</span>
+              <span>{{ Math.round(detailData.container.cpu_usage || 0) }}% · {{ detailData.container.cpu_cores || '?' }} 核</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">内存</span>
+              <span>{{ fmtMB(detailData.container.memory_used_mb) }} / {{ fmtMB(detailData.container.memory_mb) }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Swap</span>
+              <span>{{ fmtMB(detailData.container.swap_used_mb) }} / {{ fmtMB(detailData.container.swap_mb) }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">磁盘</span>
+              <span>{{ detailData.container.disk_gb || 0 }}GB</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">运行时长</span>
+              <span>{{ fmtUptime(detailData.container.uptime_seconds) }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 配置信息 -->
+        <div v-if="detailData.config" class="detail-section">
+          <h4 class="detail-section-title">配置信息</h4>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <span class="detail-label">主机名</span>
+              <span>{{ detailData.config.hostname || '-' }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">系统类型</span>
+              <span>{{ detailData.config.os_type || '-' }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">CPU 核心</span>
+              <span>{{ detailData.config.cpu_cores || '-' }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">内存</span>
+              <span>{{ detailData.config.memory_mb ? fmtMB(detailData.config.memory_mb) : '-' }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Swap</span>
+              <span>{{ detailData.config.swap_mb ? fmtMB(detailData.config.swap_mb) : '-' }}</span>
+            </div>
+            <div class="detail-item" v-if="detailData.config.startup_order">
+              <span class="detail-label">启动顺序</span>
+              <span class="mono">{{ detailData.config.startup_order }}</span>
+            </div>
+          </div>
+
+          <!-- Rootfs -->
+          <div v-if="detailData.config.rootfs" class="detail-extra">
+            <span class="detail-label">Rootfs</span>
+            <span class="mono">{{ detailData.config.rootfs.raw || detailData.config.rootfs.storage || '-' }}</span>
+          </div>
+
+          <!-- 挂载点 -->
+          <div v-if="detailData.config.mount_points?.length" class="detail-extra">
+            <span class="detail-label">挂载点</span>
+            <div class="detail-list">
+              <div v-for="mp in detailData.config.mount_points" :key="mp.slot" class="detail-list-item mono">
+                <span class="detail-label">{{ mp.slot }}:</span>
+                <span>{{ mp.raw }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 网络设备 -->
+          <div v-if="detailData.config.net_devices?.length" class="detail-extra">
+            <span class="detail-label">网络设备</span>
+            <div class="detail-list">
+              <div v-for="(net, idx) in detailData.config.net_devices" :key="idx" class="detail-list-item mono">
+                <span v-for="(val, key) in net" :key="key">{{ key }}={{ val }} </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="detailVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { Loading } from '@element-plus/icons-vue'
-import { getContainers } from '@/api/containers'
-import type { ContainerInfo } from '@/api/containers'
+import { getContainers, getContainerDetail } from '@/api/containers'
+import type { ContainerInfo, ContainerDetail } from '@/api/containers'
 
 const loading = ref(true)
 const containers = ref<ContainerInfo[]>([])
 const search = ref('')
 const statusFilter = ref('')
 let timer: ReturnType<typeof setTimeout> | null = null
+
+const detailVisible = ref(false)
+const detailLoading = ref(false)
+const detailData = ref<ContainerDetail | null>(null)
 
 onMounted(() => loadData())
 
@@ -94,6 +214,17 @@ async function loadData() {
 function debounceLoad() {
   if (timer) clearTimeout(timer)
   timer = setTimeout(loadData, 300)
+}
+
+async function showDetail(row: ContainerInfo) {
+  detailVisible.value = true
+  detailLoading.value = true
+  detailData.value = null
+  try {
+    detailData.value = await getContainerDetail(row.id)
+  } catch {} finally {
+    detailLoading.value = false
+  }
 }
 
 function cpuColor(p: number) { return p > 85 ? '#f56c6c' : p >= 70 ? '#e6a23c' : '#67c23a' }
@@ -118,6 +249,21 @@ function fmtUptime(s: number) {
 .sub-text { font-size: 12px; color: var(--text-muted); }
 .usage-cell { display: flex; flex-direction: column; gap: 4px; }
 .usage-text { font-size: 12px; color: var(--text-muted); }
+
+/* 详情对话框样式 */
+.detail-content { display: flex; flex-direction: column; gap: 20px; }
+.detail-section { }
+.detail-section-title { font-size: 15px; font-weight: 600; color: var(--text-heading); margin: 0 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color); }
+.detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; }
+.detail-item { display: flex; align-items: center; gap: 8px; }
+.detail-label { font-size: 13px; color: var(--text-muted); min-width: 60px; flex-shrink: 0; }
+.detail-value { color: var(--text-primary); }
+.detail-extra { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+.detail-extra > .detail-label { min-width: auto; margin-bottom: 2px; }
+.detail-list { display: flex; flex-direction: column; gap: 4px; }
+.detail-list-item { font-size: 13px; color: var(--text-primary); }
+.mono { font-family: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace; font-size: 12px; color: var(--text-secondary); }
+
 :deep(.el-table) { background: transparent; --el-table-bg-color: transparent; --el-table-tr-bg-color: transparent; --el-table-header-bg-color: transparent; --el-table-border-color: var(--border-color); --el-table-text-color: var(--text-primary); --el-table-header-text-color: var(--text-secondary); }
 :deep(.el-table::before) { display: none; }
 :deep(.el-table th.el-table__cell) { background: transparent; }
