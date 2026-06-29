@@ -75,6 +75,7 @@ function getCpuColor(percent: number): string {
   border: 1px solid var(--border-color);
   border-radius: 16px;
   padding: 0;
+  margin-top: 28px;
   overflow: hidden;
   transition: background-color 0.3s, border-color 0.3s;
 }

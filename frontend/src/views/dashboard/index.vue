@@ -13,17 +13,17 @@
       <StatCards />
     </div>
 
-    <div class="dash-section">
-      <TrendChart />
-    </div>
-
     <div class="dash-row-split">
       <div class="dash-col-alert">
         <AlertList />
       </div>
-      <div class="dash-col-table">
-        <NodeTable />
+      <div class="dash-col-trend">
+        <TrendChart />
       </div>
+    </div>
+
+    <div class="dash-section">
+      <NodeTable />
     </div>
   </div>
 </template>
@@ -72,6 +72,9 @@ const authStore = useAuthStore()
   grid-template-columns: 380px 1fr;
   gap: 28px;
   align-items: start;
+}
+.dash-col-trend {
+  min-width: 0;
 }
 .dash-col-table {
   min-width: 0;

@@ -89,6 +89,8 @@ function tagLabel(severity: Alert['severity']) {
 .alert-list {
   display: flex;
   flex-direction: column;
+  height: 270px;
+  overflow-y: auto;
 }
 
 .alert-item {
