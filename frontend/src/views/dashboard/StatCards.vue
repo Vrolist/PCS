@@ -82,7 +82,7 @@ const cards: StatCard[] = [
 .stat-cards-row {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
+  gap: 16px;
 }
 
 @media (max-width: 1200px) {
@@ -100,10 +100,11 @@ const cards: StatCard[] = [
 .stat-card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 16px;
-  padding: 24px;
+  border-radius: 14px;
+  padding: 16px 20px;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
   gap: 16px;
   position: relative;
   backdrop-filter: blur(12px);
@@ -112,13 +113,13 @@ const cards: StatCard[] = [
 }
 
 .stat-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
 }
 
 .stat-card__icon {
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -129,13 +130,14 @@ const cards: StatCard[] = [
 .stat-card__body {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
+  flex: 1;
 }
 
 .stat-card__value {
-  font-size: 32px;
+  font-size: 24px;
   font-weight: 700;
-  line-height: 1;
+  line-height: 1.2;
   color: var(--text-primary);
 }
 
