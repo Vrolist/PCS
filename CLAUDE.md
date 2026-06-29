@@ -16,7 +16,13 @@ pve-cluster-scan/
 │   │   ├── views.py        #   - 登录 / 注册 / 用户信息 / 密码重置
 │   │   ├── urls.py         #   - /api/auth/ 路由
 │   │   └── admin.py
-│   ├── clusters/           # 集群管理
+│   ├── clusters/           # 集群管理（CRUD + Agent 列表）
+│   │   ├── models.py       #   - Cluster（含 agent_token）
+│   │   ├── serializers.py  #   - List / Create / Detail / AgentBrief
+│   │   ├── views.py        #   - 集群 CRUD + Agent 查询
+│   │   ├── urls.py         #   - /api/clusters/ 路由
+│   │   ├── tests.py        #   - 10 个测试用例
+│   │   └── admin.py
 │   ├── agent_api/          # Agent 通信 & 多 Agent 管理
 │   │   ├── models.py       #   - AgentInstance / ScanTask
 │   │   ├── serializers.py  #   - Register / Heartbeat / ScanUpload / Tasks / Unregister / Version
@@ -58,7 +64,8 @@ pve-cluster-scan/
 │   │   │   └── theme.ts              # 亮暗主题（默认暗色）
 │   │   ├── api/
 │   │   │   ├── request.ts            # Axios 实例 + 拦截器
-│   │   │   └── auth.ts               # 登录/注册/密码重置 API
+│   │   │   ├── auth.ts               # 登录/注册/密码重置 API
+│   │   │   └── clusters.ts           # 集群 CRUD + Agent 查询 API
 │   │   └── style.css                 # CSS 变量 / 亮暗色值
 │   ├── package.json
 │   └── vite.config.ts
@@ -134,7 +141,7 @@ python manage.py makemigrations <app_name>
 python manage.py migrate
 
 # 运行测试
-python manage.py test apps.agent_api --verbosity=2
+python manage.py test apps.agent_api apps.clusters --verbosity=2
 ```
 
 ## Agent CLI 工具
@@ -278,6 +285,44 @@ GET /api/agent/install.sh?token=<agent_token>&platform=<platform_url>
 → (返回 bash 安装脚本内容)
 ```
 
+### 集群管理 `/api/clusters/`
+
+| 方法 | 路径 | 说明 | 认证 |
+|------|------|------|------|
+| GET | `/api/clusters/` | 获取用户的所有集群 | ✅ JWT |
+| POST | `/api/clusters/` | 创建集群（自动生成 agent_token） | ✅ JWT |
+| GET | `/api/clusters/:id/` | 集群详情（含 Agent 列表 + 安装命令） | ✅ JWT |
+| PATCH | `/api/clusters/:id/` | 更新集群信息 | ✅ JWT |
+| DELETE | `/api/clusters/:id/` | 删除集群 | ✅ JWT |
+
+**集群列表响应：**
+```json
+GET /api/clusters/
+{
+  "count": 2,
+  "results": [
+    {
+      "id": 1, "name": "生产集群", "status": "active",
+      "total_nodes": 3, "total_vms": 15, "total_lxc": 5,
+      "agent_count": 2, "online_agents": 2,
+      "last_scanned_at": "2026-06-29T15:30:00Z"
+    }
+  ]
+}
+```
+
+**集群详情响应（含一键安装命令）：**
+```json
+GET /api/clusters/1/
+{
+  "id": 1, "name": "生产集群", "agent_token": "abc123...",
+  "agents": [
+    { "hostname": "pve-1", "status": "online", "version": "0.1.0", "total_scans": 58 }
+  ],
+  "install_command": "curl -fsSL 'https://platform:8000/api/agent/install.sh?token=abc123&platform=https://platform:8000' | bash"
+}
+```
+
 ## 页面路由
 
 | 路径 | 页面 | 说明 | 需要登录 |
@@ -287,7 +332,7 @@ GET /api/agent/install.sh?token=<agent_token>&platform=<platform_url>
 | `/register` | 注册 | 表单校验（用户名/邮箱/密码/确认） | ❌ |
 | `/forgot-password` | 找回密码 | 两步流程：邮箱→验证码+新密码 | ❌ |
 | `/dashboard` | 控制台 | 统计卡片 + 告警+趋势 + 节点表格 | ✅ |
-| `/clusters` | 集群管理 | 集群 CRUD（待实现） | ✅ |
+| `/clusters` | 集群管理 | 集群 CRUD + Agent 列表 + 安装命令 | ✅ |
 | `/nodes` | 节点管理 | PVE 节点监控（待实现） | ✅ |
 | `/vms` | 虚拟机 | 虚拟机实例管理（待实现） | ✅ |
 | `/containers` | 容器 | LXC 容器管理（待实现） | ✅ |
@@ -435,7 +480,7 @@ PVE 节点 (Agent) → PVE API (HTTPS :8006) → Agent 数据清洗 → POST /ap
 2. 每隔 60s 发送心跳 `POST /api/agent/heartbeat/`（已有实现）
 3. 定时执行扫描任务，上报到 `POST /api/agent/scan/upload/`（已有实现）
 4. Web 端可向特定 Agent 下发任务 `GET /api/agent/tasks/`（已有实现）
-5. 后端 40 个测试用例覆盖完整流程：`python manage.py test apps.agent_api`
+5. 后端 58 个测试用例覆盖完整流程：`python manage.py test apps.agent_api apps.clusters`
 
 ## 管理员
 
@@ -448,9 +493,9 @@ PVE 节点 (Agent) → PVE API (HTTPS :8006) → Agent 数据清洗 → POST /ap
 1. ~~认证 API~~ ✅ 已完成（登录/注册/密码重置）
 2. ~~前端页面框架~~ ✅ 已完成（7 个后台页面 + 路由 + 侧边栏）
 3. ~~仪表盘 UI~~ ✅ 已完成（统计卡片 + 告警列表 + 趋势图 + 节点表格）
-4. ~~Agent 上报接口与数据入库~~ ✅ 已完成（注册/心跳/扫描上传/任务下发 + 40 个测试）
+4. ~~Agent 上报接口与数据入库~~ ✅ 已完成（注册/心跳/扫描上传/任务下发 + 48 个测试）
 5. ~~Agent CLI 工具~~ ✅ 已完成（pcs-agent：init/start/stop/status/update/uninstall/install/logs）
-6. 集群 CRUD API + 前端对接
+6. ~~集群 CRUD API + 前端对接~~ ✅ 已完成（CRUD API + Agent 列表 + 安装命令展示）
 7. 自动检测引擎
 8. 仪表盘真实数据接入
 9. 各管理页面功能实现（节点/虚拟机/容器/告警等）
