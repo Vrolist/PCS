@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.clusters.models import Cluster
-from .models import ClusterNode, VM, LXC, VMConfig, LXCConfig, HAResource
+from .models import ClusterNode, VM, LXC, VMConfig, LXCConfig, HAResource, Storage, NetworkInterface, CephStatus
 
 
 def _user_cluster_ids(user):
@@ -69,6 +69,128 @@ class NodeListView(APIView):
             "is_ha_node": n.is_ha_node,
             "scanned_at": n.scanned_at,
         } for n in nodes]
+        return Response(data)
+
+
+class StorageListView(APIView):
+    """GET /api/scanner/storage/ — 存储列表"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        cluster_ids = _user_cluster_ids(request.user)
+        nodes = ClusterNode.objects.filter(cluster_id__in=cluster_ids)
+        storages = Storage.objects.filter(node__in=nodes).select_related("node__cluster")
+
+        # 只取每个存储的最新记录
+        latest = (
+            storages.values("node__node_name", "storage_name")
+            .annotate(last_scan=Max("scanned_at"))
+        )
+        q = Q()
+        for item in latest:
+            q |= Q(node__node_name=item["node__node_name"],
+                   storage_name=item["storage_name"],
+                   scanned_at=item["last_scan"])
+
+        if q:
+            storages = Storage.objects.filter(q, node__in=nodes).select_related("node__cluster")
+        else:
+            storages = Storage.objects.none()
+
+        data = [{
+            "id": s.id,
+            "node_name": s.node.node_name,
+            "cluster_name": s.node.cluster.name,
+            "name": s.storage_name,
+            "type": s.type,
+            "status": s.status,
+            "total_gb": s.total_gb,
+            "used_gb": s.used_gb,
+            "available_gb": s.avail_gb,
+            "content": s.content_types,
+            "shared": s.shared,
+            "scanned_at": s.scanned_at,
+        } for s in storages]
+        return Response(data)
+
+
+class NetworkInterfaceListView(APIView):
+    """GET /api/scanner/networks/ — 网络接口列表"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        cluster_ids = _user_cluster_ids(request.user)
+        nodes = ClusterNode.objects.filter(cluster_id__in=cluster_ids)
+        ifaces = NetworkInterface.objects.filter(node__in=nodes).select_related("node__cluster")
+
+        latest = (
+            ifaces.values("node__node_name", "name")
+            .annotate(last_scan=Max("scanned_at"))
+        )
+        q = Q()
+        for item in latest:
+            q |= Q(node__node_name=item["node__node_name"],
+                   name=item["name"],
+                   scanned_at=item["last_scan"])
+
+        if q:
+            ifaces = NetworkInterface.objects.filter(q, node__in=nodes).select_related("node__cluster")
+        else:
+            ifaces = NetworkInterface.objects.none()
+
+        data = [{
+            "id": i.id,
+            "node_name": i.node.node_name,
+            "cluster_name": i.node.cluster.name,
+            "name": i.name,
+            "type": i.type,
+            "address": i.address,
+            "mac_address": "",
+            "speed": i.speed_mbps,
+            "status": "up" if i.active else "down",
+            "scanned_at": i.scanned_at,
+        } for i in ifaces]
+        return Response(data)
+
+
+class CephStatusView(APIView):
+    """GET /api/scanner/ceph/ — Ceph 状态"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        cluster_ids = _user_cluster_ids(request.user)
+        latest = (
+            CephStatus.objects.filter(cluster_id__in=cluster_ids)
+            .values("cluster_id")
+            .annotate(last_scan=Max("scanned_at"))
+        )
+        q = Q()
+        for item in latest:
+            q |= Q(cluster_id=item["cluster_id"], scanned_at=item["last_scan"])
+
+        if q:
+            ceph_statuses = CephStatus.objects.filter(q).order_by("-scanned_at")
+        else:
+            ceph_statuses = CephStatus.objects.none()
+
+        if not ceph_statuses:
+            return Response(None)
+
+        s = ceph_statuses.first()
+        data = {
+            "id": s.id,
+            "cluster_name": s.cluster.name if hasattr(s, "cluster") else "",
+            "health": s.health,
+            "total_osds": s.total_osds,
+            "up_osds": s.up_osds,
+            "in_osds": s.in_osds,
+            "total_pgs": s.pool_count,
+            "bytes_used_gb": s.total_used_gb,
+            "bytes_total_gb": s.total_avail_gb,
+            "version": "",
+            "uptime": "",
+            "scanned_at": s.scanned_at,
+        }
         return Response(data)
 
 

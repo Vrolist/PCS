@@ -63,6 +63,27 @@
       <template #title><span>容器</span></template>
     </el-menu-item>
 
+    <el-menu-item index="/storage" class="sidebar-item">
+      <div class="item-icon-wrap">
+        <el-icon><Coin /></el-icon>
+      </div>
+      <template #title><span>存储管理</span></template>
+    </el-menu-item>
+
+    <el-menu-item index="/networks" class="sidebar-item">
+      <div class="item-icon-wrap">
+        <el-icon><Connection /></el-icon>
+      </div>
+      <template #title><span>网络接口</span></template>
+    </el-menu-item>
+
+    <el-menu-item index="/ceph" class="sidebar-item">
+      <div class="item-icon-wrap">
+        <el-icon><Box /></el-icon>
+      </div>
+      <template #title><span>Ceph 存储</span></template>
+    </el-menu-item>
+
     <div class="menu-section">
       <span v-if="!appStore.sidebarCollapsed" class="menu-label">运维</span>
     </div>
@@ -112,6 +133,7 @@
 import { useRoute } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { useThemeStore } from '@/stores/theme'
+import { Monitor, Connection, Cpu, Box, Bell, Service, User, Document, Coin } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const appStore = useAppStore()

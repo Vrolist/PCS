@@ -67,6 +67,24 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '容器', icon: 'Box' },
       },
       {
+        path: 'storage',
+        name: 'Storage',
+        component: () => import('@/views/storage/index.vue'),
+        meta: { title: '存储管理', icon: 'Coin' },
+      },
+      {
+        path: 'networks',
+        name: 'Networks',
+        component: () => import('@/views/networks/index.vue'),
+        meta: { title: '网络接口', icon: 'Connection' },
+      },
+      {
+        path: 'ceph',
+        name: 'Ceph',
+        component: () => import('@/views/ceph/index.vue'),
+        meta: { title: 'Ceph 存储', icon: 'Box' },
+      },
+      {
         path: 'alerts',
         name: 'Alerts',
         component: () => import('@/views/alerts/index.vue'),
