@@ -23,14 +23,14 @@
       <div class="auth-brand">
         <div class="brand-card">
           <div class="brand-logo">
-            <div class="logo-icon"><ServerIcon :size="22" /></div>
+            <div class="logo-icon"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2"/><line x1="6" y1="8" x2="18" y2="8"/><line x1="6" y1="12" x2="18" y2="12"/><line x1="6" y1="16" x2="18" y2="16"/><circle cx="6" cy="6" r="1" fill="currentColor" stroke="none"/></svg></div>
             <div class="brand-logo-text">
               <span class="logo-main">PCS</span>
               <span class="logo-sub"><span class="accent-l">P</span>ve<span class="accent-l">C</span>luster<span class="accent-l">S</span>can</span>
             </div>
           </div>
-          <h2 class="brand-title">欢迎回来</h2>
-          <p class="brand-desc">登录后即可管理你的 PVE 集群，查看监控数据与检测报告。</p>
+          <h2 class="brand-title">重置密码</h2>
+          <p class="brand-desc">通过注册邮箱重置你的账户密码，安全快捷。</p>
           <div class="brand-features">
             <div v-for="item in brandItems" :key="item.label" class="brand-feature">
               <el-icon :size="16" color="#409eff"><component :is="item.icon" /></el-icon>
@@ -43,56 +43,106 @@
       <!-- Right: Form -->
       <div class="auth-form-panel">
         <div class="form-card">
-          <h2 class="form-title">登录账户</h2>
-          <p class="form-subtitle">请输入你的登录信息</p>
+          <!-- Step 1: Email -->
+          <template v-if="step === 1">
+            <h2 class="form-title">找回密码</h2>
+            <p class="form-subtitle">输入注册邮箱，我们将发送重置验证码</p>
 
-          <el-form
-            ref="formRef"
-            :model="form"
-            :rules="rules"
-            label-width="0"
-            size="large"
-            class="auth-form"
-            @keyup.enter="handleLogin"
-          >
-            <el-form-item prop="username">
-              <el-input
-                v-model="form.username"
-                placeholder="用户名 / 邮箱"
-                :prefix-icon="User"
-              />
-            </el-form-item>
+            <el-form
+              ref="formRef1"
+              :model="form1"
+              :rules="rules1"
+              label-width="0"
+              size="large"
+              class="auth-form"
+              @keyup.enter="handleSendCode"
+            >
+              <el-form-item prop="email">
+                <el-input
+                  v-model="form1.email"
+                  placeholder="注册邮箱"
+                  :prefix-icon="Message"
+                />
+              </el-form-item>
 
-            <el-form-item prop="password">
-              <el-input
-                v-model="form.password"
-                type="password"
-                placeholder="密码"
-                :prefix-icon="Lock"
-                show-password
-              />
-            </el-form-item>
+              <el-form-item>
+                <el-button
+                  type="primary"
+                  :loading="sending"
+                  @click="handleSendCode"
+                  class="submit-btn"
+                  round
+                >
+                  {{ sending ? '发送中...' : '发送验证码' }}
+                </el-button>
+              </el-form-item>
+            </el-form>
+          </template>
 
-            <div class="form-options">
-              <router-link to="/forgot-password" class="forgot-link">忘记密码？</router-link>
+          <!-- Step 2: Reset -->
+          <template v-else>
+            <h2 class="form-title">设置新密码</h2>
+            <p class="form-subtitle">验证码已发送至 {{ form1.email }}</p>
+
+            <el-form
+              ref="formRef2"
+              :model="form2"
+              :rules="rules2"
+              label-width="0"
+              size="large"
+              class="auth-form"
+              @keyup.enter="handleReset"
+            >
+              <el-form-item prop="code">
+                <el-input
+                  v-model="form2.code"
+                  placeholder="验证码"
+                  :prefix-icon="Key"
+                />
+              </el-form-item>
+
+              <el-form-item prop="newPassword">
+                <el-input
+                  v-model="form2.newPassword"
+                  type="password"
+                  placeholder="新密码"
+                  :prefix-icon="Lock"
+                  show-password
+                />
+              </el-form-item>
+
+              <el-form-item prop="confirmPassword">
+                <el-input
+                  v-model="form2.confirmPassword"
+                  type="password"
+                  placeholder="确认新密码"
+                  :prefix-icon="Lock"
+                  show-password
+                />
+              </el-form-item>
+
+              <el-form-item>
+                <el-button
+                  type="primary"
+                  :loading="resetting"
+                  @click="handleReset"
+                  class="submit-btn"
+                  round
+                >
+                  {{ resetting ? '重置中...' : '重置密码' }}
+                </el-button>
+              </el-form-item>
+            </el-form>
+
+            <div class="form-footer">
+              <span>没有收到验证码？</span>
+              <a href="javascript:void(0)" class="form-link" @click="step = 1">重新发送</a>
             </div>
+          </template>
 
-            <el-form-item>
-              <el-button
-                type="primary"
-                :loading="loading"
-                @click="handleLogin"
-                class="submit-btn"
-                round
-              >
-                {{ loading ? '登录中...' : '登录' }}
-              </el-button>
-            </el-form-item>
-          </el-form>
-
-          <div class="form-footer">
-            <span>还没有账号？</span>
-            <router-link to="/register" class="form-link">立即注册</router-link>
+          <div class="form-footer" :style="step === 2 ? 'display:none' : ''">
+            <span>想起密码了？</span>
+            <router-link to="/login" class="form-link">返回登录</router-link>
           </div>
         </div>
       </div>
@@ -104,25 +154,52 @@
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { User, Lock } from '@element-plus/icons-vue'
-import { useAuthStore } from '@/stores/auth'
+import { Message, Key, Lock } from '@element-plus/icons-vue'
 import { useThemeStore } from '@/stores/theme'
-import { login } from '@/api/auth'
+import { passwordReset, passwordResetConfirm } from '@/api/auth'
 
 const router = useRouter()
-const authStore = useAuthStore()
 const themeStore = useThemeStore()
-const loading = ref(false)
-const formRef = ref()
+const sending = ref(false)
+const resetting = ref(false)
+const formRef1 = ref()
+const formRef2 = ref()
+const step = ref(1)
 
-const form = reactive({
-  username: '',
-  password: '',
+const form1 = reactive({ email: '' })
+const form2 = reactive({
+  code: '',
+  newPassword: '',
+  confirmPassword: '',
 })
 
-const rules = {
-  username: [{ required: true, message: '请输入用户名或邮箱', trigger: 'blur' }],
-  password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
+const rules1 = {
+  email: [
+    { required: true, message: '请输入注册邮箱', trigger: 'blur' },
+    { type: 'email', message: '邮箱格式不正确', trigger: 'blur' },
+  ],
+}
+
+const validateConfirm = (_rule: any, value: string, callback: any) => {
+  if (value !== form2.newPassword) {
+    callback(new Error('两次输入的密码不一致'))
+  } else {
+    callback()
+  }
+}
+
+const rules2 = {
+  code: [
+    { required: true, message: '请输入验证码', trigger: 'blur' },
+  ],
+  newPassword: [
+    { required: true, message: '请输入新密码', trigger: 'blur' },
+    { min: 6, message: '密码至少 6 位', trigger: 'blur' },
+  ],
+  confirmPassword: [
+    { required: true, message: '请确认新密码', trigger: 'blur' },
+    { validator: validateConfirm, trigger: 'blur' },
+  ],
 }
 
 const brandItems = [
@@ -132,29 +209,39 @@ const brandItems = [
   { icon: 'Connection', label: '多 Agent 架构' },
 ]
 
-async function handleLogin() {
-  const valid = await formRef.value.validate().catch(() => false)
+async function handleSendCode() {
+  const valid = await formRef1.value.validate().catch(() => false)
   if (!valid) return
 
-  loading.value = true
+  sending.value = true
   try {
-    const res: any = await login(form)
-    authStore.setToken(res.access)
-    ElMessage.success('登录成功')
-    router.push('/dashboard')
-  } catch (err: any) {
-    const detail = err?.response?.data
-    if (typeof detail === 'string') {
-      ElMessage.error(detail)
-    } else if (detail?.__all__) {
-      ElMessage.error(Array.isArray(detail.__all__) ? detail.__all__[0] : detail.__all__)
-    } else if (detail?.non_field_errors) {
-      ElMessage.error(detail.non_field_errors[0])
-    } else {
-      ElMessage.error('登录失败，请检查用户名和密码')
-    }
+    await passwordReset({ email: form1.email })
+    ElMessage.success('验证码已发送到邮箱')
+    step.value = 2
+  } catch {
+    // handled by interceptor
   } finally {
-    loading.value = false
+    sending.value = false
+  }
+}
+
+async function handleReset() {
+  const valid = await formRef2.value.validate().catch(() => false)
+  if (!valid) return
+
+  resetting.value = true
+  try {
+    await passwordResetConfirm({
+      code: form2.code,
+      new_password: form2.newPassword,
+      new_password2: form2.confirmPassword,
+    })
+    ElMessage.success('密码重置成功，请重新登录')
+    router.push('/login')
+  } catch {
+    // handled by interceptor
+  } finally {
+    resetting.value = false
   }
 }
 </script>
@@ -169,8 +256,6 @@ async function handleLogin() {
   position: relative;
   overflow: hidden;
 }
-
-/* Background */
 .auth-bg {
   position: absolute;
   inset: 0;
@@ -206,8 +291,6 @@ async function handleLogin() {
   background-size: 60px 60px;
   opacity: 0.08;
 }
-
-/* Top buttons */
 .back-link {
   position: fixed;
   top: 24px;
@@ -230,7 +313,6 @@ async function handleLogin() {
   color: #409eff;
   border-color: #409eff;
 }
-
 .theme-btn {
   position: fixed;
   top: 24px;
@@ -253,8 +335,6 @@ async function handleLogin() {
   border-color: #409eff;
   color: #409eff;
 }
-
-/* Layout */
 .auth-container {
   position: relative;
   z-index: 1;
@@ -266,8 +346,6 @@ async function handleLogin() {
   overflow: hidden;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.12);
 }
-
-/* Left Brand Panel */
 .auth-brand {
   flex: 1;
   background: linear-gradient(135deg, #1a3a6b, #2a1a5e);
@@ -339,8 +417,6 @@ async function handleLogin() {
   font-size: 14px;
   color: rgba(255, 255, 255, 0.8);
 }
-
-/* Right Form Panel */
 .auth-form-panel {
   flex: 1;
   background: var(--bg-secondary);
@@ -365,33 +441,15 @@ async function handleLogin() {
   color: var(--text-muted);
   margin-bottom: 32px;
 }
-
 .auth-form .el-form-item {
   margin-bottom: 20px;
 }
-
 .submit-btn {
   width: 100%;
   height: 44px;
   font-size: 16px;
   font-weight: 600;
 }
-
-.form-options {
-  display: flex;
-  justify-content: flex-end;
-  margin: -12px 0 20px;
-}
-.forgot-link {
-  font-size: 13px;
-  color: var(--text-muted);
-  text-decoration: none;
-  transition: color 0.2s;
-}
-.forgot-link:hover {
-  color: #409eff;
-}
-
 .form-footer {
   text-align: center;
   margin-top: 24px;
@@ -407,8 +465,6 @@ async function handleLogin() {
 .form-link:hover {
   text-decoration: underline;
 }
-
-/* Responsive */
 @media (max-width: 768px) {
   .auth-container {
     flex-direction: column;

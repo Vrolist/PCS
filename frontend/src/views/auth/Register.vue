@@ -83,7 +83,7 @@
             <el-form-item prop="email">
               <el-input
                 v-model="form.email"
-                placeholder="邮箱（选填）"
+                placeholder="邮箱"
                 :prefix-icon="Message"
               />
             </el-form-item>
@@ -165,6 +165,7 @@ const rules = {
     { min: 2, max: 32, message: '用户名长度 2-32 位', trigger: 'blur' },
   ],
   email: [
+    { required: true, message: '请输入邮箱', trigger: 'blur' },
     { type: 'email', message: '邮箱格式不正确', trigger: 'blur' },
   ],
   password: [
@@ -185,8 +186,9 @@ async function handleRegister() {
   try {
     await register({
       username: form.username,
+      email: form.email,
       password: form.password,
-      email: form.email || undefined,
+      password2: form.confirmPassword,
     })
     ElMessage.success('注册成功，请登录')
     router.push('/login')

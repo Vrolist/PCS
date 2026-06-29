@@ -21,6 +21,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '注册', noAuth: true },
   },
   {
+    path: '/forgot-password',
+    name: 'ForgotPassword',
+    component: () => import('@/views/auth/ForgotPassword.vue'),
+    meta: { title: '找回密码', noAuth: true },
+  },
+  {
     path: '/',
     component: () => import('@/layouts/MainLayout.vue'),
     children: [

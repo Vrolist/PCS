@@ -4,10 +4,18 @@ export function login(data: { username: string; password: string }) {
   return request.post('/auth/login/', data)
 }
 
-export function register(data: { username: string; password: string; email?: string }) {
+export function register(data: { username: string; email: string; password: string; password2: string }) {
   return request.post('/auth/register/', data)
 }
 
 export function getUserInfo() {
   return request.get('/auth/user/')
+}
+
+export function passwordReset(data: { email: string }) {
+  return request.post('/auth/password-reset/', data)
+}
+
+export function passwordResetConfirm(data: { code: string; new_password: string; new_password2: string }) {
+  return request.post('/auth/password-reset/confirm/', data)
 }

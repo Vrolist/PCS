@@ -1,5 +1,7 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.utils import timezone
+import secrets
 
 
 class User(AbstractUser):
@@ -14,6 +16,37 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.username
+
+
+class PasswordResetCode(models.Model):
+    """密码重置验证码"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="用户")
+    code = models.CharField("验证码", max_length=64, unique=True)
+    email = models.EmailField("邮箱")
+    created_at = models.DateTimeField("创建时间", auto_now_add=True)
+    expires_at = models.DateTimeField("过期时间")
+    is_used = models.BooleanField("已使用", default=False)
+
+    class Meta:
+        verbose_name = "密码重置码"
+        verbose_name_plural = "密码重置码"
+
+    def __str__(self):
+        return f"{self.user.username} - {self.code[:8]}..."
+
+    def is_valid(self):
+        return not self.is_used and timezone.now() < self.expires_at
+
+    @classmethod
+    def generate_for_user(cls, user, email, expiry_minutes=30):
+        code = secrets.token_urlsafe(32)
+        expires_at = timezone.now() + timezone.timedelta(minutes=expiry_minutes)
+        return cls.objects.create(
+            user=user,
+            code=code,
+            email=email,
+            expires_at=expires_at,
+        )
 
 
 class Plan(models.Model):

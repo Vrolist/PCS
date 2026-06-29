@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
-from .models import User, Plan, UserPlan
+from .models import User, PasswordResetCode, Plan, UserPlan
 
 
 @admin.register(User)
@@ -24,3 +24,9 @@ class PlanAdmin(admin.ModelAdmin):
 class UserPlanAdmin(admin.ModelAdmin):
     list_display = ['user', 'plan', 'start_date', 'end_date', 'is_active']
     list_filter = ['is_active', 'plan']
+
+
+@admin.register(PasswordResetCode)
+class PasswordResetCodeAdmin(admin.ModelAdmin):
+    list_display = ['user', 'email', 'created_at', 'expires_at', 'is_used']
+    list_filter = ['is_used']
