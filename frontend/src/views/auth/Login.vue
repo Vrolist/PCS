@@ -24,7 +24,10 @@
         <div class="brand-card">
           <div class="brand-logo">
             <div class="logo-icon"><ServerIcon :size="22" /></div>
-            <span class="logo-text">PVE<span class="accent">Scan</span></span>
+            <div class="brand-logo-text">
+              <span class="logo-main">PCS</span>
+              <span class="logo-sub"><span class="accent-l">P</span>ce<span class="accent-l">C</span>luster<span class="accent-l">S</span>can</span>
+            </div>
           </div>
           <h2 class="brand-title">欢迎回来</h2>
           <p class="brand-desc">登录后即可管理你的 PVE 集群，查看监控数据与检测报告。</p>
@@ -279,11 +282,25 @@ async function handleLogin() {
   justify-content: center;
   font-size: 22px;
 }
-.logo-text {
-  font-size: 22px;
-  font-weight: 700;
+.brand-logo-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
 }
-.logo-text .accent {
+.brand-logo-text .logo-main {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #fff;
+}
+.brand-logo-text .logo-sub {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+  letter-spacing: 0.3px;
+}
+.brand-logo-text .accent-l {
+  font-size: 15px;
+  font-weight: 700;
   color: #60b0ff;
 }
 .brand-title {

@@ -5,7 +5,10 @@
       <div class="container nav-container">
         <router-link to="/" class="logo">
           <div class="logo-icon"><ServerIcon /></div>
-          <span class="logo-text">PVE<span class="logo-accent">Scan</span></span>
+          <div class="logo-wrapper">
+            <span class="logo-main">PCS</span>
+            <span class="logo-sub"><span class="accent-l">P</span>ce<span class="accent-l">C</span>luster<span class="accent-l">S</span>can</span>
+          </div>
         </router-link>
         <nav class="nav-actions">
           <button class="theme-btn" @click="themeStore.toggle" :title="themeStore.theme === 'dark' ? '切换到亮色' : '切换到暗色'">
@@ -142,10 +145,13 @@
         <div class="footer-top">
           <div class="footer-brand">
             <div class="logo">
-              <div class="logo-icon"><ServerIcon /></div>
-              <span class="logo-text">PVE<span class="logo-accent">Scan</span></span>
+              <div class="logo-icon-footer"><ServerIcon size="28" /></div>
+              <div class="logo-wrapper">
+                <span class="logo-main">PCS</span>
+                <span class="logo-sub"><span class="accent-l">P</span>ce<span class="accent-l">C</span>luster<span class="accent-l">S</span>can</span>
+              </div>
             </div>
-            <p class="footer-desc">开源 PVE 集群监控平台</p>
+            <p class="footer-desc">PVE 集群监控平台</p>
           </div>
           <div class="footer-links">
             <div class="footer-col">
@@ -304,6 +310,37 @@ const steps = [
 }
 .logo-accent {
   color: #409eff;
+}
+.logo-wrapper {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+.logo-main {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--text-heading);
+}
+.logo-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.3px;
+}
+.accent-l {
+  font-size: 14px;
+  font-weight: 700;
+  color: #409eff;
+}
+.logo-icon-footer {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #409eff, #337ecc);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
 }
 
 .nav-actions {
@@ -775,8 +812,14 @@ const steps = [
 .footer-brand .logo {
   margin-bottom: 12px;
 }
-.footer-brand .logo-text {
+.footer-brand .logo-main {
   color: #e0e0f0;
+}
+.footer-brand .logo-sub {
+  color: #8080a0;
+}
+.footer-brand .accent-l {
+  color: #60b0ff;
 }
 .footer-desc {
   font-size: 14px;
