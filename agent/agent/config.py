@@ -1,11 +1,12 @@
 """Agent 配置管理"""
-import os
 from pathlib import Path
 
 import yaml
 
-CONFIG_DIR = Path.home() / ".config" / "pve-agent"
+CONFIG_DIR = Path.home() / ".config" / "pcs-agent"
 CONFIG_FILE = CONFIG_DIR / "config.yaml"
+INSTALL_DIR = Path("/opt/pcs-agent")
+SERVICE_FILE = Path("/etc/systemd/system/pcs-agent.service")
 
 
 class Config:

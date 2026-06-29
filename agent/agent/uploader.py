@@ -38,6 +38,12 @@ class Uploader:
             "scan_interval": scan_interval,
         })
 
+    def unregister(self, agent_id: str) -> dict:
+        """通知平台 Agent 已卸载"""
+        return self._post("/api/agent/unregister/", {
+            "agent_id": agent_id,
+        })
+
     def heartbeat(self, agent_id: str, status: str = "online",
                   current_task: str = "") -> dict:
         """发送心跳"""
@@ -60,3 +66,7 @@ class Uploader:
     def get_tasks(self, agent_id: str) -> list:
         """获取下发任务"""
         return self._get("/api/agent/tasks/", {"agent_id": agent_id})
+
+    def check_version(self) -> dict:
+        """查询平台最新版本"""
+        return self._get("/api/agent/version/")

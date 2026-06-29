@@ -3,7 +3,7 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pve-cluster-scan-agent"
+name = "pcs-agent"
 version = "0.1.0"
 description = "PVE 集群扫描 Agent — 采集 Proxmox VE 集群数据并上报到管理平台"
 requires-python = ">=3.9"
@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [project.scripts]
-pve-agent = "agent.cli:main"
+pcs-agent = "agent.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["agent*"]

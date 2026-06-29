@@ -611,3 +611,103 @@ class AgentScanIntegrationTest(TestCase):
         self.assertEqual(agent.total_scans, 2)
         self.assertEqual(ScanTask.objects.count(), 2)
         self.assertEqual(ScanHistory.objects.count(), 2)
+
+
+# ============================================================
+# 6. Agent 卸载通知
+# ============================================================
+
+class AgentUnregisterAPITest(TestCase):
+    """POST /api/agent/unregister/"""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.url = "/api/agent/unregister/"
+        _, self.cluster = _create_user_cluster()
+        self.agent = AgentInstance.objects.create(
+            cluster=self.cluster,
+            agent_id="test-agent-id-001",
+            hostname="pve-node-1",
+            status=AgentInstance.Status.ONLINE,
+        )
+
+    def test_unregister_success(self):
+        resp = self.client.post(self.url, {
+            "agent_id": "test-agent-id-001",
+        }, format="json")
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data["ok"])
+        self.agent.refresh_from_db()
+        self.assertEqual(self.agent.status, AgentInstance.Status.OFFLINE)
+
+    def test_unregister_nonexistent_agent(self):
+        resp = self.client.post(self.url, {
+            "agent_id": "nonexistent",
+        }, format="json")
+        self.assertEqual(resp.status_code, 404)
+
+    def test_unregister_missing_agent_id(self):
+        resp = self.client.post(self.url, {}, format="json")
+        self.assertEqual(resp.status_code, 400)
+
+
+# ============================================================
+# 7. 版本查询
+# ============================================================
+
+class AgentVersionAPITest(TestCase):
+    """GET /api/agent/version/"""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.url = "/api/agent/version/"
+
+    def test_version_returns_info(self):
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("latest_version", resp.data)
+        self.assertIn("download_url", resp.data)
+        self.assertIn("changelog", resp.data)
+
+    def test_version_has_current(self):
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.data["latest_version"], "0.1.0")
+
+
+# ============================================================
+# 8. 安装脚本
+# ============================================================
+
+class AgentInstallScriptAPITest(TestCase):
+    """GET /api/agent/install.sh"""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.url = "/api/agent/install.sh"
+
+    def test_install_script_returns_bash(self):
+        resp = self.client.get(self.url, {
+            "token": "test-token",
+            "platform": "https://platform:8000",
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("text/plain", resp["Content-Type"])
+        content = resp.content.decode()
+        self.assertIn("#!/bin/bash", content)
+        self.assertIn("test-token", content)
+        self.assertIn("pcs-agent", content)
+
+    def test_install_script_contains_platform(self):
+        resp = self.client.get(self.url, {
+            "token": "abc123",
+            "platform": "https://myhost:8000",
+        })
+        content = resp.content.decode()
+        self.assertIn("https://myhost:8000", content)
+        self.assertIn("abc123", content)
+
+    def test_uninstall_script(self):
+        resp = self.client.get(self.url, {"uninstall": ""})
+        content = resp.content.decode()
+        self.assertIn("卸载", content)
+        self.assertIn("systemctl stop", content)

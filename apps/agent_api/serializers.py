@@ -46,3 +46,15 @@ class AgentTaskSerializer(serializers.ModelSerializer):
     class Meta:
         model = ScanTask
         fields = ["id", "task_type", "status", "created_at"]
+
+
+class AgentUnregisterSerializer(serializers.Serializer):
+    """Agent 卸载请求"""
+    agent_id = serializers.CharField(help_text="Agent 唯一标识")
+
+
+class AgentVersionResponseSerializer(serializers.Serializer):
+    """版本查询响应"""
+    latest_version = serializers.CharField(help_text="最新版本号")
+    download_url = serializers.URLField(help_text="下载地址")
+    changelog = serializers.CharField(help_text="更新说明")

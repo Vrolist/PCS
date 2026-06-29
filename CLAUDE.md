@@ -19,9 +19,10 @@ pve-cluster-scan/
 │   ├── clusters/           # 集群管理
 │   ├── agent_api/          # Agent 通信 & 多 Agent 管理
 │   │   ├── models.py       #   - AgentInstance / ScanTask
-│   │   ├── serializers.py  #   - Register / Heartbeat / ScanUpload / Tasks
-│   │   ├── views.py        #   - 注册 / 心跳 / 扫描上传 / 任务下发
-│   │   ├── urls.py         #   - /api/agent/ 路由
+│   │   ├── serializers.py  #   - Register / Heartbeat / ScanUpload / Tasks / Unregister / Version
+│   │   ├── views.py        #   - 注册 / 心跳 / 扫描上传 / 任务下发 / 卸载 / 版本查询 / 安装脚本
+│   │   ├── urls.py         #   - /api/agent/ 路由（7 个端点）
+│   │   ├── install_script.py  # install.sh 模板生成
 │   │   ├── tests.py        #   - 40 个测试用例
 │   │   └── admin.py
 │   └── scanner/            # 扫描数据 & 自动检测
@@ -66,7 +67,7 @@ pve-cluster-scan/
 │   └── agent/
 │       ├── __init__.py
 │       ├── cli.py              # CLI 入口（click）
-│       ├── config.py           # 配置管理（~/.config/pve-agent/config.yaml）
+│       ├── config.py           # 配置管理（~/.config/pcs-agent/config.yaml）
 │       ├── pve_client.py       # PVE API 客户端
 │       ├── scanner.py          # 数据采集 + 单位转换
 │       ├── uploader.py         # 上报到 Django 平台
@@ -150,27 +151,32 @@ curl -fsSL https://platform:8000/api/agent/install.sh?token=<token>&platform=<ur
 curl -fsSL https://platform:8000/api/agent/install.sh | bash -s -- --uninstall
 
 # Agent 管理命令
-pve-agent status      # 查看运行状态
-pve-agent update      # 更新到最新版本
-pve-agent uninstall   # 卸载 Agent
+pcs-agent init        # 注册到平台（安装时自动执行）
+pcs-agent start       # 启动 Agent
+pcs-agent stop        # 停止 Agent
+pcs-agent status      # 查看运行状态
+pcs-agent update      # 更新到最新版本
+pcs-agent uninstall   # 卸载 Agent
+pcs-agent install     # 安装 Agent（交互式）
+pcs-agent logs        # 查看运行日志（--follow 实时跟踪）
 
 # systemd 管理（标准 Linux 命令）
-systemctl status pve-agent     # 查看服务状态
-systemctl stop pve-agent       # 停止
-systemctl restart pve-agent    # 重启
-journalctl -u pve-agent -f     # 查看日志
+systemctl status pcs-agent     # 查看服务状态
+systemctl stop pcs-agent       # 停止
+systemctl restart pcs-agent    # 重启
+journalctl -u pcs-agent -f     # 查看日志
 ```
 
-**配置文件**：`~/.config/pve-agent/config.yaml`
-**安装目录**：`/opt/pve-agent/`
+**配置文件**：`~/.config/pcs-agent/config.yaml`
+**安装目录**：`/opt/pcs-agent/`
 
 **执行流程**：
 ```
 curl 安装脚本
   → 检测系统环境
   → 安装 Python3 + venv
-  → pip install pve-agent
-  → pve-agent init（注册到平台）
+  → pip install pcs-agent
+  → pcs-agent init（注册到平台）
   → 安装 systemd 服务
   → 启动服务
 
@@ -218,6 +224,9 @@ POST /api/auth/login/
 | POST | `/api/agent/heartbeat/` | Agent 心跳上报 | ❌ |
 | POST | `/api/agent/scan/upload/` | 扫描数据上传入库 | ❌ |
 | GET | `/api/agent/tasks/` | 查询下发任务 | ❌ |
+| POST | `/api/agent/unregister/` | Agent 卸载通知 | ❌ |
+| GET | `/api/agent/version/` | 查询最新版本号 | ❌ |
+| GET | `/api/agent/install.sh` | 获取安装脚本 | ❌ |
 
 **Agent 注册：**
 ```json
@@ -248,6 +257,25 @@ POST /api/agent/scan/upload/
 ```
 GET /api/agent/tasks/?agent_id=hex-uuid
 → [{"id": 1, "task_type": "full_scan", "status": "running", "created_at": "..."}]
+```
+
+**Agent 卸载通知：**
+```json
+POST /api/agent/unregister/
+{"agent_id": "hex-uuid"}
+→ {"ok": true}
+```
+
+**版本查询：**
+```
+GET /api/agent/version/
+→ {"latest_version": "0.2.0", "download_url": "https://..."}
+```
+
+**安装脚本获取：**
+```
+GET /api/agent/install.sh?token=<agent_token>&platform=<platform_url>
+→ (返回 bash 安装脚本内容)
 ```
 
 ## 页面路由
@@ -421,7 +449,7 @@ PVE 节点 (Agent) → PVE API (HTTPS :8006) → Agent 数据清洗 → POST /ap
 2. ~~前端页面框架~~ ✅ 已完成（7 个后台页面 + 路由 + 侧边栏）
 3. ~~仪表盘 UI~~ ✅ 已完成（统计卡片 + 告警列表 + 趋势图 + 节点表格）
 4. ~~Agent 上报接口与数据入库~~ ✅ 已完成（注册/心跳/扫描上传/任务下发 + 40 个测试）
-5. ~~Agent CLI 工具~~ ✅ 已完成（pve-agent：status/update/uninstall）
+5. ~~Agent CLI 工具~~ ✅ 已完成（pcs-agent：init/start/stop/status/update/uninstall/install/logs）
 6. 集群 CRUD API + 前端对接
 7. 自动检测引擎
 8. 仪表盘真实数据接入

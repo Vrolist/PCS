@@ -28,6 +28,7 @@ from .serializers import (
     AgentHeartbeatSerializer,
     AgentRegisterSerializer,
     AgentTaskSerializer,
+    AgentUnregisterSerializer,
     ScanUploadSerializer,
 )
 
@@ -411,3 +412,216 @@ class AgentTasksView(APIView):
         ).exclude(agent=agent).order_by("-created_at")[:10]
 
         return Response(AgentTaskSerializer(tasks, many=True).data)
+
+
+# ============================================================
+# Agent 版本常量（平台侧维护）
+# ============================================================
+
+AGENT_LATEST_VERSION = "0.1.0"
+AGENT_DOWNLOAD_URL = "https://pypi.org/project/pcs-agent/"
+AGENT_CHANGELOG = "初始版本：支持集群扫描、心跳、数据上报"
+
+
+class AgentUnregisterView(APIView):
+    """Agent 卸载通知"""
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        ser = AgentUnregisterSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        agent_id = ser.validated_data["agent_id"]
+
+        try:
+            agent = AgentInstance.objects.get(agent_id=agent_id)
+        except AgentInstance.DoesNotExist:
+            return Response({"error": "Agent not found"}, status=404)
+
+        # 标记为 offline
+        agent.status = AgentInstance.Status.OFFLINE
+        agent.save(update_fields=["status", "updated_at"])
+
+        return Response({"ok": True})
+
+
+class AgentVersionView(APIView):
+    """查询 Agent 最新版本"""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        return Response({
+            "latest_version": AGENT_LATEST_VERSION,
+            "download_url": AGENT_DOWNLOAD_URL,
+            "changelog": AGENT_CHANGELOG,
+        })
+
+
+class AgentInstallScriptView(APIView):
+    """返回一键安装脚本"""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        token = request.query_params.get("token", "")
+        platform_url = request.query_params.get("platform", "")
+        uninstall = "uninstall" in request.query_params
+
+        if uninstall:
+            script = self._uninstall_script()
+        else:
+            script = self._install_script(token, platform_url)
+
+        from django.http import HttpResponse
+        return HttpResponse(script, content_type="text/plain; charset=utf-8")
+
+    def _install_script(self, token: str, platform_url: str) -> str:
+        return f"""#!/bin/bash
+set -e
+
+TOKEN="{token}"
+PLATFORM_URL="{platform_url}"
+AGENT_NAME="pcs-agent"
+INSTALL_DIR="/opt/$AGENT_NAME"
+CONFIG_DIR="$HOME/.config/$AGENT_NAME"
+
+echo "=============================="
+echo "  PVE Cluster Scan Agent"
+echo "  安装程序 v0.1.0"
+echo "=============================="
+echo ""
+
+# 参数检查
+if [ -z "$TOKEN" ] || [ -z "$PLATFORM_URL" ]; then
+    echo "用法: curl -fsSL '$PLATFORM_URL/api/agent/install.sh?token=<TOKEN>&platform=$PLATFORM_URL' | bash"
+    exit 1
+fi
+
+# 1. 检测系统
+detect_os() {{
+    if [ -f /etc/debian_version ]; then
+        echo "debian"
+    elif [ -f /etc/redhat-release ]; then
+        echo "redhat"
+    else
+        echo "unknown"
+    fi
+}}
+
+OS=$(detect_os)
+echo "检测到系统: $OS"
+
+# 2. 安装依赖
+echo "安装系统依赖..."
+if [ "$OS" = "debian" ]; then
+    apt-get update -qq 2>/dev/null || true
+    apt-get install -y -qq python3 python3-pip python3-venv curl 2>/dev/null
+elif [ "$OS" = "redhat" ]; then
+    yum install -y python3 python3-pip curl 2>/dev/null || true
+else
+    echo "不支持的系统，请手动安装 python3 和 pip"
+    exit 1
+fi
+
+# 3. 创建安装目录
+echo "创建安装目录: $INSTALL_DIR"
+mkdir -p "$INSTALL_DIR"
+
+# 4. 创建虚拟环境
+echo "创建 Python 虚拟环境..."
+python3 -m venv "$INSTALL_DIR/venv"
+
+# 5. 安装 Agent
+echo "安装 $AGENT_NAME..."
+"$INSTALL_DIR/venv/bin/pip" install --quiet --upgrade pip
+"$INSTALL_DIR/venv/bin/pip" install --quiet $AGENT_NAME
+
+# 6. 初始化（注册到平台）
+echo "注册 Agent..."
+mkdir -p "$CONFIG_DIR"
+"$INSTALL_DIR/venv/bin/$AGENT_NAME" init \\
+    --platform-url "$PLATFORM_URL" \\
+    --token "$TOKEN" \\
+    --no-input
+
+# 7. 安装 systemd 服务
+echo "安装 systemd 服务..."
+cat > /etc/systemd/system/$AGENT_NAME.service << 'EOF'
+[Unit]
+Description=PVE Cluster Scan Agent
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=$INSTALL_DIR/venv/bin/$AGENT_NAME start --foreground
+Restart=always
+RestartSec=10
+WorkingDirectory=$INSTALL_DIR
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable $AGENT_NAME
+systemctl start $AGENT_NAME
+
+# 8. 验证
+sleep 2
+AGENT_STATUS=$(systemctl is-active $AGENT_NAME 2>/dev/null || echo "unknown")
+
+echo ""
+echo "=============================="
+echo "  安装完成！"
+echo ""
+if [ "$AGENT_STATUS" = "active" ]; then
+    echo "  状态:    运行中 ✓"
+else
+    echo "  状态:    $AGENT_STATUS"
+    echo "  启动失败? 查看日志: journalctl -u $AGENT_NAME -n 20"
+fi
+echo ""
+echo "  管理命令:"
+echo "    查看状态: systemctl status $AGENT_NAME"
+echo "    查看日志: journalctl -u $AGENT_NAME -f"
+echo "    停止服务: systemctl stop $AGENT_NAME"
+echo "    重启服务: systemctl restart $AGENT_NAME"
+echo "    卸载:     $AGENT_NAME uninstall"
+echo "=============================="
+"""
+
+    def _uninstall_script(self) -> str:
+        return """#!/bin/bash
+set -e
+
+AGENT_NAME="pcs-agent"
+INSTALL_DIR="/opt/$AGENT_NAME"
+CONFIG_DIR="$HOME/.config/$AGENT_NAME"
+
+echo "=============================="
+echo "  PVE Cluster Scan Agent"
+echo "  卸载程序"
+echo "=============================="
+echo ""
+
+# 1. 停止服务
+echo "1. 停止服务..."
+systemctl stop $AGENT_NAME 2>/dev/null || true
+
+# 2. 禁用开机自启
+echo "2. 禁用开机自启..."
+systemctl disable $AGENT_NAME 2>/dev/null || true
+
+# 3. 删除 systemd 服务
+echo "3. 删除 systemd 服务..."
+rm -f /etc/systemd/system/$AGENT_NAME.service
+systemctl daemon-reload
+
+# 4. 删除文件
+echo "4. 清理文件..."
+rm -rf "$INSTALL_DIR"
+rm -rf "$CONFIG_DIR"
+
+echo ""
+echo "=============================="
+echo "  卸载完成！"
+echo "=============================="
+"""

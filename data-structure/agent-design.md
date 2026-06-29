@@ -34,8 +34,7 @@ PVE 集群扫描 Agent 的完整设计方案。
           │              │              │
     ┌─────▼─────┐  ┌─────▼─────┐  ┌─────▼─────┐
     │  PVE 节点1  │  │  PVE 节点2  │  │  PVE 节点3  │
-    │            │  │            │  │            │
-    │  pve-agent │  │  pve-agent │  │  pve-agent │
+    │  pcs-agent │  │  pcs-agent │  │  pcs-agent │
     │  (systemd) │  │  (systemd) │  │  (systemd) │
     │            │  │            │  │            │
     │  → PVE API │  │  → PVE API │  │  → PVE API │
@@ -64,9 +63,9 @@ PVE 集群扫描 Agent 的完整设计方案。
 4. 脚本自动完成:
    ✅ 检测系统环境（Debian/Ubuntu/CentOS）
    ✅ 安装 Python3 + pip + venv
-   ✅ 创建虚拟环境 /opt/pve-agent/
-   ✅ pip install pve-agent
-   ✅ 执行 pve-agent init（注册到平台）
+   ✅ 创建虚拟环境 /opt/pcs-agent/
+   ✅ pip install pcs-agent
+   ✅ 执行 pcs-agent init（注册到平台）
    ✅ 安装 systemd 服务
    ✅ 启动服务
    ✅ 输出 "安装成功！Agent ID: xxx"
@@ -82,13 +81,13 @@ PVE 集群扫描 Agent 的完整设计方案。
 curl -fsSL https://platform:8000/api/agent/install.sh | bash -s -- --uninstall
 
 # 方式二：手动卸载
-pve-agent uninstall
+pcs-agent uninstall
 ```
 
 ### 更新流程
 
 ```bash
-pve-agent upgrade
+pcs-agent update
 ```
 
 ---
@@ -122,28 +121,28 @@ done
 
 # ============ 卸载模式 ============
 if [ "$UNINSTALL" = true ]; then
-  echo "停止 pve-agent 服务..."
-  systemctl stop pve-agent 2>/dev/null || true
-  systemctl disable pve-agent 2>/dev/null || true
-  rm -f /etc/systemd/system/pve-agent.service
+  echo "停止 pcs-agent 服务..."
+  systemctl stop pcs-agent 2>/dev/null || true
+  systemctl disable pcs-agent 2>/dev/null || true
+  rm -f /etc/systemd/system/pcs-agent.service
   systemctl daemon-reload
 
   # 通知平台
-  if [ -f /opt/pve-agent/config.yaml ]; then
-    AGENT_ID=$(grep "agent_id:" /opt/pve-agent/config.yaml | awk '{print $2}')
+  if [ -f /opt/pcs-agent/config.yaml ]; then
+    AGENT_ID=$(grep "agent_id:" /opt/pcs-agent/config.yaml | awk '{print $2}')
     curl -s -X POST "$PLATFORM_URL/api/agent/unregister/" \
       -H "Content-Type: application/json" \
       -d "{\"agent_id\": \"$AGENT_ID\"}" || true
   fi
 
-  rm -rf /opt/pve-agent/
-  rm -rf ~/.config/pve-agent/
+  rm -rf /opt/pcs-agent/
+  rm -rf ~/.config/pcs-agent/
   echo "✅ Agent 已卸载"
   exit 0
 fi
 
 # ============ 安装模式 ============
-echo "PVE Agent 安装程序"
+echo "PCS Agent 安装程序"
 echo "=================="
 
 # 1. 检测系统
@@ -174,7 +173,7 @@ echo "安装系统依赖..."
 install_deps
 
 # 3. 创建安装目录
-INSTALL_DIR="/opt/pve-agent"
+INSTALL_DIR="/opt/pcs-agent"
 mkdir -p "$INSTALL_DIR"
 
 # 4. 创建虚拟环境
@@ -182,47 +181,47 @@ echo "创建 Python 虚拟环境..."
 python3 -m venv "$INSTALL_DIR/venv"
 
 # 5. 安装 Agent
-echo "安装 pve-agent..."
-"$INSTALL_DIR/venv/bin/pip" install --quiet pve-agent
+echo "安装 pcs-agent..."
+"$INSTALL_DIR/venv/bin/pip" install --quiet pcs-agent
 
 # 6. 生成配置
 echo "注册 Agent..."
-"$INSTALL_DIR/venv/bin/pve-agent" init \
+"$INSTALL_DIR/venv/bin/pcs-agent" init \
   --platform-url "$PLATFORM_URL" \
   --token "$TOKEN"
 
 # 7. 安装 systemd 服务
-cat > /etc/systemd/system/pve-agent.service << 'SERVICEEOF'
+cat > /etc/systemd/system/pcs-agent.service << 'SERVICEEOF'
 [Unit]
 Description=PVE Cluster Scan Agent
 After=network.target
 
 [Service]
 Type=simple
-ExecStart=/opt/pve-agent/venv/bin/pve-agent start --foreground
+ExecStart=/opt/pcs-agent/venv/bin/pcs-agent start --foreground
 Restart=always
 RestartSec=10
-WorkingDirectory=/opt/pve-agent
+WorkingDirectory=/opt/pcs-agent
 
 [Install]
 WantedBy=multi-user.target
 SERVICEEOF
 
 systemctl daemon-reload
-systemctl enable pve-agent
-systemctl start pve-agent
+systemctl enable pcs-agent
+systemctl start pcs-agent
 
 # 8. 输出结果
-AGENT_ID=$(grep "agent_id:" ~/.config/pve-agent/config.yaml | awk '{print $2}')
+AGENT_ID=$(grep "agent_id:" ~/.config/pcs-agent/config.yaml | awk '{print $2}')
 echo ""
 echo "=============================="
 echo "✅ Agent 安装成功！"
 echo "   Agent ID: $AGENT_ID"
 echo "   安装目录: $INSTALL_DIR"
-echo "   配置文件: ~/.config/pve-agent/config.yaml"
-echo "   状态查看: systemctl status pve-agent"
-echo "   查看日志: journalctl -u pve-agent -f"
-echo "   卸载命令: pve-agent uninstall"
+echo "   配置文件: ~/.config/pcs-agent/config.yaml"
+echo "   状态查看: systemctl status pcs-agent"
+echo "   查看日志: journalctl -u pcs-agent -f"
+echo "   卸载命令: pcs-agent uninstall"
 echo "=============================="
 ```
 
@@ -234,39 +233,84 @@ echo "=============================="
 
 | 命令 | 说明 | 参数 |
 |------|------|------|
-| `pve-agent` | 显示帮助信息 | — |
-| `pve-agent status` | 查看运行状态 | — |
-| `pve-agent update` | 更新到最新版本 | `--check` 仅检查不更新 |
-| `pve-agent uninstall` | 卸载 Agent | `--force` 跳过确认 |
+| `pcs-agent` | 显示帮助信息 | — |
+| `pcs-agent init` | 注册到平台（安装时自动执行） | `--platform-url` 平台地址, `--token` agent_token |
+| `pcs-agent start` | 启动 Agent（后台运行） | `--foreground` 前台运行 |
+| `pcs-agent stop` | 停止 Agent | — |
+| `pcs-agent status` | 查看运行状态 | — |
+| `pcs-agent update` | 更新到最新版本 | `--check` 仅检查不更新 |
+| `pcs-agent uninstall` | 卸载 Agent | `--force` 跳过确认 |
+| `pcs-agent install` | 安装 Agent（交互式） | `--platform-url`, `--token` |
+| `pcs-agent logs` | 查看运行日志 | `--tail N` 最近 N 行, `--follow` 实时跟踪 |
 
 ### 帮助信息
 
 ```
-$ pve-agent
+$ pcs-agent
 
-PVE 集群扫描 Agent v0.1.0
+PCS 集群扫描 Agent v0.1.0
 
 用法:
-  pve-agent status      查看运行状态
-  pve-agent update      更新到最新版本
-  pve-agent uninstall   卸载 Agent
+  pcs-agent init        注册到平台
+  pcs-agent start       启动 Agent
+  pcs-agent stop        停止 Agent
+  pcs-agent status      查看运行状态
+  pcs-agent update      更新到最新版本
+  pcs-agent uninstall   卸载 Agent
+  pcs-agent install     安装 Agent（交互式）
+  pcs-agent logs        查看运行日志
 
 管理命令 (systemd):
-  systemctl status pve-agent     查看服务状态
-  systemctl stop pve-agent       停止服务
-  systemctl restart pve-agent    重启服务
-  journalctl -u pve-agent -f     查看实时日志
+  systemctl status pcs-agent     查看服务状态
+  systemctl stop pcs-agent       停止服务
+  systemctl restart pcs-agent    重启服务
+  journalctl -u pcs-agent -f     查看实时日志
 
-配置文件: ~/.config/pve-agent/config.yaml
-安装目录: /opt/pve-agent/
+配置文件: ~/.config/pcs-agent/config.yaml
+安装目录: /opt/pcs-agent/
+```
+
+### init 命令
+
+```
+$ pcs-agent init --platform-url https://platform:8000 --token abc123
+
+注册 Agent 到平台...
+✅ 注册成功！
+   Agent ID: abc123def456
+   平台: https://platform:8000
+   配置文件: ~/.config/pcs-agent/config.yaml
+```
+
+### start 命令
+
+```
+$ pcs-agent start
+
+启动 Agent 服务...
+✅ Agent 已启动
+   状态: active (running)
+   PID: 12345
+
+# 前台运行（调试用）
+$ pcs-agent start --foreground
+```
+
+### stop 命令
+
+```
+$ pcs-agent stop
+
+停止 Agent 服务...
+✅ Agent 已停止
 ```
 
 ### status 命令
 
 ```
-$ pve-agent status
+$ pcs-agent status
 
-PVE Agent 状态
+PCS Agent 状态
 ================
   版本:     0.1.0
   Agent ID: abc123def456
@@ -285,7 +329,7 @@ PVE Agent 状态
 ### update 命令
 
 ```
-$ pve-agent update
+$ pcs-agent update
 
 检查更新中...
 当前版本: 0.1.0
@@ -306,12 +350,12 @@ $ pve-agent update
 ### uninstall 命令
 
 ```
-$ pve-agent uninstall
+$ pcs-agent uninstall
 
-即将卸载 PVE Agent:
+即将卸载 PCS Agent:
   Agent ID: abc123def456
-  安装目录: /opt/pve-agent/
-  配置文件: ~/.config/pve-agent/config.yaml
+  安装目录: /opt/pcs-agent/
+  配置文件: ~/.config/pcs-agent/config.yaml
 
 确认卸载? [y/N]: y
 
@@ -323,6 +367,31 @@ $ pve-agent uninstall
 ✅ Agent 已卸载
 ```
 
+### install 命令
+
+```
+$ pcs-agent install --platform-url https://platform:8000 --token abc123
+
+安装 PCS Agent...
+1. 检测系统环境...
+2. 安装依赖...
+3. 创建虚拟环境...
+4. 安装 pcs-agent 包...
+5. 注册到平台...
+6. 安装 systemd 服务...
+✅ 安装完成！
+```
+
+### logs 命令
+
+```
+# 查看最近 50 行日志
+$ pcs-agent logs --tail 50
+
+# 实时跟踪日志
+$ pcs-agent logs --follow
+```
+
 ---
 
 ## systemd 服务
@@ -330,7 +399,7 @@ $ pve-agent uninstall
 ### 服务文件
 
 ```ini
-# /etc/systemd/system/pve-agent.service
+# /etc/systemd/system/pcs-agent.service
 
 [Unit]
 Description=PVE Cluster Scan Agent
@@ -338,16 +407,16 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/opt/pve-agent/venv/bin/pve-agent start --foreground
+ExecStart=/opt/pcs-agent/venv/bin/pcs-agent start --foreground
 Restart=always
 RestartSec=10
-WorkingDirectory=/opt/pve-agent
+WorkingDirectory=/opt/pcs-agent
 
 # 安全加固
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=/opt/pve-agent /root/.config/pve-agent
+ReadWritePaths=/opt/pcs-agent /root/.config/pcs-agent
 
 [Install]
 WantedBy=multi-user.target
@@ -356,14 +425,14 @@ WantedBy=multi-user.target
 ### 常用 systemd 命令
 
 ```bash
-systemctl status pve-agent       # 查看状态
-systemctl stop pve-agent         # 停止
-systemctl start pve-agent        # 启动
-systemctl restart pve-agent      # 重启
-systemctl enable pve-agent       # 开机自启
-systemctl disable pve-agent      # 取消开机自启
-journalctl -u pve-agent -f       # 实时日志
-journalctl -u pve-agent --since "1 hour ago"  # 最近日志
+systemctl status pcs-agent       # 查看状态
+systemctl stop pcs-agent         # 停止
+systemctl start pcs-agent        # 启动
+systemctl restart pcs-agent      # 重启
+systemctl enable pcs-agent       # 开机自启
+systemctl disable pcs-agent      # 取消开机自启
+journalctl -u pcs-agent -f       # 实时日志
+journalctl -u pcs-agent --since "1 hour ago"  # 最近日志
 ```
 
 ---
@@ -379,8 +448,8 @@ journalctl -u pve-agent --since "1 hour ago"  # 最近日志
 | POST | `/api/agent/scan/upload/` | 扫描数据上传 | 每 3600s |
 | GET | `/api/agent/tasks/` | 查询下发任务 | 每次扫描后 |
 | POST | `/api/agent/unregister/` | Agent 卸载通知 | 仅卸载时 |
-| GET | `/api/agent/install.sh` | 获取安装脚本 | 仅安装时 |
 | GET | `/api/agent/version/` | 查询最新版本号 | 升级时 |
+| GET | `/api/agent/install.sh` | 获取安装脚本 | 仅安装时 |
 
 ### 认证方式
 
@@ -529,9 +598,9 @@ POST /api/agent/scan/upload/
 
 ### 本地存储
 
-- 配置文件：`~/.config/pve-agent/config.yaml`（权限 600）
+- 配置文件：`~/.config/pcs-agent/config.yaml`（权限 600）
 - 包含 PVE 密码（明文，建议后续加密）
-- 安装目录：`/opt/pve-agent/`
+- 安装目录：`/opt/pcs-agent/`
 
 ### systemd 加固
 
@@ -551,14 +620,14 @@ ReadWritePaths=...         # 仅允许写入必要路径
 ```bash
 # 在有网络的机器上打包
 cd agent/
-pip download -d ./packages pve-agent
-tar czf pve-agent-offline.tar.gz packages/ install.sh
+pip download -d ./packages pcs-agent
+tar czf pcs-agent-offline.tar.gz packages/ install.sh
 
 # 上传到 PVE 节点
-scp pve-agent-offline.tar.gz root@192.168.1.100:/tmp/
+scp pcs-agent-offline.tar.gz root@192.168.1.100:/tmp/
 
 # 在 PVE 节点上安装
-cd /tmp && tar xzf pve-agent-offline.tar.gz
+cd /tmp && tar xzf pcs-agent-offline.tar.gz
 ./install.sh --offline --token xxx --platform https://platform:8000
 ```
 
@@ -568,10 +637,10 @@ cd /tmp && tar xzf pve-agent-offline.tar.gz
 if [ "$OFFLINE" = true ]; then
   # 从本地 packages/ 安装
   "$INSTALL_DIR/venv/bin/pip" install --no-index \
-    --find-links=./packages pve-agent
+    --find-links=./packages pcs-agent
 else
   # 从 PyPI 或平台安装
-  "$INSTALL_DIR/venv/bin/pip" install pve-agent
+  "$INSTALL_DIR/venv/bin/pip" install pcs-agent
 fi
 ```
 
@@ -581,12 +650,12 @@ fi
 
 ```
 agent/
-├── pyproject.toml          # 打包配置
+├── pyproject.toml          # 打包配置（包名 pcs-agent）
 ├── DESIGN.md               # 本文档
 └── agent/
     ├── __init__.py          # 版本号
-    ├── cli.py               # CLI 入口（status/update/uninstall）
-    ├── config.py            # 配置管理
+    ├── cli.py               # CLI 入口（init/start/stop/status/update/uninstall/install/logs）
+    ├── config.py            # 配置管理（~/.config/pcs-agent/config.yaml）
     ├── pve_client.py        # PVE API 客户端
     ├── scanner.py           # 数据采集 + 单位转换
     ├── uploader.py          # 上报到平台
@@ -594,6 +663,8 @@ agent/
 
 Django 平台新增:
 ├── apps/agent_api/
+│   ├── models.py            # AgentInstance / ScanTask
+│   ├── serializers.py       # Register / Heartbeat / ScanUpload / Tasks / Unregister / Version
 │   ├── views.py             # + unregister / version / install.sh
 │   ├── install_script.py    # install.sh 模板生成
 │   └── urls.py              # + 3 个新路由
