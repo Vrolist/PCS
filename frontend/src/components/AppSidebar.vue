@@ -6,7 +6,7 @@
     class="sidebar-menu"
     :class="{ 'is-dark': themeStore.theme === 'dark' }"
   >
-    <div class="sidebar-logo" :class="{ collapsed: appStore.sidebarCollapsed }">
+    <div class="sidebar-logo" :class="{ collapsed: appStore.sidebarCollapsed }" @click="$router.push('/')" style="cursor: pointer">
       <div class="logo-icon-box">
         <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <rect x="2" y="2" width="20" height="20" rx="2" ry="2"></rect>
@@ -82,14 +82,28 @@
     </el-menu-item>
 
     <div class="menu-section">
-      <span v-if="!appStore.sidebarCollapsed" class="menu-label">系统</span>
+      <span v-if="!appStore.sidebarCollapsed" class="menu-label">用户</span>
     </div>
 
     <el-menu-item index="/settings" class="sidebar-item">
       <div class="item-icon-wrap">
-        <el-icon><Setting /></el-icon>
+        <el-icon><User /></el-icon>
       </div>
-      <template #title><span>系统设置</span></template>
+      <template #title><span>用户信息</span></template>
+    </el-menu-item>
+
+    <el-menu-item index="/user-logs" class="sidebar-item">
+      <div class="item-icon-wrap">
+        <el-icon><Document /></el-icon>
+      </div>
+      <template #title><span>操作日志</span></template>
+    </el-menu-item>
+
+    <el-menu-item index="/user-notifications" class="sidebar-item">
+      <div class="item-icon-wrap">
+        <el-icon><Bell /></el-icon>
+      </div>
+      <template #title><span>通知设置</span></template>
     </el-menu-item>
   </el-menu>
 </template>

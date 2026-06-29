@@ -60,7 +60,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ["id", "username", "email", "phone", "company", "date_joined"]
+        fields = ["id", "username", "email", "phone", "company", "date_joined", "is_superuser"]
 
 
 class PasswordResetSerializer(serializers.Serializer):

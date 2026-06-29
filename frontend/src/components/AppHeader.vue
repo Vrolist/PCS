@@ -22,7 +22,10 @@
         </div>
         <template #dropdown>
           <el-dropdown-menu>
-            <el-dropdown-item @click="handleLogout">退出登录</el-dropdown-item>
+            <el-dropdown-item @click="$router.push('/settings')">用户信息</el-dropdown-item>
+            <el-dropdown-item @click="$router.push('/forgot-password')">修改密码</el-dropdown-item>
+            <el-dropdown-item divided v-if="authStore.user?.is_superuser" @click="goAdmin">管理后台</el-dropdown-item>
+            <el-dropdown-item divided @click="handleLogout">退出登录</el-dropdown-item>
           </el-dropdown-menu>
         </template>
       </el-dropdown>
@@ -54,6 +57,10 @@ const breadcrumbItems = computed(() => {
 function handleLogout() {
   authStore.logout()
   router.push('/login')
+}
+
+function goAdmin() {
+  window.open('/admin/', '_blank')
 }
 </script>
 

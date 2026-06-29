@@ -14,12 +14,20 @@
           <button class="theme-btn" @click="themeStore.toggle" :title="themeStore.theme === 'dark' ? '切换到亮色' : '切换到暗色'">
             <el-icon :size="20"><Sunny v-if="themeStore.theme === 'dark'" /><Moon v-else /></el-icon>
           </button>
-          <router-link to="/login">
-            <el-button :type="themeStore.theme === 'dark' ? 'primary' : ''" plain round size="default">登录</el-button>
-          </router-link>
-          <router-link to="/dashboard">
-            <el-button type="primary" round size="default">控制台</el-button>
-          </router-link>
+          <template v-if="authStore.isLoggedIn">
+            <span class="nav-user">{{ authStore.user?.username }}</span>
+            <router-link to="/dashboard">
+              <el-button type="primary" round size="default">控制台</el-button>
+            </router-link>
+          </template>
+          <template v-else>
+            <router-link to="/login">
+              <el-button :type="themeStore.theme === 'dark' ? 'primary' : ''" plain round size="default">登录</el-button>
+            </router-link>
+            <router-link to="/register">
+              <el-button type="primary" round size="default">注册</el-button>
+            </router-link>
+          </template>
         </nav>
       </div>
     </header>
@@ -214,17 +222,24 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useThemeStore } from '@/stores/theme'
+import { useAuthStore } from '@/stores/auth'
 
 const themeStore = useThemeStore()
+const authStore = useAuthStore()
 const scrolled = ref(false)
 
 function onScroll() {
   scrolled.value = window.scrollY > 20
 }
-onMounted(() => window.addEventListener('scroll', onScroll))
+onMounted(() => {
+  window.addEventListener('scroll', onScroll)
+  if (authStore.isLoggedIn) {
+    authStore.fetchUser()
+  }
+})
 onUnmounted(() => window.removeEventListener('scroll', onScroll))
 
-// Parallax tilt for visual console card
+  // Parallax tilt for visual console card
 const visualCardRef = ref<HTMLElement | null>(null)
 const tiltX = ref(0)
 const tiltY = ref(0)
@@ -446,6 +461,12 @@ const steps = [
   display: flex;
   align-items: center;
   gap: 8px;
+}
+.nav-user {
+  font-size: 14px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  margin-right: 4px;
 }
 
 .theme-btn {

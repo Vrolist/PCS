@@ -1,0 +1,37 @@
+<template>
+  <div class="page-container">
+    <div class="page-header">
+      <div>
+        <h2 class="page-title">通知设置</h2>
+        <p class="page-desc">管理通知和告警推送方式</p>
+      </div>
+    </div>
+    <el-card shadow="hover">
+      <el-empty description="通知设置功能开发中" />
+    </el-card>
+  </div>
+</template>
+
+<style scoped>
+.page-container {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 28px;
+}
+.page-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-heading);
+  margin: 0;
+}
+.page-desc {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: 4px 0 0;
+}
+</style>
