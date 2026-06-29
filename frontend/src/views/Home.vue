@@ -63,16 +63,22 @@
           </div>
         </div>
         <div class="hero-visual">
-          <div class="visual-card">
+          <div
+            class="visual-card"
+            ref="visualCardRef"
+            @mousemove="handleTilt"
+            @mouseleave="handleTiltLeave"
+            :style="tiltStyle"
+          >
             <div class="vc-header">
               <div class="vc-dots"><span></span><span></span><span></span></div>
               <span class="vc-title">pve-cluster</span>
             </div>
             <div class="vc-body">
-              <div class="vc-row" v-for="i in 4" :key="i">
-                <div class="vc-dot" :class="i === 2 ? 'warn' : i === 4 ? 'ok' : ''"></div>
-                <div class="vc-bar" :style="{ width: (40 + Math.random() * 50) + '%' }"></div>
-                <span class="vc-label">{{ ['pve-1', 'pve-2', 'pve-3', 'pve-4'][i - 1] }}</span>
+              <div class="vc-row" v-for="(w, i) in barWidths" :key="i">
+                <div class="vc-dot" :class="i === 1 ? 'warn' : i === 3 ? 'ok' : ''"></div>
+                <div class="vc-bar" :style="{ width: w + '%' }"></div>
+                <span class="vc-label">{{ ['pve-1', 'pve-2', 'pve-3', 'pve-4'][i] }}</span>
               </div>
             </div>
           </div>
@@ -175,7 +181,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useThemeStore } from '@/stores/theme'
 
 const themeStore = useThemeStore()
@@ -186,6 +192,54 @@ function onScroll() {
 }
 onMounted(() => window.addEventListener('scroll', onScroll))
 onUnmounted(() => window.removeEventListener('scroll', onScroll))
+
+// Parallax tilt for visual console card
+const visualCardRef = ref<HTMLElement | null>(null)
+const tiltX = ref(0)
+const tiltY = ref(0)
+const tiltTransition = ref(true)
+
+function handleTilt(e: MouseEvent) {
+  const card = visualCardRef.value
+  if (!card) return
+  const rect = card.getBoundingClientRect()
+  const centerX = rect.left + rect.width / 2
+  const centerY = rect.top + rect.height / 2
+  const mouseX = e.clientX - centerX
+  const mouseY = e.clientY - centerY
+  const rangeX = rect.width / 2
+  const rangeY = rect.height / 2
+  const maxAngle = 10
+  tiltX.value = -(mouseY / rangeY) * maxAngle
+  tiltY.value = (mouseX / rangeX) * maxAngle
+  tiltTransition.value = false
+}
+
+function handleTiltLeave() {
+  tiltX.value = 0
+  tiltY.value = 0
+  tiltTransition.value = true
+}
+
+const tiltStyle = computed(() => ({
+  transform: `rotateX(${tiltX.value}deg) rotateY(${tiltY.value}deg)`,
+  transition: tiltTransition.value ? 'transform 0.5s ease' : 'transform 0.05s',
+}))
+
+// Periodic bar width animation
+const barWidths = ref([55, 45, 60, 50])
+
+function randomizeBars() {
+  barWidths.value = barWidths.value.map(() => 40 + Math.round(Math.random() * 50))
+}
+
+let barTimer: ReturnType<typeof setInterval>
+onMounted(() => {
+  barTimer = setInterval(randomizeBars, 10000)
+})
+onUnmounted(() => {
+  clearInterval(barTimer)
+})
 
 const features = [
   {
@@ -554,7 +608,7 @@ const steps = [
   transition: transform 0.4s;
 }
 .visual-card:hover {
-  transform: rotateY(-4deg) rotateX(2deg);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.15);
 }
 .dark .visual-card {
   background: rgba(255, 255, 255, 0.04);
