@@ -13,5 +13,6 @@ urlpatterns = [
     path("unregister/", views.AgentUnregisterView.as_view(), name="unregister"),
     # 版本与安装
     path("version/", views.AgentVersionView.as_view(), name="version"),
+    path("pve-info/", views.AgentPVEInfoView.as_view(), name="pve-info"),
     path("install.sh", views.AgentInstallScriptView.as_view(), name="install-script"),
 ]

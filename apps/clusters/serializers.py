@@ -42,8 +42,15 @@ class ClusterCreateSerializer(serializers.ModelSerializer):
         return value
 
     def validate_pve_endpoint(self, value):
-        if value and not value.startswith(("http://", "https://")):
+        if not value:
+            raise serializers.ValidationError("此字段为必填项")
+        if not value.startswith(("http://", "https://")):
             raise serializers.ValidationError("必须以 http:// 或 https:// 开头")
+        return value
+
+    def validate_pve_token(self, value):
+        if not value:
+            raise serializers.ValidationError("此字段为必填项")
         return value
 
     def create(self, validated_data):
@@ -72,7 +79,6 @@ class ClusterDetailSerializer(serializers.ModelSerializer):
         return AgentBriefSerializer(agents, many=True).data
 
     def get_install_command(self, obj):
-        import urllib.parse
         request = self.context.get("request")
         if request:
             host = request.get_host()
@@ -81,19 +87,7 @@ class ClusterDetailSerializer(serializers.ModelSerializer):
         else:
             platform_url = "https://your-platform:8000"
 
-        # 构建 URL 参数
-        params = {
-            "token": obj.agent_token,
-            "platform": platform_url,
-        }
-        # 如果有 PVE 信息，嵌入到安装命令中（非交互式）
-        if obj.pve_endpoint:
-            params["pve"] = obj.pve_endpoint
-        if obj.pve_token:
-            params["pve_token"] = obj.pve_token
-
-        query = urllib.parse.urlencode(params)
-        return f"curl -fsSL '{platform_url}/api/agent/install.sh?{query}' | bash"
+        return f"curl -fsSL '{platform_url}/api/agent/install.sh?token={obj.agent_token}' | bash"
 
 
 class AgentBriefSerializer(serializers.ModelSerializer):

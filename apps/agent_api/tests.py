@@ -698,13 +698,17 @@ class AgentInstallScriptAPITest(TestCase):
         self.assertIn("pcs-agent", content)
 
     def test_install_script_contains_platform(self):
-        resp = self.client.get(self.url, {
-            "token": "abc123",
-            "platform": "https://myhost:8000",
-        })
+        resp = self.client.get(self.url, {"token": "abc123"})
         content = resp.content.decode()
-        self.assertIn("https://myhost:8000", content)
+        # platform_url 从请求 host 自动推导
+        self.assertIn("testserver", content)
         self.assertIn("abc123", content)
+
+    def test_install_script_queries_pve_info(self):
+        resp = self.client.get(self.url, {"token": "abc123"})
+        content = resp.content.decode()
+        # 新版脚本从平台查询 PVE 信息
+        self.assertIn("pve-info", content)
 
     def test_uninstall_script(self):
         resp = self.client.get(self.url, {"uninstall": ""})

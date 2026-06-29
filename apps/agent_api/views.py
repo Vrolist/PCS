@@ -457,6 +457,28 @@ class AgentVersionView(APIView):
         })
 
 
+class AgentPVEInfoView(APIView):
+    """根据 agent_token 查询集群的 PVE 连接信息（供 install.sh 调用）"""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        token = request.query_params.get("token", "")
+        if not token:
+            return Response({"error": "token is required"}, status=400)
+
+        from apps.clusters.models import Cluster
+        try:
+            cluster = Cluster.objects.get(agent_token=token)
+        except Cluster.DoesNotExist:
+            return Response({"error": "invalid token"}, status=404)
+
+        return Response({
+            "pve_endpoint": cluster.pve_endpoint,
+            "pve_username": "root@pam",
+            "pve_token": cluster.pve_token,
+        })
+
+
 class AgentInstallScriptView(APIView):
     """返回一键安装脚本或 agent.py 源码"""
     permission_classes = [AllowAny]
@@ -467,15 +489,16 @@ class AgentInstallScriptView(APIView):
             return self._agent_source()
 
         token = request.query_params.get("token", "")
-        platform_url = request.query_params.get("platform", "")
-        pve_endpoint = request.query_params.get("pve", "")
-        pve_token = request.query_params.get("pve_token", "")
+        # platform_url 从请求中自动推导，不再需要参数
+        host = request.get_host()
+        scheme = "https" if request.is_secure() else "http"
+        platform_url = f"{scheme}://{host}"
         uninstall = "uninstall" in request.query_params
 
         if uninstall:
             script = self._uninstall_script()
         else:
-            script = self._install_script(token, platform_url, pve_endpoint, pve_token)
+            script = self._install_script(token, platform_url)
 
         from django.http import HttpResponse
         return HttpResponse(script, content_type="text/plain; charset=utf-8")
@@ -488,14 +511,12 @@ class AgentInstallScriptView(APIView):
             return HttpResponse("agent.py not found", status=404)
         return HttpResponse(agent_path.read_text(), content_type="text/x-python; charset=utf-8")
 
-    def _install_script(self, token: str, platform_url: str, pve_endpoint: str = "", pve_token: str = "") -> str:
+    def _install_script(self, token: str, platform_url: str) -> str:
         return f"""#!/bin/bash
 set -e
 
 TOKEN="{token}"
 PLATFORM_URL="{platform_url}"
-PVE_ENDPOINT="{pve_endpoint}"
-PVE_TOKEN="{pve_token}"
 AGENT_NAME="pcs-agent"
 INSTALL_DIR="/opt/$AGENT_NAME"
 
@@ -506,8 +527,8 @@ echo "=============================="
 echo ""
 
 # 参数检查
-if [ -z "$TOKEN" ] || [ -z "$PLATFORM_URL" ]; then
-    echo "用法: curl -fsSL '$PLATFORM_URL/api/agent/install.sh?token=<TOKEN>&platform=$PLATFORM_URL' | bash"
+if [ -z "$TOKEN" ]; then
+    echo "用法: curl -fsSL '$PLATFORM_URL/api/agent/install.sh?token=<TOKEN>' | bash"
     exit 1
 fi
 
@@ -539,22 +560,21 @@ curl -fsSL "$PLATFORM_URL/api/agent/install.sh?agent=1" -o "$INSTALL_DIR/agent.p
 chmod +x "$INSTALL_DIR/agent.py"
 echo "已下载: $INSTALL_DIR/agent.py"
 
-# 5. 获取 PVE 信息
-# 如果命令行传入了 PVE 参数（非交互式安装），跳过输入
-if [ -n "$PVE_ENDPOINT" ] && [ -n "$PVE_TOKEN" ]; then
-    PVE_USER="root@pam"
-    echo "PVE 地址: $PVE_ENDPOINT"
-    echo "PVE Token: ${{PVE_TOKEN:0:20}}..."
-else
-    # 交互式输入
-    echo ""
-    echo "请输入 PVE 信息:"
-    read -p "PVE API 地址 (如 https://192.168.1.200:8006): " PVE_ENDPOINT
-    read -p "PVE 用户名 [root@pam]: " PVE_USER
-    PVE_USER=${{PVE_USER:-root@pam}}
-    read -s -p "PVE API Token: " PVE_TOKEN
-    echo ""
+# 5. 从平台查询 PVE 连接信息
+echo "查询 PVE 信息..."
+PVE_INFO=$(curl -s "$PLATFORM_URL/api/agent/pve-info/?token=$TOKEN")
+
+PVE_ENDPOINT=$(echo "$PVE_INFO" | python3 -c "import sys,json; print(json.load(sys.stdin).get('pve_endpoint',''))" 2>/dev/null || true)
+PVE_USER=$(echo "$PVE_INFO" | python3 -c "import sys,json; print(json.load(sys.stdin).get('pve_username','root@pam'))" 2>/dev/null || true)
+PVE_TOKEN=$(echo "$PVE_INFO" | python3 -c "import sys,json; print(json.load(sys.stdin).get('pve_token',''))" 2>/dev/null || true)
+
+if [ -z "$PVE_ENDPOINT" ] || [ -z "$PVE_TOKEN" ]; then
+    echo "错误: 无法获取 PVE 信息，请检查 token 是否正确"
+    echo "返回: $PVE_INFO"
+    exit 1
 fi
+echo "PVE 地址: $PVE_ENDPOINT"
+echo "PVE Token: ${{PVE_TOKEN:0:20}}..."
 
 # 6. 注册到平台
 echo "注册到平台..."

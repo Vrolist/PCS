@@ -69,7 +69,7 @@
 
     <!-- 新建集群弹窗 -->
     <el-dialog v-model="showCreate" title="新建集群" width="560px" :close-on-click-modal="false">
-      <el-form ref="createFormRef" :model="createForm" :rules="createRules" label-width="100px">
+      <el-form ref="createFormRef" :model="createForm" :rules="createRules" label-width="120px">
         <el-form-item label="集群名称" prop="name">
           <el-input v-model="createForm.name" placeholder="如：生产环境集群" maxlength="128" />
         </el-form-item>
@@ -171,6 +171,8 @@ const createFormRef = ref<FormInstance>()
 const createForm = ref({ name: '', description: '', pve_endpoint: '', pve_token: '' })
 const createRules = {
   name: [{ required: true, message: '请输入集群名称', trigger: 'blur' }],
+  pve_endpoint: [{ required: true, message: '请输入 PVE API 地址', trigger: 'blur' }],
+  pve_token: [{ required: true, message: '请输入 PVE API Token', trigger: 'blur' }],
 }
 
 async function loadClusters() {
@@ -310,5 +312,5 @@ onMounted(loadClusters)
 }
 .copy-btn { position: absolute; top: 8px; right: 8px; }
 .install-hint { font-size: 12px; color: var(--text-secondary, #909399); margin-top: 8px; }
-.form-hint { font-size: 12px; color: var(--text-secondary, #909399); margin: -8px 0 0 100px; }
+.form-hint { font-size: 12px; color: var(--text-secondary, #909399); margin: -8px 0 0 120px; }
 </style>
