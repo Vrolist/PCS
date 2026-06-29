@@ -83,7 +83,7 @@ class AgentRegisterView(APIView):
             agent = AgentInstance.objects.create(
                 cluster=cluster,
                 agent_id=uuid.uuid4().hex,
-                version="1.0.0",
+                version=d.get("version", "0.1.0"),
                 hostname=d["hostname"],
                 ip_address=request.META.get("REMOTE_ADDR"),
                 platform=platform.platform(),
@@ -102,6 +102,7 @@ class AgentRegisterView(APIView):
         return Response(
             {
                 "agent_id": agent.agent_id,
+                "cluster_id": agent.cluster_id,
                 "scan_interval": agent.scan_interval,
                 "status": agent.status,
             },
@@ -126,8 +127,9 @@ class AgentHeartbeatView(APIView):
         agent.last_heartbeat_at = timezone.now()
         agent.status = d["status"]
         agent.current_task = d.get("current_task", "")
+        agent.error_message = d.get("error_message", "")
         agent.save(update_fields=[
-            "last_heartbeat_at", "status", "current_task", "updated_at"
+            "last_heartbeat_at", "status", "current_task", "error_message", "updated_at"
         ])
 
         return Response({"ok": True})
@@ -554,6 +556,21 @@ echo "Python: $PYTHON"
 # 3. 创建安装目录
 mkdir -p "$INSTALL_DIR"
 
+# 3.5 如果已安装，先停止并清理旧 Agent
+if [ -f "$INSTALL_DIR/config.env" ]; then
+    echo "检测到已安装 Agent，正在清理..."
+    OLD_AGENT_ID=$(grep '^agent_id=' "$INSTALL_DIR/config.env" | cut -d'"' -f2 || true)
+    systemctl stop $AGENT_NAME 2>/dev/null || true
+    if [ -n "$OLD_AGENT_ID" ]; then
+        curl -s -X POST "$PLATFORM_URL/api/agent/unregister/" \\
+            -H "Content-Type: application/json" \\
+            -d "{{
+                \\"agent_id\\": \\"$OLD_AGENT_ID\\"
+            }}" || true
+        echo "已通知平台卸载旧 Agent: $OLD_AGENT_ID"
+    fi
+fi
+
 # 4. 下载 agent.py
 echo "下载 agent..."
 curl -fsSL "$PLATFORM_URL/api/agent/install.sh?agent=1" -o "$INSTALL_DIR/agent.py"
@@ -587,12 +604,14 @@ REGISTER_RESULT=$(curl -s -X POST "$PLATFORM_URL/api/agent/register/" \\
         \\"pve_username\\": \\"$PVE_USER\\",
         \\"pve_password\\": \\"$PVE_TOKEN\\",
         \\"hostname\\": \\"$HOSTNAME\\",
-        \\"scan_interval\\": 3600
+        \\"scan_interval\\": 300,
+        \\"version\\": \\"0.2.0\\"
     }}")
 
 AGENT_ID=$(echo "$REGISTER_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('agent_id',''))" 2>/dev/null || true)
+CLUSTER_ID=$(echo "$REGISTER_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('cluster_id',''))" 2>/dev/null || true)
 
-if [ -z "$AGENT_ID" ]; then
+if [ -z "$AGENT_ID" ] || [ -z "$CLUSTER_ID" ]; then
     echo "注册失败: $REGISTER_RESULT"
     exit 1
 fi
@@ -603,12 +622,12 @@ cat > "$INSTALL_DIR/config.env" << CFGEOF
 platform_url="$PLATFORM_URL"
 agent_token="$TOKEN"
 agent_id="$AGENT_ID"
-cluster_id=""
+cluster_id="$CLUSTER_ID"
 pve_endpoint="$PVE_ENDPOINT"
 pve_username="$PVE_USER"
 pve_password="$PVE_TOKEN"
-scan_interval=3600
-heartbeat_interval=60
+scan_interval=300
+heartbeat_interval=300
 CFGEOF
 chmod 600 "$INSTALL_DIR/config.env"
 echo "配置已保存: $INSTALL_DIR/config.env"

@@ -4,8 +4,8 @@ PVE Cluster Scan Agent — 单文件版，无外部依赖
 
 功能：
   1. 注册到管理平台（获取 agent_id）
-  2. 定时心跳（每 60s）
-  3. 定时扫描 PVE 集群（每 3600s）
+  2. 定时心跳（每 300s / 5 分钟）
+  3. 定时扫描 PVE 集群（每 300s / 5 分钟）
   4. 上传数据到管理平台
 
 用法：
@@ -59,6 +59,12 @@ ssl_ctx = ssl.create_default_context()
 ssl_ctx.check_hostname = False
 ssl_ctx.verify_mode = ssl.CERT_NONE
 
+# 自定义 opener：跟随重定向 + 忽略 SSL 验证
+_http_opener = urllib.request.build_opener(
+    urllib.request.HTTPRedirectHandler,
+    urllib.request.HTTPSHandler(context=ssl_ctx),
+)
+
 
 # ============================================================
 # 配置管理 (KEY=VALUE 文本文件)
@@ -73,8 +79,8 @@ class Config:
         self.pve_endpoint = ""
         self.pve_username = "root@pam"
         self.pve_password = ""
-        self.scan_interval = 3600
-        self.heartbeat_interval = 60
+        self.scan_interval = 300
+        self.heartbeat_interval = 300
 
     def load(self):
         if not CONFIG_FILE.exists():
@@ -120,7 +126,7 @@ class Config:
 # ============================================================
 
 def http_post(url, data, timeout=30):
-    """发送 JSON POST 请求"""
+    """发送 JSON POST 请求（自动跟随重定向）"""
     payload = json.dumps(data).encode("utf-8")
     req = urllib.request.Request(
         url,
@@ -128,14 +134,14 @@ def http_post(url, data, timeout=30):
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=timeout, context=ssl_ctx) as resp:
+    with _http_opener.open(req, timeout=timeout) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
 
 def http_get(url, timeout=30):
-    """发送 GET 请求"""
+    """发送 GET 请求（自动跟随重定向）"""
     req = urllib.request.Request(url)
-    with urllib.request.urlopen(req, timeout=timeout, context=ssl_ctx) as resp:
+    with _http_opener.open(req, timeout=timeout) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
 
@@ -150,22 +156,35 @@ class PVEClient:
         self.password = password
         self.ticket = ""
         self.csrf = ""
+        # 判断是 API Token 还是密码
+        # Token 格式: user@realm!tokenid=uuid  或  user@realm!tokenid=uuid（含=号）
+        self._is_token = "!" in password and "=" in password
 
     def authenticate(self):
-        url = f"{self.endpoint}/api2/json/access/ticket"
-        data = json.dumps({"username": self.username, "password": self.password}).encode()
-        req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
-        with urllib.request.urlopen(req, context=ssl_ctx) as resp:
-            result = json.loads(resp.read())["data"]
-        self.ticket = result["ticket"]
-        self.csrf = result["CSRFPreventionToken"]
-        logger.info("PVE 认证成功")
+        if self._is_token:
+            # API Token 认证：无需调用 /access/ticket，直接在请求 header 中携带
+            logger.info("PVE API Token 认证模式")
+        else:
+            # 密码认证：调用 /access/ticket 获取 ticket
+            url = f"{self.endpoint}/api2/json/access/ticket"
+            data = json.dumps({"username": self.username, "password": self.password}).encode()
+            req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
+            with _http_opener.open(req) as resp:
+                result = json.loads(resp.read())["data"]
+            self.ticket = result["ticket"]
+            self.csrf = result["CSRFPreventionToken"]
+            logger.info("PVE 认证成功")
 
     def get(self, path):
         url = f"{self.endpoint}/api2/json{path}"
         req = urllib.request.Request(url)
-        req.add_header("Cookie", f"PVEAuthCookie={self.ticket}")
-        with urllib.request.urlopen(req, context=ssl_ctx) as resp:
+        if self._is_token:
+            # API Token 认证
+            req.add_header("Authorization", f"PVEAPIToken={self.password}")
+        else:
+            # Ticket 认证
+            req.add_header("Cookie", f"PVEAuthCookie={self.ticket}")
+        with _http_opener.open(req) as resp:
             return json.loads(resp.read())["data"]
 
     def get_version(self):
@@ -399,17 +418,21 @@ class PlatformClient:
             "pve_password": pve_password,
             "hostname": hostname,
             "scan_interval": scan_interval,
+            "version": VERSION,
         })
 
     def unregister(self, agent_id):
         return http_post(f"{self.base_url}/api/agent/unregister/", {"agent_id": agent_id})
 
-    def heartbeat(self, agent_id, status="online", current_task=""):
-        return http_post(f"{self.base_url}/api/agent/heartbeat/", {
+    def heartbeat(self, agent_id, status="online", current_task="", error_message=""):
+        payload = {
             "agent_id": agent_id,
             "status": status,
             "current_task": current_task,
-        })
+        }
+        if error_message:
+            payload["error_message"] = error_message
+        return http_post(f"{self.base_url}/api/agent/heartbeat/", payload)
 
     def upload_scan(self, agent_id, cluster_id, scan_data):
         return http_post(f"{self.base_url}/api/agent/scan/upload/", {
@@ -443,12 +466,40 @@ class Agent:
         logger.info(f"平台: {self.config.platform_url}")
         logger.info(f"扫描间隔: {self.config.scan_interval}s | 心跳间隔: {self.config.heartbeat_interval}s")
 
-        # PVE 认证
-        self.pve.authenticate()
+        # PVE 认证（失败不崩溃，上报错误状态）
+        pve_auth_ok = False
+        try:
+            self.pve.authenticate()
+            pve_auth_ok = True
+        except Exception as e:
+            logger.error(f"PVE 认证失败: {e}")
+            # 上报错误到平台
+            try:
+                self.platform.heartbeat(
+                    self.config.agent_id,
+                    status="error",
+                    error_message=f"PVE 认证失败: {e}",
+                )
+            except Exception:
+                pass
 
         # 心跳线程
         t = threading.Thread(target=self._heartbeat_loop, daemon=True)
         t.start()
+
+        # 启动后立即执行一次扫描
+        try:
+            self._do_scan()
+        except Exception as e:
+            logger.error(f"首次扫描失败: {e}")
+            try:
+                self.platform.heartbeat(
+                    self.config.agent_id,
+                    status="error",
+                    error_message=f"扫描失败: {e}",
+                )
+            except Exception:
+                pass
 
         # 扫描主循环
         self._scan_loop()
@@ -486,11 +537,36 @@ class Agent:
         except Exception:
             pass
 
-        scan_data = scan_full(self.pve)
-        logger.info(f"扫描完成: {len(scan_data['nodes'])} 个节点")
+        try:
+            # 如果之前认证失败，尝试重新认证
+            if not self.pve._is_token and not self.pve.ticket:
+                logger.info("尝试重新认证 PVE...")
+                self.pve.authenticate()
 
-        result = self.platform.upload_scan(self.config.agent_id, self.config.cluster_id, scan_data)
-        logger.info(f"上传成功: {result}")
+            scan_data = scan_full(self.pve)
+            logger.info(f"扫描完成: {len(scan_data['nodes'])} 个节点")
+
+            result = self.platform.upload_scan(self.config.agent_id, self.config.cluster_id, scan_data)
+            logger.info(f"上传成功: {result}")
+
+            # 扫描成功，恢复在线状态
+            try:
+                self.platform.heartbeat(self.config.agent_id, status="online", current_task="")
+            except Exception:
+                pass
+
+        except Exception as e:
+            error_msg = f"扫描失败: {e}"
+            logger.error(error_msg)
+            # 上报扫描失败到平台
+            try:
+                self.platform.heartbeat(
+                    self.config.agent_id,
+                    status="error",
+                    error_message=error_msg,
+                )
+            except Exception:
+                pass
 
         # 检查任务
         try:

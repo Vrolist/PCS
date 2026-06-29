@@ -10,7 +10,8 @@ class AgentRegisterSerializer(serializers.Serializer):
     pve_username = serializers.CharField(help_text="PVE 用户名")
     pve_password = serializers.CharField(write_only=True, help_text="PVE 密码")
     hostname = serializers.CharField(help_text="Agent 所在主机名")
-    scan_interval = serializers.IntegerField(default=3600, help_text="扫描间隔(秒)")
+    scan_interval = serializers.IntegerField(default=300, help_text="扫描间隔(秒)")
+    version = serializers.CharField(required=False, default="0.1.0", help_text="Agent 版本")
 
 
 class AgentRegisterResponseSerializer(serializers.ModelSerializer):
@@ -29,6 +30,7 @@ class AgentHeartbeatSerializer(serializers.Serializer):
         help_text="当前状态"
     )
     current_task = serializers.CharField(required=False, default="", allow_blank=True, help_text="当前任务")
+    error_message = serializers.CharField(required=False, default="", allow_blank=True, help_text="错误信息")
 
 
 class ScanUploadSerializer(serializers.Serializer):
