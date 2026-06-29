@@ -7,7 +7,7 @@
           <div class="logo-icon"><ServerIcon /></div>
           <div class="logo-wrapper">
             <span class="logo-main">PCS</span>
-            <span class="logo-sub"><span class="accent-l">P</span>ce<span class="accent-l">C</span>luster<span class="accent-l">S</span>can</span>
+            <span class="logo-sub"><span class="accent-l">P</span>ve<span class="accent-l">C</span>luster<span class="accent-l">S</span>can</span>
           </div>
         </router-link>
         <nav class="nav-actions">
@@ -185,7 +185,7 @@
               <div class="logo-icon-footer"><ServerIcon size="28" /></div>
               <div class="logo-wrapper">
                 <span class="logo-main">PCS</span>
-                <span class="logo-sub"><span class="accent-l">P</span>ce<span class="accent-l">C</span>luster<span class="accent-l">S</span>can</span>
+                <span class="logo-sub"><span class="accent-l">P</span>ve<span class="accent-l">C</span>luster<span class="accent-l">S</span>can</span>
               </div>
             </div>
             <p class="footer-desc">PVE 集群监控平台</p>

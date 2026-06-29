@@ -26,7 +26,7 @@
             <div class="logo-icon"><ServerIcon :size="22" /></div>
             <div class="brand-logo-text">
               <span class="logo-main">PCS</span>
-              <span class="logo-sub"><span class="accent-l">P</span>ce<span class="accent-l">C</span>luster<span class="accent-l">S</span>can</span>
+              <span class="logo-sub"><span class="accent-l">P</span>ve<span class="accent-l">C</span>luster<span class="accent-l">S</span>can</span>
             </div>
           </div>
           <h2 class="brand-title">开始免费使用</h2>
