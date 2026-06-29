@@ -4,45 +4,53 @@
       <span class="card-title">节点详情</span>
       <a href="/clusters" class="view-all">查看全部</a>
     </div>
-    <el-table :data="nodes" style="width: 100%">
+    <div v-if="loading" class="node-loading">
+      <el-icon class="is-loading" :size="20"><Loading /></el-icon>
+      <span>加载中...</span>
+    </div>
+    <el-table v-else :data="nodes" style="width: 100%">
       <el-table-column prop="name" label="节点名称" min-width="120">
         <template #default="{ row }">
           <span class="node-name">{{ row.name }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="cpu" label="CPU" min-width="160">
+      <el-table-column label="CPU" min-width="160">
         <template #default="{ row }">
           <div class="usage-cell">
             <el-progress
-              :percentage="row.cpuPercent"
+              :percentage="Math.round(row.cpu_load)"
               :stroke-width="8"
-              :color="getCpuColor(row.cpuPercent)"
+              :color="getCpuColor(Math.round(row.cpu_load))"
               :show-text="false"
             />
-            <span class="usage-text">{{ row.cpuPercent }}%</span>
+            <span class="usage-text">{{ Math.round(row.cpu_load) }}%</span>
           </div>
         </template>
       </el-table-column>
-      <el-table-column prop="ram" label="内存" min-width="200">
+      <el-table-column label="内存" min-width="200">
         <template #default="{ row }">
           <div class="usage-cell">
             <el-progress
-              :percentage="row.ramPercent"
+              :percentage="Math.round(row.memory_usage_pct || 0)"
               :stroke-width="8"
               :color="'#409eff'"
               :show-text="false"
             />
-            <span class="usage-text">{{ row.ramUsed }}/{{ row.ramTotal }} ({{ row.ramPercent }}%)</span>
+            <span class="usage-text">{{ formatMB(row.memory_used_mb) }}/{{ formatMB(row.memory_total_mb) }} ({{ Math.round(row.memory_usage_pct || 0) }}%)</span>
           </div>
         </template>
       </el-table-column>
-      <el-table-column prop="disk" label="磁盘" min-width="140">
+      <el-table-column label="磁盘" min-width="140">
         <template #default="{ row }">
-          <span class="disk-text">{{ row.diskUsed }}/{{ row.diskTotal }}</span>
+          <span class="disk-text">{{ row.rootfs_used_gb || 0 }}GB/{{ row.rootfs_total_gb || 0 }}GB</span>
         </template>
       </el-table-column>
-      <el-table-column prop="ip" label="IP地址" min-width="150" />
-      <el-table-column prop="pveVersion" label="PVE版本" min-width="160" />
+      <el-table-column prop="ip_address" label="IP地址" min-width="150">
+        <template #default="{ row }">
+          {{ row.ip_address || '未知' }}
+        </template>
+      </el-table-column>
+      <el-table-column prop="pve_version" label="PVE版本" min-width="160" />
       <el-table-column prop="status" label="状态" width="100" align="center">
         <template #default="{ row }">
           <el-tag :type="row.status === 'online' ? 'success' : 'warning'" disable-transitions>
@@ -55,12 +63,28 @@
 </template>
 
 <script setup lang="ts">
-const nodes = [
-  { name: 'pve-1', cpuPercent: 35, ramUsed: '8.2GB', ramTotal: '32GB', ramPercent: 25.6, diskUsed: '1.2TB', diskTotal: '4TB', ip: '192.168.1.101', pveVersion: 'pve-manager/8.1.4', status: 'online' },
-  { name: 'pve-2', cpuPercent: 82, ramUsed: '12GB', ramTotal: '32GB', ramPercent: 37.5, diskUsed: '2.1TB', diskTotal: '4TB', ip: '192.168.1.102', pveVersion: 'pve-manager/8.1.4', status: 'warning' },
-  { name: 'pve-3', cpuPercent: 28, ramUsed: '6GB', ramTotal: '32GB', ramPercent: 18.8, diskUsed: '0.8TB', diskTotal: '4TB', ip: '192.168.1.103', pveVersion: 'pve-manager/8.1.4', status: 'online' },
-  { name: 'pve-4', cpuPercent: 55, ramUsed: '10GB', ramTotal: '32GB', ramPercent: 31.3, diskUsed: '1.5TB', diskTotal: '4TB', ip: '192.168.1.104', pveVersion: 'pve-manager/8.1.3', status: 'online' },
-]
+import { ref, onMounted } from 'vue'
+import { Loading } from '@element-plus/icons-vue'
+import { getDashboardNodes } from '@/api/dashboard'
+import type { DashboardNode } from '@/api/dashboard'
+
+const loading = ref(true)
+const nodes = ref<DashboardNode[]>([])
+
+onMounted(async () => {
+  try {
+    nodes.value = await getDashboardNodes()
+  } catch {
+    // error handled by interceptor
+  } finally {
+    loading.value = false
+  }
+})
+
+function formatMB(mb: number) {
+  if (mb >= 1024) return `${(mb / 1024).toFixed(1)}GB`
+  return `${mb}MB`
+}
 
 function getCpuColor(percent: number): string {
   if (percent > 85) return '#f56c6c'
@@ -80,24 +104,15 @@ function getCpuColor(percent: number): string {
   transition: background-color 0.3s, border-color 0.3s;
 }
 .card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: flex; align-items: center; justify-content: space-between;
   padding: 20px 24px 16px;
 }
-.card-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-heading);
-}
-.view-all {
-  font-size: 13px;
-  color: var(--primary-color);
-  text-decoration: none;
-  transition: opacity 0.2s;
-}
-.view-all:hover {
-  opacity: 0.8;
+.card-title { font-size: 16px; font-weight: 600; color: var(--text-heading); }
+.view-all { font-size: 13px; color: var(--primary-color); text-decoration: none; transition: opacity 0.2s; }
+.view-all:hover { opacity: 0.8; }
+.node-loading {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 40px; color: var(--text-secondary); font-size: 14px;
 }
 :deep(.el-table) {
   background: transparent;
@@ -109,42 +124,17 @@ function getCpuColor(percent: number): string {
   --el-table-text-color: var(--text-primary);
   --el-table-header-text-color: var(--text-secondary);
 }
-:deep(.el-table::before),
-:deep(.el-table--border::after) {
-  display: none;
-}
-:deep(.el-table th.el-table__cell) {
-  background: transparent;
-  border-bottom: 1px solid var(--border-color);
-}
-:deep(.el-table td.el-table__cell) {
-  border-bottom: 1px solid var(--border-color);
-}
-:deep(.el-table--enable-row-hover .el-table__body tr:hover > td) {
-  background-color: rgba(64, 158, 255, 0.05);
-}
+:deep(.el-table::before), :deep(.el-table--border::after) { display: none; }
+:deep(.el-table th.el-table__cell) { background: transparent; border-bottom: 1px solid var(--border-color); }
+:deep(.el-table td.el-table__cell) { border-bottom: 1px solid var(--border-color); }
+:deep(.el-table--enable-row-hover .el-table__body tr:hover > td) { background-color: rgba(64, 158, 255, 0.05); }
 :deep(.el-table--border .el-table__inner-wrapper::after),
 :deep(.el-table--border::before),
-:deep(.el-table--border::after) {
-  background-color: var(--border-color);
-}
-.node-name {
-  font-weight: 600;
-  color: var(--text-primary);
-}
-.usage-cell {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.usage-text {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-.disk-text {
-  font-size: 14px;
-  color: var(--text-primary);
-}
+:deep(.el-table--border::after) { background-color: var(--border-color); }
+.node-name { font-weight: 600; color: var(--text-primary); }
+.usage-cell { display: flex; flex-direction: column; gap: 4px; }
+.usage-text { font-size: 12px; color: var(--text-muted); }
+.disk-text { font-size: 14px; color: var(--text-primary); }
 :deep(.el-tag--success) {
   --el-tag-bg-color: rgba(103, 194, 58, 0.15);
   --el-tag-text-color: #67c23a;

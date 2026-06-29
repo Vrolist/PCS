@@ -26,6 +26,12 @@ class Cluster(models.Model):
     agent_token = models.CharField("Agent令牌", max_length=64, unique=True,
                                    default=generate_agent_token, db_index=True)
 
+    # PVE 连接信息（用户创建集群时填入，供 Agent 非交互式安装）
+    pve_endpoint = models.CharField("PVE API 地址", max_length=256, blank=True,
+                                    help_text="如 https://192.168.1.200:8006")
+    pve_token = models.CharField("PVE API Token", max_length=256, blank=True,
+                                 help_text="如 root@pam!monitor:xxxxxxxxxxxx")
+
     # 集群信息（由 Agent 上报填充）
     status = models.CharField("状态", max_length=32, choices=Status.choices,
                               default=Status.PENDING)

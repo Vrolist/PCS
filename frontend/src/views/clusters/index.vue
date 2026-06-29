@@ -68,14 +68,22 @@
     </div>
 
     <!-- 新建集群弹窗 -->
-    <el-dialog v-model="showCreate" title="新建集群" width="480px" :close-on-click-modal="false">
-      <el-form ref="createFormRef" :model="createForm" :rules="createRules" label-width="80px">
+    <el-dialog v-model="showCreate" title="新建集群" width="560px" :close-on-click-modal="false">
+      <el-form ref="createFormRef" :model="createForm" :rules="createRules" label-width="100px">
         <el-form-item label="集群名称" prop="name">
           <el-input v-model="createForm.name" placeholder="如：生产环境集群" maxlength="128" />
         </el-form-item>
         <el-form-item label="描述" prop="description">
-          <el-input v-model="createForm.description" type="textarea" :rows="3" placeholder="可选描述" />
+          <el-input v-model="createForm.description" type="textarea" :rows="2" placeholder="可选描述" />
         </el-form-item>
+        <el-divider content-position="left">PVE 连接信息（可选，填入后安装无需交互）</el-divider>
+        <el-form-item label="PVE API 地址" prop="pve_endpoint">
+          <el-input v-model="createForm.pve_endpoint" placeholder="如 https://192.168.1.200:8006" />
+        </el-form-item>
+        <el-form-item label="PVE API Token" prop="pve_token">
+          <el-input v-model="createForm.pve_token" placeholder="如 root@pam!monitor:xxxxxxxxxxxx" show-password />
+        </el-form-item>
+        <p class="form-hint">在 PVE 的「数据中心 → 权限 → API Tokens」中创建只读 Token</p>
       </el-form>
       <template #footer>
         <el-button @click="showCreate = false">取消</el-button>
@@ -160,7 +168,7 @@ const showDetail = ref(false)
 const detail = ref<ClusterDetail | null>(null)
 const createFormRef = ref<FormInstance>()
 
-const createForm = ref({ name: '', description: '' })
+const createForm = ref({ name: '', description: '', pve_endpoint: '', pve_token: '' })
 const createRules = {
   name: [{ required: true, message: '请输入集群名称', trigger: 'blur' }],
 }
@@ -185,7 +193,7 @@ async function handleCreate() {
     await createCluster(createForm.value)
     ElMessage.success('集群创建成功')
     showCreate.value = false
-    createForm.value = { name: '', description: '' }
+    createForm.value = { name: '', description: '', pve_endpoint: '', pve_token: '' }
     await loadClusters()
   } catch {
     // error handled by interceptor
@@ -219,9 +227,20 @@ async function confirmDelete(cluster: Cluster) {
 }
 
 function copyCommand(cmd: string) {
-  navigator.clipboard.writeText(cmd).then(() => {
+  const ta = document.createElement('textarea')
+  ta.value = cmd
+  ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px'
+  document.body.appendChild(ta)
+  ta.focus()
+  ta.select()
+  try {
+    document.execCommand('copy')
     ElMessage.success('已复制到剪贴板')
-  })
+  } catch {
+    ElMessage.error('复制失败，请手动复制')
+  } finally {
+    document.body.removeChild(ta)
+  }
 }
 
 function formatTime(iso: string) {
@@ -291,4 +310,5 @@ onMounted(loadClusters)
 }
 .copy-btn { position: absolute; top: 8px; right: 8px; }
 .install-hint { font-size: 12px; color: var(--text-secondary, #909399); margin-top: 8px; }
+.form-hint { font-size: 12px; color: var(--text-secondary, #909399); margin: -8px 0 0 100px; }
 </style>

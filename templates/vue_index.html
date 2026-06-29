@@ -1,14 +1,20 @@
-{% load django_vite %}
+{% load vite_tags %}
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PVE 集群扫描平台</title>
-  {% vite_hmr_client %}
+  {% if is_debug %}
+  <script type="module" src="http://{{ vite_host }}:{{ vite_port }}/static/frontend/@vite/client"></script>
+  {% endif %}
 </head>
 <body>
   <div id="app"></div>
+  {% if is_debug %}
+  <script type="module" src="http://{{ vite_host }}:{{ vite_port }}/static/frontend/src/main.ts"></script>
+  {% else %}
   {% vite_asset 'src/main.ts' %}
+  {% endif %}
 </body>
 </html>

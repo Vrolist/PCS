@@ -3,6 +3,7 @@ import platform
 import time
 import uuid
 from datetime import timedelta
+from pathlib import Path
 
 from django.db import transaction
 from django.db.models import F
@@ -418,9 +419,9 @@ class AgentTasksView(APIView):
 # Agent 版本常量（平台侧维护）
 # ============================================================
 
-AGENT_LATEST_VERSION = "0.1.0"
-AGENT_DOWNLOAD_URL = "https://pypi.org/project/pcs-agent/"
-AGENT_CHANGELOG = "初始版本：支持集群扫描、心跳、数据上报"
+AGENT_LATEST_VERSION = "0.2.0"
+AGENT_DOWNLOAD_URL = "/api/agent/install.sh"  # 从平台下载
+AGENT_CHANGELOG = "v0.2.0: 简化为单文件，零依赖"
 
 
 class AgentUnregisterView(APIView):
@@ -457,35 +458,50 @@ class AgentVersionView(APIView):
 
 
 class AgentInstallScriptView(APIView):
-    """返回一键安装脚本"""
+    """返回一键安装脚本或 agent.py 源码"""
     permission_classes = [AllowAny]
 
     def get(self, request):
+        # ?agent=1 → 返回 agent.py 源码（供 install.sh 下载）
+        if request.query_params.get("agent") == "1":
+            return self._agent_source()
+
         token = request.query_params.get("token", "")
         platform_url = request.query_params.get("platform", "")
+        pve_endpoint = request.query_params.get("pve", "")
+        pve_token = request.query_params.get("pve_token", "")
         uninstall = "uninstall" in request.query_params
 
         if uninstall:
             script = self._uninstall_script()
         else:
-            script = self._install_script(token, platform_url)
+            script = self._install_script(token, platform_url, pve_endpoint, pve_token)
 
         from django.http import HttpResponse
         return HttpResponse(script, content_type="text/plain; charset=utf-8")
 
-    def _install_script(self, token: str, platform_url: str) -> str:
+    def _agent_source(self):
+        """返回 agent.py 源码"""
+        from django.http import HttpResponse
+        agent_path = Path(__file__).resolve().parent.parent.parent / "agent" / "agent.py"
+        if not agent_path.exists():
+            return HttpResponse("agent.py not found", status=404)
+        return HttpResponse(agent_path.read_text(), content_type="text/x-python; charset=utf-8")
+
+    def _install_script(self, token: str, platform_url: str, pve_endpoint: str = "", pve_token: str = "") -> str:
         return f"""#!/bin/bash
 set -e
 
 TOKEN="{token}"
 PLATFORM_URL="{platform_url}"
+PVE_ENDPOINT="{pve_endpoint}"
+PVE_TOKEN="{pve_token}"
 AGENT_NAME="pcs-agent"
 INSTALL_DIR="/opt/$AGENT_NAME"
-CONFIG_DIR="$HOME/.config/$AGENT_NAME"
 
 echo "=============================="
 echo "  PVE Cluster Scan Agent"
-echo "  安装程序 v0.1.0"
+echo "  安装程序 v0.2.0"
 echo "=============================="
 echo ""
 
@@ -495,96 +511,135 @@ if [ -z "$TOKEN" ] || [ -z "$PLATFORM_URL" ]; then
     exit 1
 fi
 
-# 1. 检测系统
-detect_os() {{
-    if [ -f /etc/debian_version ]; then
-        echo "debian"
-    elif [ -f /etc/redhat-release ]; then
-        echo "redhat"
-    else
-        echo "unknown"
-    fi
-}}
-
-OS=$(detect_os)
-echo "检测到系统: $OS"
-
-# 2. 安装依赖
-echo "安装系统依赖..."
-if [ "$OS" = "debian" ]; then
-    apt-get update -qq 2>/dev/null || true
-    apt-get install -y -qq python3 python3-pip python3-venv curl 2>/dev/null
-elif [ "$OS" = "redhat" ]; then
-    yum install -y python3 python3-pip curl 2>/dev/null || true
-else
-    echo "不支持的系统，请手动安装 python3 和 pip"
+# 1. 检查 root
+if [ "$(id -u)" -ne 0 ]; then
+    echo "错误: 需要 root 权限，请使用 sudo"
     exit 1
 fi
 
+# 2. 检查 Python3
+if ! command -v python3 &>/dev/null; then
+    echo "安装 python3..."
+    if [ -f /etc/debian_version ]; then
+        apt-get update -qq && apt-get install -y -qq python3
+    elif [ -f /etc/redhat-release ]; then
+        yum install -y python3
+    fi
+fi
+
+PYTHON=$(command -v python3)
+echo "Python: $PYTHON"
+
 # 3. 创建安装目录
-echo "创建安装目录: $INSTALL_DIR"
 mkdir -p "$INSTALL_DIR"
 
-# 4. 创建虚拟环境
-echo "创建 Python 虚拟环境..."
-python3 -m venv "$INSTALL_DIR/venv"
+# 4. 下载 agent.py
+echo "下载 agent..."
+curl -fsSL "$PLATFORM_URL/api/agent/install.sh?agent=1" -o "$INSTALL_DIR/agent.py"
+chmod +x "$INSTALL_DIR/agent.py"
+echo "已下载: $INSTALL_DIR/agent.py"
 
-# 5. 安装 Agent
-echo "安装 $AGENT_NAME..."
-"$INSTALL_DIR/venv/bin/pip" install --quiet --upgrade pip
-"$INSTALL_DIR/venv/bin/pip" install --quiet $AGENT_NAME
+# 5. 获取 PVE 信息
+# 如果命令行传入了 PVE 参数（非交互式安装），跳过输入
+if [ -n "$PVE_ENDPOINT" ] && [ -n "$PVE_TOKEN" ]; then
+    PVE_USER="root@pam"
+    echo "PVE 地址: $PVE_ENDPOINT"
+    echo "PVE Token: ${{PVE_TOKEN:0:20}}..."
+else
+    # 交互式输入
+    echo ""
+    echo "请输入 PVE 信息:"
+    read -p "PVE API 地址 (如 https://192.168.1.200:8006): " PVE_ENDPOINT
+    read -p "PVE 用户名 [root@pam]: " PVE_USER
+    PVE_USER=${{PVE_USER:-root@pam}}
+    read -s -p "PVE API Token: " PVE_TOKEN
+    echo ""
+fi
 
-# 6. 初始化（注册到平台）
-echo "注册 Agent..."
-mkdir -p "$CONFIG_DIR"
-"$INSTALL_DIR/venv/bin/$AGENT_NAME" init \\
-    --platform-url "$PLATFORM_URL" \\
-    --token "$TOKEN" \\
-    --no-input
+# 6. 注册到平台
+echo "注册到平台..."
+HOSTNAME=$(hostname)
+REGISTER_RESULT=$(curl -s -X POST "$PLATFORM_URL/api/agent/register/" \\
+    -H "Content-Type: application/json" \\
+    -d "{{
+        \\"agent_token\\": \\"$TOKEN\\",
+        \\"pve_api_endpoint\\": \\"$PVE_ENDPOINT\\",
+        \\"pve_username\\": \\"$PVE_USER\\",
+        \\"pve_password\\": \\"$PVE_TOKEN\\",
+        \\"hostname\\": \\"$HOSTNAME\\",
+        \\"scan_interval\\": 3600
+    }}")
 
-# 7. 安装 systemd 服务
-echo "安装 systemd 服务..."
-cat > /etc/systemd/system/$AGENT_NAME.service << 'EOF'
+AGENT_ID=$(echo "$REGISTER_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('agent_id',''))" 2>/dev/null || true)
+
+if [ -z "$AGENT_ID" ]; then
+    echo "注册失败: $REGISTER_RESULT"
+    exit 1
+fi
+echo "注册成功: $AGENT_ID"
+
+# 7. 保存配置
+cat > "$INSTALL_DIR/config.env" << CFGEOF
+platform_url="$PLATFORM_URL"
+agent_token="$TOKEN"
+agent_id="$AGENT_ID"
+cluster_id=""
+pve_endpoint="$PVE_ENDPOINT"
+pve_username="$PVE_USER"
+pve_password="$PVE_TOKEN"
+scan_interval=3600
+heartbeat_interval=60
+CFGEOF
+chmod 600 "$INSTALL_DIR/config.env"
+echo "配置已保存: $INSTALL_DIR/config.env"
+
+# 8. 安装 systemd 服务
+cat > /etc/systemd/system/$AGENT_NAME.service << SVCEOF
 [Unit]
 Description=PVE Cluster Scan Agent
 After=network.target
 
 [Service]
 Type=simple
-ExecStart=$INSTALL_DIR/venv/bin/$AGENT_NAME start --foreground
+ExecStart=$PYTHON $INSTALL_DIR/agent.py run
 Restart=always
 RestartSec=10
 WorkingDirectory=$INSTALL_DIR
 
 [Install]
 WantedBy=multi-user.target
-EOF
+SVCEOF
 
 systemctl daemon-reload
 systemctl enable $AGENT_NAME
 systemctl start $AGENT_NAME
 
-# 8. 验证
+# 9. 验证
 sleep 2
 AGENT_STATUS=$(systemctl is-active $AGENT_NAME 2>/dev/null || echo "unknown")
 
 echo ""
 echo "=============================="
-echo "  安装完成！"
+echo "  安装完成!"
 echo ""
 if [ "$AGENT_STATUS" = "active" ]; then
-    echo "  状态:    运行中 ✓"
+    echo "  状态:     运行中"
 else
-    echo "  状态:    $AGENT_STATUS"
-    echo "  启动失败? 查看日志: journalctl -u $AGENT_NAME -n 20"
+    echo "  状态:     $AGENT_STATUS"
+    echo "  排查:     journalctl -u $AGENT_NAME -n 20"
 fi
 echo ""
+echo "  Agent ID: $AGENT_ID"
+echo "  安装目录: $INSTALL_DIR"
+echo "  配置文件: $INSTALL_DIR/config.env"
+echo "  日志文件: $INSTALL_DIR/agent.log"
+echo ""
 echo "  管理命令:"
-echo "    查看状态: systemctl status $AGENT_NAME"
-echo "    查看日志: journalctl -u $AGENT_NAME -f"
-echo "    停止服务: systemctl stop $AGENT_NAME"
-echo "    重启服务: systemctl restart $AGENT_NAME"
-echo "    卸载:     $AGENT_NAME uninstall"
+echo "    systemctl status $AGENT_NAME    # 查看状态"
+echo "    systemctl restart $AGENT_NAME   # 重启"
+echo "    systemctl stop $AGENT_NAME      # 停止"
+echo "    journalctl -u $AGENT_NAME -f    # 实时日志"
+echo "    curl -fsSL '$PLATFORM_URL/api/agent/install.sh?uninstall' | bash  # 卸载"
 echo "=============================="
 """
 
@@ -594,7 +649,6 @@ set -e
 
 AGENT_NAME="pcs-agent"
 INSTALL_DIR="/opt/$AGENT_NAME"
-CONFIG_DIR="$HOME/.config/$AGENT_NAME"
 
 echo "=============================="
 echo "  PVE Cluster Scan Agent"
@@ -602,12 +656,21 @@ echo "  卸载程序"
 echo "=============================="
 echo ""
 
-# 1. 停止服务
-echo "1. 停止服务..."
-systemctl stop $AGENT_NAME 2>/dev/null || true
+# 1. 通知平台
+if [ -f "$INSTALL_DIR/config.env" ]; then
+    AGENT_ID=$(grep '^agent_id=' "$INSTALL_DIR/config.env" | cut -d'"' -f2)
+    PLATFORM_URL=$(grep '^platform_url=' "$INSTALL_DIR/config.env" | cut -d'"' -f2)
+    if [ -n "$AGENT_ID" ] && [ -n "$PLATFORM_URL" ]; then
+        echo "1. 通知平台..."
+        curl -s -X POST "$PLATFORM_URL/api/agent/unregister/" \\
+            -H "Content-Type: application/json" \\
+            -d "{\"agent_id\": \"$AGENT_ID\"}" || true
+    fi
+fi
 
-# 2. 禁用开机自启
-echo "2. 禁用开机自启..."
+# 2. 停止服务
+echo "2. 停止服务..."
+systemctl stop $AGENT_NAME 2>/dev/null || true
 systemctl disable $AGENT_NAME 2>/dev/null || true
 
 # 3. 删除 systemd 服务
@@ -618,10 +681,9 @@ systemctl daemon-reload
 # 4. 删除文件
 echo "4. 清理文件..."
 rm -rf "$INSTALL_DIR"
-rm -rf "$CONFIG_DIR"
 
 echo ""
 echo "=============================="
-echo "  卸载完成！"
+echo "  卸载完成!"
 echo "=============================="
 """

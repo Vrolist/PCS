@@ -23,14 +23,15 @@ THIRD_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
-    'django_vite',
 ]
 
 LOCAL_APPS = [
+    'apps.core',
     'apps.accounts',
     'apps.clusters',
     'apps.agent_api',
     'apps.scanner',
+    'apps.dashboard',
 ]
 
 INSTALLED_APPS = [
@@ -66,6 +67,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'apps.core.context_processors.vite_context',
             ],
         },
     },
@@ -114,15 +116,8 @@ STATICFILES_DIRS = [
 ]
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# django-vite
-DJANGO_VITE = {
-    "default": {
-        "dev_mode": DEBUG,
-        "dev_server_host": "127.0.0.1",
-        "dev_server_port": 5173,
-        "static_url_prefix": "frontend",
-    }
-}
+# Vite dev server port (dev mode: 浏览器通过此端口加载前端资源)
+VITE_PORT = 5173
 
 # Media files
 MEDIA_URL = 'media/'

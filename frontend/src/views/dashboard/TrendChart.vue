@@ -2,9 +2,9 @@
   <div class="trend-chart-card">
     <div class="trend-chart-header">
       <h3 class="trend-chart-title">资源趋势</h3>
-      <el-select v-model="timeRange" size="small" class="time-range-select">
-        <el-option label="近 7 天" value="7d" />
-        <el-option label="近 15 天" value="15d" />
+      <el-select v-model="timeRange" size="small" class="time-range-select" @change="loadTrends">
+        <el-option label="近 7 天" value="7" />
+        <el-option label="近 15 天" value="15" />
       </el-select>
     </div>
     <div class="trend-chart-body">
@@ -14,25 +14,31 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import * as echarts from 'echarts'
 import VChart from 'vue-echarts'
 import { useThemeStore } from '@/stores/theme'
+import { getDashboardTrends } from '@/api/dashboard'
 
-const timeRange = ref('7d')
+const timeRange = ref('7')
 const themeStore = useThemeStore()
 
-function getDateLabels(): string[] {
-  const n = timeRange.value === '15d' ? 15 : 7
-  const days: string[] = []
-  const today = new Date()
-  for (let i = n; i >= 1; i--) {
-    const d = new Date(today)
-    d.setDate(today.getDate() - i)
-    days.push(`${d.getMonth() + 1}.${d.getDate()}`)
+const dates = ref<string[]>([])
+const cpuData = ref<number[]>([])
+const memoryData = ref<number[]>([])
+
+async function loadTrends() {
+  try {
+    const data = await getDashboardTrends(Number(timeRange.value))
+    dates.value = data.dates
+    cpuData.value = data.cpu_avg
+    memoryData.value = data.memory_avg
+  } catch {
+    // empty chart on error
   }
-  return days
 }
+
+onMounted(loadTrends)
 
 const chartOption = computed(() => {
   const isDark = themeStore.theme === 'dark'
@@ -51,20 +57,14 @@ const chartOption = computed(() => {
       textStyle: { color: tooltipText }
     },
     legend: {
-      top: 0,
-      right: 0,
+      top: 0, right: 0,
       textStyle: { color: textColor }
     },
-    grid: {
-      left: 40,
-      right: 20,
-      bottom: 30,
-      top: 40
-    },
+    grid: { left: 40, right: 20, bottom: 30, top: 40 },
     xAxis: {
       type: 'category' as const,
       boundaryGap: false,
-      data: getDateLabels(),
+      data: dates.value,
       axisLine: { lineStyle: { color: axisColor } },
       axisTick: { lineStyle: { color: axisColor } },
       axisLabel: { color: textColor }
@@ -80,7 +80,7 @@ const chartOption = computed(() => {
         name: 'CPU 使用率',
         type: 'line',
         smooth: true,
-        data: [35, 42, 38, 55, 48, 40, 38],
+        data: cpuData.value,
         itemStyle: { color: '#409eff' },
         lineStyle: { color: '#409eff', width: 2 },
         areaStyle: {
@@ -94,7 +94,7 @@ const chartOption = computed(() => {
         name: '内存使用率',
         type: 'line',
         smooth: true,
-        data: [62, 65, 68, 72, 70, 68, 65],
+        data: memoryData.value,
         itemStyle: { color: '#8b5cf6' },
         lineStyle: { color: '#8b5cf6', width: 2 },
         areaStyle: {
@@ -118,25 +118,11 @@ const chartOption = computed(() => {
   transition: background-color 0.3s, border-color 0.3s;
 }
 .trend-chart-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: flex; align-items: center; justify-content: space-between;
   padding: 20px 24px 0;
 }
-.trend-chart-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-heading);
-  margin: 0;
-}
-.time-range-select {
-  width: 120px;
-}
-.trend-chart-body {
-  padding: 8px 16px 16px;
-}
-.trend-chart {
-  width: 100%;
-  height: 260px;
-}
+.trend-chart-title { font-size: 16px; font-weight: 600; color: var(--text-heading); margin: 0; }
+.time-range-select { width: 120px; }
+.trend-chart-body { padding: 8px 16px 16px; }
+.trend-chart { width: 100%; height: 260px; }
 </style>

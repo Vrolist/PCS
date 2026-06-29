@@ -1,6 +1,6 @@
 #!/bin/bash
 # pve-cluster-scan 一键开发启动脚本
-# 同时启动 Django 后端 + Vite 前端（django-vite 集成模式）
+# 同时启动 Django 后端 + Vite 前端（模板自动适配 IP/端口）
 
 set -e
 
@@ -46,8 +46,7 @@ cd frontend && npm install && cd ..
 # 5. 启动服务（前台：Django + 后台：Vite）
 echo "[5/5] 启动服务..."
 echo ""
-echo "   Django 后端:  http://0.0.0.0:8000"
-echo "   Vite  前端:   http://localhost:5173"
+echo "   Django 后端:  http://<本机IP>:8000（前端资源自动适配）"
 echo "========================================="
 
 # 后台启动 Vite 开发服务器

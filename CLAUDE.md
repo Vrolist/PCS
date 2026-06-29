@@ -7,9 +7,14 @@ PVE 集群扫描与管理平台 — Django 5 + Vue 3 全栈项目。
 ```
 pve-cluster-scan/
 ├── config/                 # Django 项目配置
-│   ├── settings.py         #   - DRF / JWT / django-vite / CORS
+│   ├── settings.py         #   - DRF / JWT / CORS / Vite 端口配置
 │   └── urls.py             #   - auth 路由 + catch-all → Vue SPA
 ├── apps/
+│   ├── core/               # 通用工具（Vite 模板标签 / 上下文处理器）
+│   │   ├── context_processors.py  # - vite_context（注入 vite_host/vite_port）
+│   │   ├── templatetags/
+│   │   │   └── vite_tags.py       # - vite_asset（生产模式 manifest 查找）
+│   │   └── views.py
 │   ├── accounts/           # 用户认证 & 套餐管理
 │   │   ├── models.py       #   - User / Plan / UserPlan / PasswordResetCode
 │   │   ├── serializers.py  #   - Login / Register / User / PasswordReset
@@ -31,6 +36,10 @@ pve-cluster-scan/
 │   │   ├── install_script.py  # install.sh 模板生成
 │   │   ├── tests.py        #   - 40 个测试用例
 │   │   └── admin.py
+│   ├── dashboard/          # Dashboard 查询 API
+│   │   ├── views.py        #   - stats / alerts / trends / nodes
+│   │   ├── urls.py         #   - /api/dashboard/ 路由（4 个端点）
+│   │   └── tests.py        #   - 30 个测试用例
 │   └── scanner/            # 扫描数据 & 自动检测
 ├── frontend/               # Vue 3 + Vite 前端
 │   ├── src/
@@ -65,20 +74,13 @@ pve-cluster-scan/
 │   │   ├── api/
 │   │   │   ├── request.ts            # Axios 实例 + 拦截器
 │   │   │   ├── auth.ts               # 登录/注册/密码重置 API
-│   │   │   └── clusters.ts           # 集群 CRUD + Agent 查询 API
+│   │   │   ├── clusters.ts           # 集群 CRUD + Agent 查询 API
+│   │   │   └── dashboard.ts          # Dashboard 统计/告警/趋势/节点 API
 │   │   └── style.css                 # CSS 变量 / 亮暗色值
 │   ├── package.json
 │   └── vite.config.ts
-├── agent/                    # Agent CLI 工具（独立 Python 包）
-│   ├── pyproject.toml          # 打包配置
-│   └── agent/
-│       ├── __init__.py
-│       ├── cli.py              # CLI 入口（click）
-│       ├── config.py           # 配置管理（~/.config/pcs-agent/config.yaml）
-│       ├── pve_client.py       # PVE API 客户端
-│       ├── scanner.py          # 数据采集 + 单位转换
-│       ├── uploader.py         # 上报到 Django 平台
-│       └── scheduler.py        # 心跳 + 扫描调度器
+├── agent/                    # Agent（单文件，零依赖）
+│   └── agent.py               # PVE 数据采集 + 上报（纯 Python stdlib）
 ├── data-structure/           # PVE 数据结构分析文档
 │   ├── README.md             # 分析说明与 License 声明
 │   ├── database-models.md    # 数据库模型与 PVE 字段映射
@@ -87,7 +89,7 @@ pve-cluster-scan/
 │   ├── data-flow.md          # 数据采集与入库流程
 │   └── agent-design.md       # Agent 设计文档（架构/命令/安装/通信）
 ├── templates/
-│   └── vue_index.html                # Django 模板（django-vite 入口）
+│   └── vue_index.html                # Django 模板（自动适配 IP/端口）
 ├── static/                           # Vite 构建输出
 ├── manage.py
 ├── dev_start.sh                      # 一键启动（Django + Vite）
@@ -102,22 +104,24 @@ pve-cluster-scan/
 | 前端 | Vue 3 + TypeScript + Vite |
 | UI | Element Plus + Pinia + Vue Router |
 | 图表 | ECharts + vue-echarts |
-| 集成 | django-vite（Vite HMR 内嵌到 Django 模板） |
+| 集成 | Vite（模板自动适配 IP/端口，无需 django-vite） |
 | 认证 | SimpleJWT（access + refresh token） |
 | 主题 | CSS 变量 + Element Plus dark 模式 |
 
-## django-vite 工作流程
+## Vite 集成工作流程
 
 ```
 开发模式:
   python manage.py runserver (Django :8000)
-  + npm run dev (Vite :5173)
-  → django-vite 将 Vite 资源注入 Django 模板
-  → 热更新正常工作
+  + npm run dev (Vite :5173, host=0.0.0.0)
+  → 模板上下文处理器自动注入 vite_host/vite_port
+  → 浏览器根据当前访问 IP 自动加载 Vite 资源
+  → 热更新正常工作（支持 localhost / 内网 IP 远程访问）
 
 生产模式:
-  npm run build → 输出到 static/frontend/
+  npm run build → 输出到 static/frontend/（含 manifest.json）
   python manage.py collectstatic
+  → vite_asset 模板标签从 manifest 查找构建后的 JS/CSS
   → Django 直接 serve 构建产物
 ```
 
@@ -144,58 +148,52 @@ python manage.py migrate
 python manage.py test apps.agent_api apps.clusters --verbosity=2
 ```
 
-## Agent CLI 工具
+## Agent
 
-独立 Python 包，安装在 PVE 节点上运行。
-
-> 完整设计文档见 `data-structure/agent-design.md`
+单文件 Python 脚本（零依赖，纯 stdlib），安装在 PVE 节点上运行。
 
 ```bash
 # 用户一键安装（从 Web 页面复制）
-curl -fsSL https://platform:8000/api/agent/install.sh?token=<token>&platform=<url> | bash
+curl -fsSL 'http://platform:8000/api/agent/install.sh?token=<token>&platform=<url>' | bash
+# → 下载 agent.py → 交互式输入 PVE 信息 → 注册 → 安装 systemd → 启动
 
 # 用户一键卸载
-curl -fsSL https://platform:8000/api/agent/install.sh | bash -s -- --uninstall
+curl -fsSL 'http://platform:8000/api/agent/install.sh?uninstall' | bash
 
-# Agent 管理命令
-pcs-agent init        # 注册到平台（安装时自动执行）
-pcs-agent start       # 启动 Agent
-pcs-agent stop        # 停止 Agent
-pcs-agent status      # 查看运行状态
-pcs-agent update      # 更新到最新版本
-pcs-agent uninstall   # 卸载 Agent
-pcs-agent install     # 安装 Agent（交互式）
-pcs-agent logs        # 查看运行日志（--follow 实时跟踪）
+# 手动安装
+curl -fsSL 'http://platform:8000/api/agent/install.sh?agent=1' -o agent.py
+python3 agent.py install     # 交互式配置 + 注册 + 安装 systemd
+python3 agent.py run         # 直接运行（前台）
+python3 agent.py once        # 单次扫描
+python3 agent.py status      # 查看状态
 
-# systemd 管理（标准 Linux 命令）
-systemctl status pcs-agent     # 查看服务状态
-systemctl stop pcs-agent       # 停止
-systemctl restart pcs-agent    # 重启
-journalctl -u pcs-agent -f     # 查看日志
+# systemd 管理
+systemctl status pcs-agent
+systemctl restart pcs-agent
+journalctl -u pcs-agent -f
 ```
 
-**配置文件**：`~/.config/pcs-agent/config.yaml`
 **安装目录**：`/opt/pcs-agent/`
+**配置文件**：`/opt/pcs-agent/config.env`（KEY=VALUE 格式）
+**日志文件**：`/opt/pcs-agent/agent.log`
 
 **执行流程**：
 ```
 curl 安装脚本
-  → 检测系统环境
-  → 安装 Python3 + venv
-  → pip install pcs-agent
-  → pcs-agent init（注册到平台）
-  → 安装 systemd 服务
-  → 启动服务
+  → 下载 agent.py 到 /opt/pcs-agent/
+  → 交互式输入 PVE 地址/用户名/密码
+  → POST /api/agent/register/ 注册到平台
+  → 保存 config.env
+  → 安装 systemd 服务 → 启动
 
 Agent 运行中:
-  → PVE API 认证
-  → 心跳循环 (每 60s)
+  → PVE API 认证 (POST /access/ticket)
+  → 心跳循环 (每 60s POST /api/agent/heartbeat/)
   → 扫描循环 (每 3600s)
     → 调用 PVE API 采集所有节点
     → 数据清洗 (bytes→MB/GB, CPU→%)
     → POST /api/agent/scan/upload/
-    → Django 事务性入库 (10 个模型)
-    → 检查下发任务
+    → 检查下发任务 GET /api/agent/tasks/
 ```
 
 ## API 端点
@@ -284,6 +282,15 @@ GET /api/agent/version/
 GET /api/agent/install.sh?token=<agent_token>&platform=<platform_url>
 → (返回 bash 安装脚本内容)
 ```
+
+### Dashboard `/api/dashboard/`
+
+| 方法 | 路径 | 说明 | 认证 |
+|------|------|------|------|
+| GET | `/api/dashboard/stats/` | 统计卡片（集群数/节点数/VM数/告警数） | ✅ JWT |
+| GET | `/api/dashboard/alerts/?limit=10` | 最近未解决告警列表 | ✅ JWT |
+| GET | `/api/dashboard/trends/?days=7` | CPU/内存使用率趋势 | ✅ JWT |
+| GET | `/api/dashboard/nodes/` | 最新节点状态 | ✅ JWT |
 
 ### 集群管理 `/api/clusters/`
 
@@ -480,7 +487,7 @@ PVE 节点 (Agent) → PVE API (HTTPS :8006) → Agent 数据清洗 → POST /ap
 2. 每隔 60s 发送心跳 `POST /api/agent/heartbeat/`（已有实现）
 3. 定时执行扫描任务，上报到 `POST /api/agent/scan/upload/`（已有实现）
 4. Web 端可向特定 Agent 下发任务 `GET /api/agent/tasks/`（已有实现）
-5. 后端 58 个测试用例覆盖完整流程：`python manage.py test apps.agent_api apps.clusters`
+5. 后端 88 个测试用例覆盖完整流程：`python manage.py test apps.agent_api apps.clusters apps.dashboard`
 
 ## 管理员
 
@@ -494,7 +501,7 @@ PVE 节点 (Agent) → PVE API (HTTPS :8006) → Agent 数据清洗 → POST /ap
 2. ~~前端页面框架~~ ✅ 已完成（7 个后台页面 + 路由 + 侧边栏）
 3. ~~仪表盘 UI~~ ✅ 已完成（统计卡片 + 告警列表 + 趋势图 + 节点表格）
 4. ~~Agent 上报接口与数据入库~~ ✅ 已完成（注册/心跳/扫描上传/任务下发 + 48 个测试）
-5. ~~Agent CLI 工具~~ ✅ 已完成（pcs-agent：init/start/stop/status/update/uninstall/install/logs）
+5. ~~Agent CLI 工具~~ ✅ 已完成（单文件 agent.py，零依赖，curl 一键安装）
 6. ~~集群 CRUD API + 前端对接~~ ✅ 已完成（CRUD API + Agent 列表 + 安装命令展示）
 7. 自动检测引擎
 8. 仪表盘真实数据接入
