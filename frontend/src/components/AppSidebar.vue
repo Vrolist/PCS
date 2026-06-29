@@ -253,7 +253,7 @@ const themeStore = useThemeStore()
   --el-menu-hover-bg-color: rgba(64, 158, 255, 0.08);
   --el-menu-hover-text-color: #409eff;
   --el-menu-active-color: #409eff;
-  background: linear-gradient(180deg, #f0f2f5 0%, #e8eaef 50%, #f0f2f5 100%) !important;
+  background: var(--bg-secondary) !important;
 }
 .sidebar-logo {
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
@@ -290,7 +290,7 @@ const themeStore = useThemeStore()
   --el-menu-hover-bg-color: rgba(64, 158, 255, 0.1);
   --el-menu-hover-text-color: rgba(255, 255, 255, 0.85);
   --el-menu-active-color: #fff;
-  background: linear-gradient(180deg, #0f1729 0%, #1a1f3a 50%, #0f1729 100%) !important;
+  background: var(--bg-secondary) !important;
 }
 .sidebar-menu.is-dark .sidebar-logo {
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);

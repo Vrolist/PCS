@@ -1,8 +1,8 @@
 :root {
   /* Light theme — clearly layered */
   --bg-primary: #e8ebf0;
-  --bg-secondary: #ffffff;
-  --bg-card: #ffffff;
+  --bg-secondary: #f5f6f8;
+  --bg-card: #f5f6f8;
   --bg-navbar: rgba(255, 255, 255, 0.88);
   --bg-navbar-border: #d9dce4;
   --text-primary: #1d1e24;
