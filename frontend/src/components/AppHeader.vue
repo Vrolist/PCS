@@ -1,7 +1,7 @@
 <template>
-  <el-header class="app-header">
+  <header class="app-header">
     <div class="header-left">
-      <el-icon class="collapse-btn" @click="appStore.toggleSidebar" :size="20">
+      <el-icon class="collapse-btn" @click="appStore.toggleSidebar" :size="28">
         <Fold v-if="!appStore.sidebarCollapsed" />
         <Expand v-else />
       </el-icon>
@@ -12,14 +12,14 @@
       </el-breadcrumb>
     </div>
     <div class="header-right">
-      <button class="theme-btn" @click="themeStore.toggle" :title="themeStore.theme === 'dark' ? '切换到亮色' : '切换到暗色'">
-        <el-icon :size="18"><Sunny v-if="themeStore.theme === 'dark'" /><Moon v-else /></el-icon>
+      <button class="header-icon-btn" @click="themeStore.toggle" :title="themeStore.theme === 'dark' ? '切换到亮色' : '切换到暗色'">
+        <el-icon :size="16"><Sunny v-if="themeStore.theme === 'dark'" /><Moon v-else /></el-icon>
       </button>
       <el-dropdown trigger="click">
-        <span class="user-info">
-          <el-avatar :size="32" icon="UserFilled" />
+        <div class="user-avatar-wrap">
+          <el-avatar :size="30" icon="UserFilled" class="user-avatar" />
           <span class="username">{{ authStore.user?.username || 'buladou' }}</span>
-        </span>
+        </div>
         <template #dropdown>
           <el-dropdown-menu>
             <el-dropdown-item @click="handleLogout">退出登录</el-dropdown-item>
@@ -27,7 +27,7 @@
         </template>
       </el-dropdown>
     </div>
-  </el-header>
+  </header>
 </template>
 
 <script setup lang="ts">
@@ -62,32 +62,38 @@ function handleLogout() {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  width: 100%;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
-  padding: 0 20px;
-  height: 60px;
+  padding: 0 24px;
+  height: 56px;
+  flex-shrink: 0;
   transition: background 0.3s, border-color 0.3s;
 }
 .header-left {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 4px;
 }
 .collapse-btn {
   cursor: pointer;
-  color: var(--text-secondary);
+  color: var(--text-muted);
+  padding: 8px;
+  border-radius: 8px;
+  transition: all 0.2s;
 }
 .collapse-btn:hover {
-  color: #409eff;
+  color: var(--primary-color);
+  background: rgba(64, 158, 255, 0.08);
 }
 .header-right {
   display: flex;
   align-items: center;
   gap: 8px;
 }
-.theme-btn {
-  width: 34px;
-  height: 34px;
+.header-icon-btn {
+  width: 32px;
+  height: 32px;
   border-radius: 8px;
   border: 1px solid var(--border-color);
   background: transparent;
@@ -95,21 +101,32 @@ function handleLogout() {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-secondary);
+  color: var(--text-muted);
   transition: all 0.2s;
 }
-.theme-btn:hover {
-  border-color: #409eff;
-  color: #409eff;
+.header-icon-btn:hover {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+  background: rgba(64, 158, 255, 0.06);
 }
-.user-info {
+.user-avatar-wrap {
   display: flex;
   align-items: center;
   gap: 8px;
+  padding: 4px 12px 4px 4px;
+  border-radius: 20px;
   cursor: pointer;
+  transition: background 0.2s;
+}
+.user-avatar-wrap:hover {
+  background: rgba(64, 158, 255, 0.08);
+}
+.user-avatar {
+  background: linear-gradient(135deg, #409eff, #8b5cf6);
 }
 .username {
-  font-size: 14px;
-  color: var(--text-primary);
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 500;
 }
 </style>

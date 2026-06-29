@@ -1,73 +1,85 @@
 <template>
   <div class="dashboard">
-    <h2 class="page-title">控制台</h2>
+    <div class="dash-header">
+      <div>
+        <h2 class="dash-title">控制台</h2>
+        <p class="dash-subtitle">欢迎回来，{{ authStore.user?.username || 'buladou' }}</p>
+      </div>
+      <div class="dash-actions">
+      </div>
+    </div>
 
-    <!-- 统计卡片 -->
-    <el-row :gutter="20" class="stat-cards">
-      <el-col :span="6" v-for="card in statCards" :key="card.label">
-        <el-card shadow="hover" class="stat-card">
-          <div class="stat-card-inner">
-            <div class="stat-info">
-              <p class="stat-value">{{ card.value }}</p>
-              <p class="stat-label">{{ card.label }}</p>
-            </div>
-            <el-icon :size="40" :color="card.color">
-              <component :is="card.icon" />
-            </el-icon>
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
+    <div class="dash-section">
+      <StatCards />
+    </div>
 
-    <!-- 集群状态 -->
-    <el-card shadow="hover" class="section-card">
-      <template #header>
-        <span>集群列表</span>
-      </template>
-      <el-empty description="暂无集群数据，请先创建一个集群" />
-    </el-card>
+    <div class="dash-section">
+      <TrendChart />
+    </div>
+
+    <div class="dash-row-split">
+      <div class="dash-col-alert">
+        <AlertList />
+      </div>
+      <div class="dash-col-table">
+        <NodeTable />
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-const statCards = [
-  { label: '集群总数', value: 0, icon: 'Setting', color: '#409eff' },
-  { label: '在线节点', value: 0, icon: 'Monitor', color: '#67c23a' },
-  { label: '虚拟机', value: 0, icon: 'Cloudy', color: '#e6a23c' },
-  { label: '告警', value: 0, icon: 'WarningFilled', color: '#f56c6c' },
-]
+import { useAuthStore } from '@/stores/auth'
+import StatCards from './StatCards.vue'
+import TrendChart from './TrendChart.vue'
+import NodeTable from './NodeTable.vue'
+import AlertList from './AlertList.vue'
+
+const authStore = useAuthStore()
 </script>
 
 <style scoped>
 .dashboard {
-  max-width: 1200px;
+  max-width: 1400px;
+  margin: 0 auto;
 }
-.page-title {
-  font-size: 22px;
-  font-weight: 600;
-  margin-bottom: 24px;
-  color: #303133;
-}
-.stat-cards {
-  margin-bottom: 24px;
-}
-.stat-card-inner {
+.dash-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  margin-bottom: 28px;
 }
-.stat-value {
-  font-size: 28px;
+.dash-title {
+  font-size: 24px;
   font-weight: 700;
-  color: #303133;
+  color: var(--text-heading);
   margin: 0;
 }
-.stat-label {
+.dash-subtitle {
   font-size: 14px;
-  color: #909399;
-  margin: 4px 0 0 0;
+  color: var(--text-muted);
+  margin: 4px 0 0;
 }
-.section-card {
-  margin-bottom: 24px;
+.dash-actions {
+  display: flex;
+  gap: 12px;
+}
+.dash-section {
+  margin-bottom: 28px;
+}
+.dash-row-split {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 28px;
+  align-items: start;
+}
+.dash-col-table {
+  min-width: 0;
+  overflow-x: auto;
+}
+@media (max-width: 1200px) {
+  .dash-row-split {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

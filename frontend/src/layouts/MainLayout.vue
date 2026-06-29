@@ -1,31 +1,53 @@
 <template>
-  <el-container class="layout-container">
-    <!-- 侧边栏 -->
-    <AppSidebar />
-    <!-- 主区域 -->
-    <el-container>
-      <!-- 顶栏 -->
+  <div class="layout-container">
+    <aside class="layout-sidebar" :class="{ collapsed: appStore.sidebarCollapsed }">
+      <AppSidebar />
+    </aside>
+    <div class="layout-main">
       <AppHeader />
-      <!-- 内容区 -->
-      <el-main class="main-content">
+      <main class="main-content">
         <router-view />
-      </el-main>
-    </el-container>
-  </el-container>
+      </main>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
 import AppSidebar from '@/components/AppSidebar.vue'
 import AppHeader from '@/components/AppHeader.vue'
+import { useAppStore } from '@/stores/app'
+
+const appStore = useAppStore()
 </script>
 
 <style scoped>
 .layout-container {
+  display: flex;
   height: 100vh;
+  overflow: hidden;
+}
+.layout-sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  overflow: hidden;
+  transition: width 0.3s;
+  border-right: 1px solid var(--border-color);
+}
+.layout-sidebar.collapsed {
+  width: 64px;
+}
+.layout-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
 }
 .main-content {
-  background: #f5f7fa;
-  padding: 20px;
+  flex: 1;
+  background: var(--bg-primary);
+  padding: 24px;
   overflow-y: auto;
+  transition: background 0.3s;
 }
 </style>
