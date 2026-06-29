@@ -35,6 +35,7 @@ class LoginSerializer(serializers.Serializer):
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, validators=[validate_password])
     password2 = serializers.CharField(write_only=True, label="确认密码")
+    email = serializers.EmailField(required=True, label="邮箱")
 
     class Meta:
         model = User
