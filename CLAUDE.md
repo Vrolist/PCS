@@ -76,7 +76,8 @@ pve-cluster-scan/
 │   ├── database-models.md    # 数据库模型与 PVE 字段映射
 │   ├── api-interfaces.md     # PVE API 接口清单
 │   ├── field-mapping.md      # 字段对照表
-│   └── data-flow.md          # 数据采集与入库流程
+│   ├── data-flow.md          # 数据采集与入库流程
+│   └── agent-design.md       # Agent 设计文档（架构/命令/安装/通信）
 ├── templates/
 │   └── vue_index.html                # Django 模板（django-vite 入口）
 ├── static/                           # Vite 构建输出
@@ -139,36 +140,41 @@ python manage.py test apps.agent_api --verbosity=2
 
 独立 Python 包，安装在 PVE 节点上运行。
 
+> 完整设计文档见 `data-structure/agent-design.md`
+
 ```bash
-# 安装
-cd agent && pip install -e .
+# 用户一键安装（从 Web 页面复制）
+curl -fsSL https://platform:8000/api/agent/install.sh?token=<token>&platform=<url> | bash
 
-# 初始化（注册到平台）
-pve-agent init \
-  --platform-url http://your-platform:8000 \
-  --token <agent_token> \
-  --pve-endpoint https://192.168.1.100:8006 \
-  --pve-username root@pam \
-  --pve-password xxx
+# 用户一键卸载
+curl -fsSL https://platform:8000/api/agent/install.sh | bash -s -- --uninstall
 
-# 启动守护进程（心跳 60s + 扫描 3600s）
-pve-agent start
+# Agent 管理命令
+pve-agent status      # 查看运行状态
+pve-agent update      # 更新到最新版本
+pve-agent uninstall   # 卸载 Agent
 
-# 单次扫描
-pve-agent scan
-
-# 查看状态
-pve-agent status
-
-# 修改配置
-pve-agent config --scan-interval 1800
+# systemd 管理（标准 Linux 命令）
+systemctl status pve-agent     # 查看服务状态
+systemctl stop pve-agent       # 停止
+systemctl restart pve-agent    # 重启
+journalctl -u pve-agent -f     # 查看日志
 ```
 
 **配置文件**：`~/.config/pve-agent/config.yaml`
+**安装目录**：`/opt/pve-agent/`
 
 **执行流程**：
 ```
-pve-agent start
+curl 安装脚本
+  → 检测系统环境
+  → 安装 Python3 + venv
+  → pip install pve-agent
+  → pve-agent init（注册到平台）
+  → 安装 systemd 服务
+  → 启动服务
+
+Agent 运行中:
   → PVE API 认证
   → 心跳循环 (每 60s)
   → 扫描循环 (每 3600s)
@@ -415,7 +421,7 @@ PVE 节点 (Agent) → PVE API (HTTPS :8006) → Agent 数据清洗 → POST /ap
 2. ~~前端页面框架~~ ✅ 已完成（7 个后台页面 + 路由 + 侧边栏）
 3. ~~仪表盘 UI~~ ✅ 已完成（统计卡片 + 告警列表 + 趋势图 + 节点表格）
 4. ~~Agent 上报接口与数据入库~~ ✅ 已完成（注册/心跳/扫描上传/任务下发 + 40 个测试）
-5. ~~Agent CLI 工具~~ ✅ 已完成（pve-agent：init/start/scan/status/config）
+5. ~~Agent CLI 工具~~ ✅ 已完成（pve-agent：status/update/uninstall）
 6. 集群 CRUD API + 前端对接
 7. 自动检测引擎
 8. 仪表盘真实数据接入
