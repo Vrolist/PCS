@@ -141,6 +141,7 @@ class LXC(models.Model):
 
     tags = models.CharField("标签", max_length=256, blank=True)
     description = models.TextField("描述", blank=True)
+    has_template = models.BooleanField("是否为模板", default=False)
     scanned_at = models.DateTimeField("扫描时间", db_index=True)
 
     class Meta:

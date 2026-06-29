@@ -18,6 +18,7 @@ export interface ContainerInfo {
   disk_gb: number
   uptime_seconds: number
   tags: string
+  has_template: boolean
   scanned_at: string
 }
 

@@ -198,6 +198,7 @@ class LXCListView(APIView):
             "disk_gb": ct.disk_gb,
             "uptime_seconds": ct.uptime_seconds,
             "tags": ct.tags,
+            "has_template": ct.has_template,
             "scanned_at": ct.scanned_at,
         } for ct in containers]
         return Response(data)
@@ -298,6 +299,7 @@ class LXCDetailView(APIView):
                 "disk_gb": ct.disk_gb,
                 "uptime_seconds": ct.uptime_seconds,
                 "tags": ct.tags,
+                "has_template": ct.has_template,
                 "scanned_at": ct.scanned_at,
             },
             "config": None,

@@ -76,6 +76,7 @@ class AgentRegisterView(APIView):
             # 已存在则更新
             agent.pve_api_endpoint = d["pve_api_endpoint"]
             agent.scan_interval = d["scan_interval"]
+            agent.version = d.get("version", agent.version)
             agent.platform = platform.platform()
             agent.python_version = platform.python_version()
             agent.status = AgentInstance.Status.ONLINE
@@ -303,6 +304,7 @@ class ScanUploadView(APIView):
                     uptime_seconds=lxc_data.get("uptime_seconds"),
                     tags=lxc_data.get("tags", ""),
                     description=lxc_data.get("description", ""),
+                    has_template=lxc_data.get("has_template", False),
                     scanned_at=scanned_at,
                 )
 

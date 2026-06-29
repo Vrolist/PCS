@@ -337,11 +337,11 @@ def _scan_vms(pve, node):
             "vmid": vmid,
             "name": vm.get("name", ""),
             "status": vm.get("status", "unknown"),
-            "cpu_cores": vm.get("maxcpu"),
+            "cpu_cores": vm.get("cpus") or vm.get("maxcpu"),
             "cpu_usage": _cpu_pct(vm.get("cpu", 0)),
             "memory_mb": _bytes_to_mb(vm.get("maxmem", 0)),
             "memory_used_mb": _bytes_to_mb(vm.get("mem", 0)),
-            "disk_gb": _bytes_to_gb(vm.get("disk", 0)),
+            "disk_gb": _bytes_to_gb(vm.get("maxdisk", 0)),  # PVE API 不返回 QEMU 实际磁盘使用量
             "max_disk_gb": _bytes_to_gb(vm.get("maxdisk", 0)),
             "disk_write_iops": vm.get("diskwrite"),
             "disk_read_iops": vm.get("diskread"),
@@ -435,7 +435,7 @@ def _scan_lxc(pve, node):
             "vmid": ct.get("vmid"),
             "name": ct.get("name", ""),
             "status": ct.get("status", "unknown"),
-            "cpu_cores": ct.get("maxcpu"),
+            "cpu_cores": ct.get("cpus") or ct.get("maxcpu"),
             "cpu_usage": _cpu_pct(ct.get("cpu", 0)),
             "memory_mb": _bytes_to_mb(ct.get("maxmem", 0)),
             "memory_used_mb": _bytes_to_mb(ct.get("mem", 0)),
@@ -445,6 +445,7 @@ def _scan_lxc(pve, node):
             "uptime_seconds": ct.get("uptime", 0),
             "tags": ct.get("tags", ""),
             "description": "",
+            "has_template": bool(ct.get("template", 0)),
         })
     return containers
 

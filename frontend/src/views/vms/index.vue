@@ -49,7 +49,7 @@
         </el-table-column>
         <el-table-column label="磁盘" min-width="110" sortable :sort-method="(a, b) => (a.max_disk_gb || 0) - (b.max_disk_gb || 0)">
           <template #default="{ row }">
-            <span>{{ row.disk_gb || 0 }}GB / {{ row.max_disk_gb || 0 }}GB</span>
+            <span>{{ row.max_disk_gb || 0 }}GB</span>
           </template>
         </el-table-column>
         <el-table-column label="网络 (累计)" min-width="140">
@@ -88,7 +88,7 @@
             <div class="detail-item"><span class="detail-label">节点</span><span>{{ detailData.vm.node_name }}</span></div>
             <div class="detail-item"><span class="detail-label">CPU</span><span>{{ detailData.vm.cpu_usage }}% · {{ detailData.vm.cpu_cores }}核</span></div>
             <div class="detail-item"><span class="detail-label">内存</span><span>{{ fmtMB(detailData.vm.memory_used_mb) }} / {{ fmtMB(detailData.vm.memory_mb) }}</span></div>
-            <div class="detail-item"><span class="detail-label">磁盘</span><span>{{ detailData.vm.disk_gb }}GB / {{ detailData.vm.max_disk_gb }}GB</span></div>
+            <div class="detail-item"><span class="detail-label">磁盘</span><span>{{ detailData.vm.max_disk_gb }}GB</span></div>
           </div>
         </div>
         <div class="detail-section" v-if="detailData.config">

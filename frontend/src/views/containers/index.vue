@@ -11,6 +11,10 @@
           <el-option label="运行中" value="running" />
           <el-option label="已停止" value="stopped" />
         </el-select>
+        <el-select v-model="typeFilter" placeholder="类型" clearable style="width: 110px" @change="loadData">
+          <el-option label="容器" value="container" />
+          <el-option label="模板" value="template" />
+        </el-select>
       </div>
     </div>
     <el-card shadow="hover" class="table-card">
@@ -33,6 +37,12 @@
             <el-tag :type="row.status === 'running' ? 'success' : 'danger'" size="small" disable-transitions>
               {{ row.status === 'running' ? '运行中' : '已停止' }}
             </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="类型" width="80" align="center">
+          <template #default="{ row }">
+            <el-tag v-if="row.has_template" type="warning" size="small" effect="plain">模板</el-tag>
+            <el-tag v-else type="primary" size="small" effect="plain">容器</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="CPU" min-width="120">
@@ -193,6 +203,7 @@ const loading = ref(true)
 const containers = ref<ContainerInfo[]>([])
 const search = ref('')
 const statusFilter = ref('')
+const typeFilter = ref('')
 let timer: ReturnType<typeof setTimeout> | null = null
 
 const detailVisible = ref(false)
@@ -207,7 +218,10 @@ async function loadData() {
     const params: Record<string, string> = {}
     if (statusFilter.value) params.status = statusFilter.value
     if (search.value) params.search = search.value
-    containers.value = await getContainers(params)
+    let data = await getContainers(params)
+    if (typeFilter.value === 'template') data = data.filter(c => c.has_template)
+    else if (typeFilter.value === 'container') data = data.filter(c => !c.has_template)
+    containers.value = data
   } catch {} finally { loading.value = false }
 }
 
