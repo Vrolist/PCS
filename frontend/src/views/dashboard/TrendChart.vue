@@ -4,8 +4,7 @@
       <h3 class="trend-chart-title">资源趋势</h3>
       <el-select v-model="timeRange" size="small" class="time-range-select">
         <el-option label="近 7 天" value="7d" />
-        <el-option label="近 30 天" value="30d" />
-        <el-option label="近 90 天" value="90d" />
+        <el-option label="近 15 天" value="15d" />
       </el-select>
     </div>
     <div class="trend-chart-body">
@@ -23,10 +22,11 @@ import { useThemeStore } from '@/stores/theme'
 const timeRange = ref('7d')
 const themeStore = useThemeStore()
 
-function getLast7Days(): string[] {
+function getDateLabels(): string[] {
+  const n = timeRange.value === '15d' ? 15 : 7
   const days: string[] = []
   const today = new Date()
-  for (let i = 7; i >= 1; i--) {
+  for (let i = n; i >= 1; i--) {
     const d = new Date(today)
     d.setDate(today.getDate() - i)
     days.push(`${d.getMonth() + 1}.${d.getDate()}`)
@@ -63,7 +63,8 @@ const chartOption = computed(() => {
     },
     xAxis: {
       type: 'category' as const,
-      data: getLast7Days(),
+      boundaryGap: false,
+      data: getDateLabels(),
       axisLine: { lineStyle: { color: axisColor } },
       axisTick: { lineStyle: { color: axisColor } },
       axisLabel: { color: textColor }
