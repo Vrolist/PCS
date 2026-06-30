@@ -7,7 +7,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import User, PasswordResetCode
+from .models import User, PasswordResetCode, UserLog
 from .serializers import (
     LoginSerializer,
     RegisterSerializer,
@@ -15,9 +15,24 @@ from .serializers import (
     PasswordResetSerializer,
     PasswordResetConfirmSerializer,
     ChangePasswordSerializer,
+    UserLogSerializer,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def log_user_action(user, action, resource_type="", resource_id="", detail="", request=None):
+    """记录用户操作日志"""
+    UserLog.objects.create(
+        user=user,
+        username=user.username,
+        action=action,
+        resource_type=resource_type,
+        resource_id=str(resource_id) if resource_id else "",
+        detail=detail,
+        ip_address=request.META.get("REMOTE_ADDR") if request else None,
+        user_agent=request.META.get("HTTP_USER_AGENT", "")[:512] if request else "",
+    )
 
 
 @api_view(["POST"])
@@ -28,6 +43,7 @@ def change_password_view(request):
     serializer.is_valid(raise_exception=True)
     request.user.set_password(serializer.validated_data["new_password"])
     request.user.save()
+    log_user_action(request.user, "change_password", request=request)
     return Response({"detail": "密码修改成功"})
 
 
@@ -54,6 +70,7 @@ def login_view(request):
     serializer.is_valid(raise_exception=True)
     user = serializer.validated_data["user"]
     refresh = RefreshToken.for_user(user)
+    log_user_action(user, "login", request=request)
     return Response({
         "access": str(refresh.access_token),
         "refresh": str(refresh),
@@ -68,6 +85,7 @@ def register_view(request):
     serializer.is_valid(raise_exception=True)
     user = serializer.save()
     refresh = RefreshToken.for_user(user)
+    log_user_action(user, "register", request=request)
     return Response({
         "access": str(refresh.access_token),
         "refresh": str(refresh),
@@ -123,4 +141,31 @@ def password_reset_confirm_view(request):
     reset_code.is_used = True
     reset_code.save()
 
+    log_user_action(user, "reset_password", request=request)
     return Response({"detail": "密码重置成功"})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def user_logs_view(request):
+    """获取当前用户的操作日志（分页）"""
+    page_size = int(request.GET.get("page_size", 20))
+    page = int(request.GET.get("page", 1))
+    action = request.GET.get("action", "")
+
+    queryset = UserLog.objects.filter(user=request.user)
+    if action:
+        queryset = queryset.filter(action=action)
+
+    total = queryset.count()
+    start = (page - 1) * page_size
+    end = start + page_size
+    logs = queryset[start:end]
+
+    serializer = UserLogSerializer(logs, many=True)
+    return Response({
+        "count": total,
+        "page": page,
+        "page_size": page_size,
+        "results": serializer.data,
+    })

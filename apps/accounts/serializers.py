@@ -2,7 +2,7 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
-from .models import User, PasswordResetCode
+from .models import User, PasswordResetCode, UserLog
 
 
 class LoginSerializer(serializers.Serializer):
@@ -99,3 +99,12 @@ class ChangePasswordSerializer(serializers.Serializer):
         if data["new_password"] != data["new_password2"]:
             raise serializers.ValidationError("两次密码不一致")
         return data
+
+
+class UserLogSerializer(serializers.ModelSerializer):
+    action_display = serializers.CharField(source="get_action_display", read_only=True)
+
+    class Meta:
+        model = UserLog
+        fields = ["id", "username", "action", "action_display", "resource_type", "resource_id",
+                  "detail", "ip_address", "created_at"]

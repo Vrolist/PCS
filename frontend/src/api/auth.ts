@@ -31,3 +31,26 @@ export function updateUserInfo(data: { phone?: string; company?: string }) {
 export function createAdminSession() {
   return request.post('/auth/create-admin-session/', {}, { withCredentials: true })
 }
+
+export interface UserLog {
+  id: number
+  username: string
+  action: string
+  action_display: string
+  resource_type: string
+  resource_id: string
+  detail: string
+  ip_address: string
+  created_at: string
+}
+
+export interface UserLogResponse {
+  count: number
+  page: number
+  page_size: number
+  results: UserLog[]
+}
+
+export function getUserLogs(params: { page?: number; page_size?: number; action?: string }) {
+  return request.get<any, UserLogResponse>('/auth/logs/', { params })
+}

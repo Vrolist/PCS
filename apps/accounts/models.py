@@ -99,3 +99,36 @@ class UserPlan(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.plan.name}"
+
+
+class UserLog(models.Model):
+    """用户操作日志"""
+    ACTION_CHOICES = [
+        ("login", "登录"),
+        ("logout", "退出登录"),
+        ("create", "创建"),
+        ("update", "更新"),
+        ("delete", "删除"),
+        ("change_password", "修改密码"),
+        ("reset_password", "重置密码"),
+        ("register", "注册"),
+        ("other", "其他"),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="用户")
+    username = models.CharField("用户名", max_length=150, blank=True)
+    action = models.CharField("操作类型", max_length=32, choices=ACTION_CHOICES, db_index=True)
+    resource_type = models.CharField("资源类型", max_length=64, blank=True, db_index=True)
+    resource_id = models.CharField("资源 ID", max_length=64, blank=True)
+    detail = models.TextField("操作详情", blank=True)
+    ip_address = models.GenericIPAddressField("IP 地址", blank=True, null=True)
+    user_agent = models.CharField("User-Agent", max_length=512, blank=True)
+    created_at = models.DateTimeField("操作时间", auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = "操作日志"
+        verbose_name_plural = "操作日志"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.username} - {self.get_action_display()} - {self.created_at:%Y-%m-%d %H:%M}"
