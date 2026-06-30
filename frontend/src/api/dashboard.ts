@@ -5,6 +5,7 @@ export interface DashboardStats {
   total_nodes: number
   online_nodes: number
   total_vms: number
+  total_containers: number
   active_alerts: number
 }
 

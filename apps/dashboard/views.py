@@ -26,6 +26,7 @@ class StatsView(APIView):
         cluster_agg = Cluster.objects.filter(id__in=cluster_ids).aggregate(
             total_nodes=Sum("total_nodes"),
             total_vms=Sum("total_vms"),
+            total_containers=Sum("total_lxc"),
         )
 
         online_nodes = ClusterNode.objects.filter(
@@ -41,6 +42,7 @@ class StatsView(APIView):
             "total_nodes": cluster_agg["total_nodes"] or 0,
             "online_nodes": online_nodes,
             "total_vms": cluster_agg["total_vms"] or 0,
+            "total_containers": cluster_agg["total_containers"] or 0,
             "active_alerts": active_alerts,
         })
 

@@ -19,24 +19,24 @@ import { getDashboardStats } from '@/api/dashboard'
 import type { DashboardStats } from '@/api/dashboard'
 
 const stats = ref<DashboardStats>({
-  total_clusters: 0, total_nodes: 0, online_nodes: 0, total_vms: 0, active_alerts: 0,
+  total_clusters: 0, total_nodes: 0, online_nodes: 0, total_vms: 0, total_containers: 0, active_alerts: 0,
 })
 
 const cards = ref([
-  { label: '集群总数', value: 0, icon: Setting, color: '#409eff', bg: 'rgba(64, 158, 255, 0.10)' },
-  { label: '在线节点', value: 0, icon: Monitor, color: '#67c23a', bg: 'rgba(103, 194, 58, 0.10)' },
-  { label: '虚拟机', value: 0, icon: Cloudy, color: '#e6a23c', bg: 'rgba(230, 162, 60, 0.10)' },
-  { label: '告警', value: 0, icon: WarningFilled, color: '#f56c6c', bg: 'rgba(245, 108, 108, 0.10)' },
+  { label: '集群', value: '0', icon: Setting, color: '#409eff', bg: 'rgba(64, 158, 255, 0.10)' },
+  { label: '节点', value: '0', icon: Monitor, color: '#67c23a', bg: 'rgba(103, 194, 58, 0.10)' },
+  { label: '虚拟机 / 容器', value: '0 / 0', icon: Cloudy, color: '#e6a23c', bg: 'rgba(230, 162, 60, 0.10)' },
+  { label: '告警', value: '0', icon: WarningFilled, color: '#f56c6c', bg: 'rgba(245, 108, 108, 0.10)' },
 ])
 
 onMounted(async () => {
   try {
     const data = await getDashboardStats()
     stats.value = data
-    cards.value[0].value = data.total_clusters
-    cards.value[1].value = data.online_nodes
-    cards.value[2].value = data.total_vms
-    cards.value[3].value = data.active_alerts
+    cards.value[0].value = String(data.total_clusters)
+    cards.value[1].value = String(data.total_nodes)
+    cards.value[2].value = `${data.total_vms} / ${data.total_containers}`
+    cards.value[3].value = String(data.active_alerts)
   } catch {
     // error handled by interceptor
   }
