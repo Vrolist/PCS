@@ -41,6 +41,9 @@ pve-cluster-scan/
 │   │   ├── urls.py         #   - /api/dashboard/ 路由（4 个端点）
 │   │   └── tests.py        #   - 30 个测试用例
 │   └── scanner/            # 扫描数据 & 自动检测
+│       ├── views.py        #   - 节点/VM/容器/存储/网络/Ceph/HA 列表+详情
+│       ├── urls.py         #   - /api/scanner/ 路由（10 个端点）
+│       └── models.py       #   - ClusterNode/VM/LXC/Storage/NetworkInterface/CephStatus/ScanHistory/DetectionRule/DetectionResult
 ├── frontend/               # Vue 3 + Vite 前端
 │   ├── src/
 │   │   ├── views/
@@ -51,22 +54,25 @@ pve-cluster-scan/
 │   │   │   │   └── ForgotPassword.vue         # 找回密码（两步流程）
 │   │   │   ├── dashboard/
 │   │   │   │   ├── index.vue                  # 控制台主布局
-│   │   │   │   ├── StatCards.vue              # 统计卡片组件（水平压缩）
+│   │   │   │   ├── StatCards.vue              # 统计卡片（集群/节点/VM&容器/告警）
 │   │   │   │   ├── AlertList.vue              # 最近告警列表（固定高度+滚动）
 │   │   │   │   ├── TrendChart.vue             # 资源趋势 ECharts 折线图
-│   │   │   │   └── NodeTable.vue              # 节点详情表格
-│   │   │   ├── clusters/index.vue             # 集群管理（空状态+el-card）
-│   │   │   ├── nodes/index.vue                # 节点管理（空状态+el-card）
-│   │   │   ├── vms/index.vue                  # 虚拟机（空状态+el-card）
-│   │   │   ├── containers/index.vue           # 容器（空状态+el-card）
+│   │   │   │   ├── NodeTable.vue              # 节点详情表格
+│   │   │   │   └── ChangePassword.vue         # 修改密码
+│   │   │   ├── clusters/index.vue             # 集群管理（表格+CRUD+详情弹窗）
+│   │   │   ├── nodes/index.vue                # 节点管理（表格+详情弹窗）
+│   │   │   ├── vms/index.vue                  # 虚拟机（表格+详情弹窗）
+│   │   │   ├── containers/index.vue           # 容器（表格+详情弹窗）
 │   │   │   ├── alerts/index.vue               # 告警中心（空状态+el-card）
 │   │   │   ├── services/index.vue             # 运维服务（空状态+el-card）
-│   │   │   └── settings/index.vue             # 系统设置（空状态+el-card）
+│   │   │   ├── settings/index.vue             # 系统设置（空状态+el-card）
+│   │   │   ├── user-logs/index.vue            # 操作日志（空状态）
+│   │   │   └── user-notifications/index.vue   # 通知设置（空状态）
 │   │   ├── components/
 │   │   │   ├── AppSidebar.vue        # 侧边栏导航（含折叠图标居中）
 │   │   │   └── AppHeader.vue         # 顶栏（含主题切换）
 │   │   ├── layouts/MainLayout.vue    # 后台主布局（侧边栏+顶栏+内容区）
-│   │   ├── router/index.ts           # 路由 + 守卫
+│   │   │── router/index.ts           # 路由 + 守卫（所有后台页面在 /dashboard/ 下）
 │   │   ├── stores/
 │   │   │   ├── app.ts                # 全局状态（侧边栏折叠）
 │   │   │   ├── auth.ts               # JWT 认证
@@ -75,7 +81,8 @@ pve-cluster-scan/
 │   │   │   ├── request.ts            # Axios 实例 + 拦截器
 │   │   │   ├── auth.ts               # 登录/注册/密码重置 API
 │   │   │   ├── clusters.ts           # 集群 CRUD + Agent 查询 API
-│   │   │   └── dashboard.ts          # Dashboard 统计/告警/趋势/节点 API
+│   │   │   ├── dashboard.ts          # Dashboard 统计/告警/趋势/节点 API
+│   │   │   └── nodes.ts              # 节点/详情 API
 │   │   └── style.css                 # CSS 变量 / 亮暗色值
 │   ├── package.json
 │   └── vite.config.ts
@@ -285,9 +292,15 @@ GET /api/agent/install.sh?token=<agent_token>&platform=<platform_url>
 
 ### Dashboard `/api/dashboard/`
 
+**Stats 响应新增 `total_containers` 字段：**
+```json
+GET /api/dashboard/stats/
+→ {"total_clusters": 1, "total_nodes": 3, "online_nodes": 3, "total_vms": 16, "total_containers": 67, "active_alerts": 0}
+```
+
 | 方法 | 路径 | 说明 | 认证 |
 |------|------|------|------|
-| GET | `/api/dashboard/stats/` | 统计卡片（集群数/节点数/VM数/告警数） | ✅ JWT |
+| GET | `/api/dashboard/stats/` | 统计卡片（集群数/节点数/VM&容器数/告警数） | ✅ JWT |
 | GET | `/api/dashboard/alerts/?limit=10` | 最近未解决告警列表 | ✅ JWT |
 | GET | `/api/dashboard/trends/?days=7` | CPU/内存使用率趋势 | ✅ JWT |
 | GET | `/api/dashboard/nodes/` | 最新节点状态 | ✅ JWT |
@@ -330,22 +343,73 @@ GET /api/clusters/1/
 }
 ```
 
+### 扫描数据 `/api/scanner/`
+
+| 方法 | 路径 | 说明 | 认证 |
+|------|------|------|------|
+| GET | `/scanner/nodes/` | 节点列表（含集群名，按扫描时间倒序） | ✅ JWT |
+| GET | `/scanner/nodes/:id/detail/` | 节点详情（关联存储/网络/VM/容器） | ✅ JWT |
+| GET | `/scanner/vms/` | 虚拟机列表（含集群名+节点名） | ✅ JWT |
+| GET | `/scanner/vms/:id/detail/` | 虚拟机详情（CPU/内存/磁盘/网络/HA/标签等） | ✅ JWT |
+| GET | `/scanner/containers/` | LXC 容器列表 | ✅ JWT |
+| GET | `/scanner/containers/:id/detail/` | 容器详情（含 IP 地址、HA 等） | ✅ JWT |
+| GET | `/scanner/storage/` | 存储列表 | ✅ JWT |
+| GET | `/scanner/networks/` | 网络接口列表 | ✅ JWT |
+| GET | `/scanner/ceph/` | Ceph 集群状态 | ✅ JWT |
+| GET | `/scanner/ha/` | HA 资源组列表 | ✅ JWT |
+
+**节点详情响应：**
+```json
+GET /scanner/nodes/1/detail/
+{
+  "node": { "id": 1, "node_name": "pve-1", "status": "online", "cpu_load": 35.0, "memory_total_mb": 32000, ... },
+  "storages": [{ "name": "local", "type": "dir", ... }],
+  "networks": [{ "name": "vmbr0", "type": "bridge", "address": "192.168.1.1", ... }],
+  "vms": [{ "vmid": 100, "name": "ubuntu", "status": "running", ... }],
+  "containers": [{ "vmid": 200, "name": "nginx", "status": "running", ... }]
+}
+```
+
+**VM 详情响应（含补充字段）：**
+```json
+GET /scanner/vms/1/detail/
+{
+  "vm": { "vmid": 100, "name": "ubuntu", "cpu_cores": 2, "cpu_sockets": 1, "balloon_min_mb": 1024, "balloon_max_mb": 4096, "disk_read_iops": 100, "disk_write_iops": 50, "snapshot_count": 2, "has_template": false, "description": "..." },
+  "config": { "ha_enabled": false, "ha_group": null }
+}
+```
+
+**容器详情响应（含 IP 地址）：**
+```json
+GET /scanner/containers/1/detail/
+{
+  "container": { ..., "ip_address": "192.168.1.100" },
+  "config": { ... }
+}
+```
+
 ## 页面路由
 
 | 路径 | 页面 | 说明 | 需要登录 |
 |------|------|------|---------|
-| `/` | 首页 | Landing Page，品牌介绍与 CTA | ❌ |
+| `/` | 自动重定向 → `/dashboard` | 根路径跳转到控制台 | ❌ |
 | `/login` | 登录 | 左右分栏布局 + 品牌展示 | ❌ |
 | `/register` | 注册 | 表单校验（用户名/邮箱/密码/确认） | ❌ |
 | `/forgot-password` | 找回密码 | 两步流程：邮箱→验证码+新密码 | ❌ |
 | `/dashboard` | 控制台 | 统计卡片 + 告警+趋势 + 节点表格 | ✅ |
-| `/clusters` | 集群管理 | 集群 CRUD + Agent 列表 + 安装命令 | ✅ |
-| `/nodes` | 节点管理 | PVE 节点监控（待实现） | ✅ |
-| `/vms` | 虚拟机 | 虚拟机实例管理（待实现） | ✅ |
-| `/containers` | 容器 | LXC 容器管理（待实现） | ✅ |
-| `/alerts` | 告警中心 | 告警记录与处理（待实现） | ✅ |
-| `/services` | 运维服务 | 远程运维订阅（待实现） | ✅ |
-| `/settings` | 系统设置 | 账户和系统配置（待实现） | ✅ |
+| `/dashboard/clusters` | 集群管理 | 集群 CRUD + Agent 列表 + 安装命令 | ✅ |
+| `/dashboard/nodes` | 节点管理 | PVE 节点监控（表格+详情弹窗） | ✅ |
+| `/dashboard/vms` | 虚拟机 | 虚拟机实例管理（表格+详情弹窗） | ✅ |
+| `/dashboard/containers` | 容器 | LXC 容器管理（表格+详情弹窗） | ✅ |
+| `/dashboard/storage` | 存储管理 | PVE 存储列表 | ✅ |
+| `/dashboard/networks` | 网络接口 | 网络接口列表 | ✅ |
+| `/dashboard/ceph` | Ceph 存储 | Ceph 集群状态 | ✅ |
+| `/dashboard/alerts` | 告警中心 | 告警记录与处理（待实现） | ✅ |
+| `/dashboard/services` | 运维服务 | 远程运维订阅（待实现） | ✅ |
+| `/dashboard/settings` | 用户信息 | 账户基本信息 | ✅ |
+| `/dashboard/change-password` | 修改密码 | 修改登录密码 | ✅ |
+| `/dashboard/user-logs` | 操作日志 | 用户操作记录（待实现） | ✅ |
+| `/dashboard/user-notifications` | 通知设置 | 通知偏好（待实现） | ✅ |
 | `/admin/` | Django Admin | 后台管理 | 管理员 |
 
 ## 控制台布局（dashboard）
@@ -353,9 +417,9 @@ GET /api/clusters/1/
 ```
 ┌─────────────────────────────────────────────┐
 │  控制台                                        │
-├──────────┬──────────┬──────────┬─────────────┤
-│ 集群总数  │ 在线节点  │ 告警数    │ Agent 数    │  ← StatCards（水平排列）
-├──────────┴──────────┴──────────┴─────────────┤
+├──────────┬──────────┬────────────────┬───────┤
+│ 集群 1    │ 节点 3   │ 虚拟机/容器 16/67│ 告警 0│  ← StatCards（左图标+右数值）
+├──────────┴──────────┴────────────────┴───────┤
 │ ┌──────────┐ ┌──────────────────────────────┐│
 │ │ 最近告警   │ │ 资源趋势 (ECharts)           ││  ← dash-row-split（grid）
 │ │ (固定高度) │ │ CPU / 内存使用率折线         ││
@@ -503,6 +567,7 @@ PVE 节点 (Agent) → PVE API (HTTPS :8006) → Agent 数据清洗 → POST /ap
 4. ~~Agent 上报接口与数据入库~~ ✅ 已完成（注册/心跳/扫描上传/任务下发 + 48 个测试）
 5. ~~Agent CLI 工具~~ ✅ 已完成（单文件 agent.py，零依赖，curl 一键安装）
 6. ~~集群 CRUD API + 前端对接~~ ✅ 已完成（CRUD API + Agent 列表 + 安装命令展示）
-7. 自动检测引擎
-8. 仪表盘真实数据接入
-9. 各管理页面功能实现（节点/虚拟机/容器/告警等）
+7. ~~节点/VM/容器管理页面~~ ✅ 已完成（表格+详情弹窗+详情API）
+8. 自动检测引擎
+9. 仪表盘真实数据进一步接入（告警、趋势数据源）
+10. 各管理页面功能完善（告警/服务/日志/通知等）

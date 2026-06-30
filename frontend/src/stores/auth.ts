@@ -29,11 +29,18 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function fetchUser() {
     try {
-      user.value = await getUserInfo()
+      const data = await getUserInfo()
+      user.value = data
+      return data
     } catch {
       logout()
+      return null
     }
   }
 
-  return { token, refreshTokenVal, user, isLoggedIn, setToken, setRefreshToken, logout, fetchUser }
+  function setUser(data: any) {
+    user.value = data
+  }
+
+  return { token, refreshTokenVal, user, isLoggedIn, setToken, setRefreshToken, logout, fetchUser, setUser }
 })

@@ -75,8 +75,13 @@ def register_view(request):
     }, status=status.HTTP_201_CREATED)
 
 
-@api_view(["GET"])
+@api_view(["GET", "PATCH"])
 def user_view(request):
+    if request.method == "PATCH":
+        serializer = UserSerializer(request.user, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
     return Response(UserSerializer(request.user).data)
 
 

@@ -24,6 +24,10 @@ export function changePassword(data: { new_password: string; new_password2: stri
   return request.post('/auth/change-password/', data)
 }
 
+export function updateUserInfo(data: { phone?: string; company?: string }) {
+  return request.patch('/auth/user/', data)
+}
+
 export function createAdminSession() {
   return request.post('/auth/create-admin-session/', {}, { withCredentials: true })
 }
