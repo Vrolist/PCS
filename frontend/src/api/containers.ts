@@ -9,6 +9,7 @@ export interface ContainerInfo {
   vmid: number
   name: string
   status: string
+  ip_address: string
   cpu_cores: number
   cpu_usage: number
   memory_mb: number
@@ -31,6 +32,8 @@ export interface LXCConfig {
   rootfs: { storage: string; raw: string }
   mount_points: Array<{ slot: string; raw: string }>
   net_devices: Array<Record<string, string>>
+  ha_enabled: boolean
+  ha_group: string
   description: string
   tags: string
   startup_order: string

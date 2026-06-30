@@ -45,6 +45,11 @@
             <el-tag v-else type="primary" size="small" effect="plain">容器</el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="IP 地址" min-width="140">
+          <template #default="{ row }">
+            <span style="font-family: monospace; font-size: 12px;">{{ row.ip_address || '--' }}</span>
+          </template>
+        </el-table-column>
         <el-table-column label="CPU" min-width="120">
           <template #default="{ row }">
             <div class="usage-cell">
@@ -81,7 +86,7 @@
     </el-card>
 
     <!-- 详情对话框 -->
-    <el-dialog v-model="detailVisible" title="容器详情" width="680px" :close-on-click-modal="true">
+    <el-dialog v-model="detailVisible" :title="detailData?.container?.name || '容器详情'" width="720px" :close-on-click-modal="true" top="5vh">
       <div v-if="detailLoading" class="loading-box">
         <el-icon class="is-loading" :size="20"><Loading /></el-icon>
         <span>加载中...</span>
@@ -89,99 +94,64 @@
       <div v-else-if="detailData" class="detail-content">
         <!-- 基本信息 -->
         <div class="detail-section">
-          <h4 class="detail-section-title">基本信息</h4>
-          <div class="detail-grid">
-            <div class="detail-item">
-              <span class="detail-label">VMID</span>
-              <span class="detail-value mono">{{ detailData.container.vmid }}</span>
+          <h4>基本信息</h4>
+          <div class="detail-kv">
+            <div class="kv-row"><span class="kv-label">VMID</span><span class="kv-val mono">{{ detailData.container.vmid }}</span></div>
+            <div class="kv-row"><span class="kv-label">状态</span><span class="kv-val"><el-tag :type="detailData.container.status === 'running' ? 'success' : 'danger'" size="small" disable-transitions>{{ detailData.container.status === 'running' ? '运行中' : '已停止' }}</el-tag></span></div>
+            <div class="kv-row"><span class="kv-label">节点</span><span class="kv-val">{{ detailData.container.node_name }}</span></div>
+            <div class="kv-row"><span class="kv-label">集群</span><span class="kv-val">{{ detailData.container.cluster_name }}</span></div>
+            <div class="kv-row"><span class="kv-label">类型</span><span class="kv-val"><el-tag :type="detailData.container.has_template ? 'warning' : 'primary'" size="small" effect="plain">{{ detailData.container.has_template ? '模板' : '容器' }}</el-tag></span></div>
+            <div class="kv-row" v-if="detailData.container.ip_address"><span class="kv-label">IP 地址</span><span class="kv-val mono">{{ detailData.container.ip_address }}</span></div>
+            <div class="kv-row"><span class="kv-label">CPU</span><span class="kv-val">{{ Math.round(detailData.container.cpu_usage || 0) }}% · {{ detailData.container.cpu_cores || '?' }} 核</span></div>
+            <div class="kv-row"><span class="kv-label">内存</span><span class="kv-val">{{ fmtMB(detailData.container.memory_used_mb) }} / {{ fmtMB(detailData.container.memory_mb) }}</span></div>
+            <div class="kv-row"><span class="kv-label">Swap</span><span class="kv-val">{{ fmtMB(detailData.container.swap_used_mb) }} / {{ fmtMB(detailData.container.swap_mb) }}</span></div>
+            <div class="kv-row"><span class="kv-label">磁盘</span><span class="kv-val">{{ detailData.container.disk_gb || 0 }}GB</span></div>
+            <div class="kv-row" v-if="detailData.container.uptime_seconds"><span class="kv-label">运行时长</span><span class="kv-val">{{ fmtUptime(detailData.container.uptime_seconds) }}</span></div>
+            <div class="kv-row" v-if="detailData.container.tags"><span class="kv-label">标签</span><span class="kv-val">{{ detailData.container.tags }}</span></div>
+            <div class="kv-row" v-if="detailData.container.description"><span class="kv-label">描述</span><span class="kv-val">{{ detailData.container.description }}</span></div>
+            <div class="kv-row"><span class="kv-label">扫描时间</span><span class="kv-val mono">{{ fmtTime(detailData.container.scanned_at) }}</span></div>
+          </div>
+        </div>
+        <!-- 配置信息 -->
+        <div v-if="detailData.config" class="detail-section">
+          <h4>配置</h4>
+          <div class="detail-kv">
+            <div class="kv-row"><span class="kv-label">主机名</span><span class="kv-val">{{ detailData.config.hostname || '-' }}</span></div>
+            <div class="kv-row"><span class="kv-label">系统类型</span><span class="kv-val">{{ detailData.config.os_type || '-' }}</span></div>
+            <div class="kv-row"><span class="kv-label">CPU 核心</span><span class="kv-val">{{ detailData.config.cpu_cores || '-' }}</span></div>
+            <div class="kv-row"><span class="kv-label">内存</span><span class="kv-val">{{ detailData.config.memory_mb ? fmtMB(detailData.config.memory_mb) : '-' }}</span></div>
+            <div class="kv-row"><span class="kv-label">Swap</span><span class="kv-val">{{ detailData.config.swap_mb ? fmtMB(detailData.config.swap_mb) : '-' }}</span></div>
+            <div class="kv-row" v-if="detailData.config.startup_order"><span class="kv-label">启动顺序</span><span class="kv-val mono">{{ detailData.config.startup_order }}</span></div>
+            <div class="kv-row"><span class="kv-label">HA</span><span class="kv-val"><el-tag :type="detailData.config.ha_enabled ? 'success' : 'info'" size="small">{{ detailData.config.ha_enabled ? (detailData.config.ha_group || '启用') : '未启用' }}</el-tag></span></div>
+            <div class="kv-row" v-if="detailData.config.tags"><span class="kv-label">标签</span><span class="kv-val">{{ detailData.config.tags }}</span></div>
+            <div class="kv-row" v-if="detailData.config.description"><span class="kv-label">描述</span><span class="kv-val">{{ detailData.config.description }}</span></div>
+          </div>
+        </div>
+        <!-- 存储设备 -->
+        <div class="detail-section" v-if="detailData.config?.rootfs || detailData.config?.mount_points?.length">
+          <h4>存储</h4>
+          <div class="device-list">
+            <div v-if="detailData.config.rootfs" class="device-chip">
+              <span class="chip-tag">rootfs</span>
+              <span class="chip-body">{{ detailData.config.rootfs.storage || '-' }}</span>
+              <span class="chip-sub mono">{{ detailData.config.rootfs.raw }}</span>
             </div>
-            <div class="detail-item">
-              <span class="detail-label">状态</span>
-              <el-tag :type="detailData.container.status === 'running' ? 'success' : 'danger'" size="small" disable-transitions>
-                {{ detailData.container.status === 'running' ? '运行中' : '已停止' }}
-              </el-tag>
-            </div>
-            <div class="detail-item">
-              <span class="detail-label">节点</span>
-              <span>{{ detailData.container.node_name }}</span>
-            </div>
-            <div class="detail-item">
-              <span class="detail-label">CPU</span>
-              <span>{{ Math.round(detailData.container.cpu_usage || 0) }}% · {{ detailData.container.cpu_cores || '?' }} 核</span>
-            </div>
-            <div class="detail-item">
-              <span class="detail-label">内存</span>
-              <span>{{ fmtMB(detailData.container.memory_used_mb) }} / {{ fmtMB(detailData.container.memory_mb) }}</span>
-            </div>
-            <div class="detail-item">
-              <span class="detail-label">Swap</span>
-              <span>{{ fmtMB(detailData.container.swap_used_mb) }} / {{ fmtMB(detailData.container.swap_mb) }}</span>
-            </div>
-            <div class="detail-item">
-              <span class="detail-label">磁盘</span>
-              <span>{{ detailData.container.disk_gb || 0 }}GB</span>
-            </div>
-            <div class="detail-item">
-              <span class="detail-label">运行时长</span>
-              <span>{{ fmtUptime(detailData.container.uptime_seconds) }}</span>
+            <div v-for="mp in (detailData.config.mount_points || [])" :key="mp.slot" class="device-chip">
+              <span class="chip-tag">mp{{ mp.slot }}</span>
+              <span class="chip-body">{{ mp.raw }}</span>
             </div>
           </div>
         </div>
-
-        <!-- 配置信息 -->
-        <div v-if="detailData.config" class="detail-section">
-          <h4 class="detail-section-title">配置信息</h4>
-          <div class="detail-grid">
-            <div class="detail-item">
-              <span class="detail-label">主机名</span>
-              <span>{{ detailData.config.hostname || '-' }}</span>
-            </div>
-            <div class="detail-item">
-              <span class="detail-label">系统类型</span>
-              <span>{{ detailData.config.os_type || '-' }}</span>
-            </div>
-            <div class="detail-item">
-              <span class="detail-label">CPU 核心</span>
-              <span>{{ detailData.config.cpu_cores || '-' }}</span>
-            </div>
-            <div class="detail-item">
-              <span class="detail-label">内存</span>
-              <span>{{ detailData.config.memory_mb ? fmtMB(detailData.config.memory_mb) : '-' }}</span>
-            </div>
-            <div class="detail-item">
-              <span class="detail-label">Swap</span>
-              <span>{{ detailData.config.swap_mb ? fmtMB(detailData.config.swap_mb) : '-' }}</span>
-            </div>
-            <div class="detail-item" v-if="detailData.config.startup_order">
-              <span class="detail-label">启动顺序</span>
-              <span class="mono">{{ detailData.config.startup_order }}</span>
-            </div>
-          </div>
-
-          <!-- Rootfs -->
-          <div v-if="detailData.config.rootfs" class="detail-extra">
-            <span class="detail-label">Rootfs</span>
-            <span class="mono">{{ detailData.config.rootfs.raw || detailData.config.rootfs.storage || '-' }}</span>
-          </div>
-
-          <!-- 挂载点 -->
-          <div v-if="detailData.config.mount_points?.length" class="detail-extra">
-            <span class="detail-label">挂载点</span>
-            <div class="detail-list">
-              <div v-for="mp in detailData.config.mount_points" :key="mp.slot" class="detail-list-item mono">
-                <span class="detail-label">{{ mp.slot }}:</span>
-                <span>{{ mp.raw }}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- 网络设备 -->
-          <div v-if="detailData.config.net_devices?.length" class="detail-extra">
-            <span class="detail-label">网络设备</span>
-            <div class="detail-list">
-              <div v-for="(net, idx) in detailData.config.net_devices" :key="idx" class="detail-list-item mono">
-                <span v-for="(val, key) in net" :key="key">{{ key }}={{ val }} </span>
-              </div>
+        <!-- 网络设备 -->
+        <div class="detail-section" v-if="detailData.config?.net_devices?.length">
+          <h4>网络</h4>
+          <div class="device-list">
+            <div v-for="(net, idx) in detailData.config.net_devices" :key="idx" class="device-chip">
+              <span class="chip-tag">{{ net.name || net.iface || `net${idx}` }}</span>
+              <span class="chip-body">{{ net.type || 'veth' }}</span>
+              <span class="chip-sub">桥接 {{ net.bridge || '-' }}</span>
+              <span v-if="net.address" class="chip-sub mono">{{ net.address }}</span>
+              <span v-if="net.hwaddr" class="chip-sub mono">{{ net.hwaddr }}</span>
             </div>
           </div>
         </div>
@@ -243,6 +213,10 @@ async function showDetail(row: ContainerInfo) {
 
 function cpuColor(p: number) { return p > 85 ? '#f56c6c' : p >= 70 ? '#e6a23c' : '#67c23a' }
 function fmtMB(mb: number) { return mb >= 1024 ? `${(mb / 1024).toFixed(1)}GB` : `${mb || 0}MB` }
+function fmtTime(iso: string) {
+  if (!iso) return '-'
+  return new Date(iso).toLocaleString('zh-CN')
+}
 function fmtUptime(s: number) {
   if (!s) return '-'
   const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600)
@@ -265,18 +239,20 @@ function fmtUptime(s: number) {
 .usage-text { font-size: 12px; color: var(--text-muted); }
 
 /* 详情对话框样式 */
-.detail-content { display: flex; flex-direction: column; gap: 20px; }
-.detail-section { }
-.detail-section-title { font-size: 15px; font-weight: 600; color: var(--text-heading); margin: 0 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color); }
-.detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; }
-.detail-item { display: flex; align-items: center; gap: 8px; }
-.detail-label { font-size: 13px; color: var(--text-muted); min-width: 60px; flex-shrink: 0; }
-.detail-value { color: var(--text-primary); }
-.detail-extra { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
-.detail-extra > .detail-label { min-width: auto; margin-bottom: 2px; }
-.detail-list { display: flex; flex-direction: column; gap: 4px; }
-.detail-list-item { font-size: 13px; color: var(--text-primary); }
-.mono { font-family: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace; font-size: 12px; color: var(--text-secondary); }
+.detail-content { max-height: 70vh; overflow-y: auto; }
+.detail-section { margin-bottom: 16px; }
+.detail-section:last-child { margin-bottom: 0; }
+.detail-section h4 { font-size: 13px; font-weight: 600; color: var(--text-secondary); margin: 0 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border-color); text-transform: uppercase; letter-spacing: 0.5px; }
+.detail-kv { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 20px; }
+.kv-row { display: flex; align-items: center; padding: 5px 0; border-bottom: 1px dashed var(--border-color); }
+.kv-label { font-size: 13px; color: var(--text-muted); min-width: 72px; flex-shrink: 0; }
+.kv-val { font-size: 13px; color: var(--text-primary); }
+.mono { font-family: 'SF Mono', 'Menlo', monospace; font-size: 12px; }
+.device-list { display: flex; flex-direction: column; gap: 4px; }
+.device-chip { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--bg-secondary); border-radius: 8px; }
+.chip-tag { font-size: 12px; font-weight: 600; color: var(--color-primary); background: rgba(64, 158, 255, 0.1); padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
+.chip-body { font-size: 13px; font-weight: 500; color: var(--text-primary); }
+.chip-sub { font-size: 12px; color: var(--text-muted); }
 
 :deep(.el-table) { background: transparent; --el-table-bg-color: transparent; --el-table-tr-bg-color: transparent; --el-table-header-bg-color: transparent; --el-table-border-color: var(--border-color); --el-table-text-color: var(--text-primary); --el-table-header-text-color: var(--text-secondary); }
 :deep(.el-table::before) { display: none; }

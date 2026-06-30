@@ -302,6 +302,36 @@ class LXCListView(APIView):
         if search:
             containers = containers.filter(Q(name__icontains=search) | Q(vmid__icontains=search))
 
+        # 预加载最新 LXCConfig 以提取 IP
+        from .models import LXCConfig
+        container_ids = [ct.id for ct in containers]
+        latest_configs = {}
+        if container_ids:
+            configs = (
+                LXCConfig.objects
+                .filter(container_id__in=container_ids)
+                .values("container_id")
+                .annotate(last_scan=Max("scanned_at"))
+            )
+            for cfg in configs:
+                lc = LXCConfig.objects.filter(
+                    container_id=cfg["container_id"],
+                    scanned_at=cfg["last_scan"]
+                ).first()
+                if lc:
+                    latest_configs[cfg["container_id"]] = lc
+
+        def _extract_ip(ct):
+            """从 LXCConfig.net_devices 提取第一个 IPv4 地址"""
+            cfg = latest_configs.get(ct.id)
+            if not cfg:
+                return ""
+            for net in (cfg.net_devices or []):
+                ip_val = net.get("ip", "")
+                if ip_val and ip_val != "dhcp" and "/" in ip_val:
+                    return ip_val.split("/")[0]
+            return ""
+
         data = [{
             "id": ct.id,
             "node_id": ct.node_id,
@@ -311,6 +341,7 @@ class LXCListView(APIView):
             "vmid": ct.vmid,
             "name": ct.name,
             "status": ct.status,
+            "ip_address": _extract_ip(ct),
             "cpu_cores": ct.cpu_cores,
             "cpu_usage": ct.cpu_usage,
             "memory_mb": ct.memory_mb,
@@ -352,16 +383,24 @@ class VMDetailView(APIView):
                 "node_name": vm.node.node_name,
                 "cluster_name": vm.node.cluster.name,
                 "cpu_cores": vm.cpu_cores,
+                "cpu_sockets": vm.cpu_sockets,
                 "cpu_usage": vm.cpu_usage,
                 "memory_mb": vm.memory_mb,
                 "memory_used_mb": vm.memory_used_mb,
+                "balloon_min_mb": vm.balloon_min_mb,
+                "balloon_max_mb": vm.balloon_max_mb,
                 "disk_gb": vm.disk_gb,
                 "max_disk_gb": vm.max_disk_gb,
+                "disk_read_iops": vm.disk_read_iops,
+                "disk_write_iops": vm.disk_write_iops,
                 "net_in_bps": vm.net_in_bps,
                 "net_out_bps": vm.net_out_bps,
                 "uptime_seconds": vm.uptime_seconds,
                 "os_type": vm.os_type,
+                "snapshot_count": vm.snapshot_count,
+                "has_template": vm.has_template,
                 "tags": vm.tags,
+                "description": vm.description,
                 "scanned_at": vm.scanned_at,
             },
             "config": None,
@@ -380,6 +419,8 @@ class VMDetailView(APIView):
                 "ide_disks": config.ide_disks,
                 "net_devices": config.net_devices,
                 "agent_enabled": config.agent_enabled,
+                "ha_enabled": config.ha_enabled,
+                "ha_group": config.ha_group,
                 "description": config.description,
                 "tags": config.tags,
             }
@@ -404,6 +445,15 @@ class LXCDetailView(APIView):
             .first()
         )
 
+        # 从 net_devices 提取 IP
+        ip_address = ""
+        if config:
+            for net in (config.net_devices or []):
+                ip_val = net.get("ip", "")
+                if ip_val and ip_val != "dhcp" and "/" in ip_val:
+                    ip_address = ip_val.split("/")[0]
+                    break
+
         data = {
             "container": {
                 "id": ct.id,
@@ -412,6 +462,7 @@ class LXCDetailView(APIView):
                 "status": ct.status,
                 "node_name": ct.node.node_name,
                 "cluster_name": ct.node.cluster.name,
+                "ip_address": ip_address,
                 "cpu_cores": ct.cpu_cores,
                 "cpu_usage": ct.cpu_usage,
                 "memory_mb": ct.memory_mb,
@@ -437,6 +488,8 @@ class LXCDetailView(APIView):
                 "rootfs": config.rootfs,
                 "mount_points": config.mount_points,
                 "net_devices": config.net_devices,
+                "ha_enabled": config.ha_enabled,
+                "ha_group": config.ha_group,
                 "description": config.description,
                 "tags": config.tags,
                 "startup_order": config.startup_order,

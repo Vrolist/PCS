@@ -72,69 +72,90 @@
       <el-empty v-if="!loading && !vms.length" description="暂无虚拟机数据" />
     </el-card>
     <!-- VM 详情弹窗 -->
-    <el-dialog v-model="detailVisible" :title="detailData?.vm?.name || 'VM 详情'" width="680px" destroy-on-close>
+    <el-dialog v-model="detailVisible" :title="detailData?.vm?.name || 'VM 详情'" width="720px" destroy-on-close top="5vh">
       <div v-if="detailLoading" class="loading-box">
         <el-icon class="is-loading" :size="20"><Loading /></el-icon>
         <span>加载中...</span>
       </div>
       <div v-else-if="detailData" class="detail-content">
+        <!-- 基本信息 -->
         <div class="detail-section">
           <h4>基本信息</h4>
-          <div class="detail-grid">
-            <div class="detail-item"><span class="detail-label">VMID</span><span>{{ detailData.vm.vmid }}</span></div>
-            <div class="detail-item"><span class="detail-label">状态</span>
-              <el-tag :type="detailData.vm.status === 'running' ? 'success' : 'danger'" size="small">{{ detailData.vm.status === 'running' ? '运行中' : '已停止' }}</el-tag>
-            </div>
-            <div class="detail-item"><span class="detail-label">节点</span><span>{{ detailData.vm.node_name }}</span></div>
-            <div class="detail-item"><span class="detail-label">CPU</span><span>{{ detailData.vm.cpu_usage }}% · {{ detailData.vm.cpu_cores }}核</span></div>
-            <div class="detail-item"><span class="detail-label">内存</span><span>{{ fmtMB(detailData.vm.memory_used_mb) }} / {{ fmtMB(detailData.vm.memory_mb) }}</span></div>
-            <div class="detail-item"><span class="detail-label">磁盘</span><span>{{ detailData.vm.max_disk_gb }}GB</span></div>
+          <div class="detail-kv">
+            <div class="kv-row"><span class="kv-label">VMID</span><span class="kv-val mono">{{ detailData.vm.vmid }}</span></div>
+            <div class="kv-row"><span class="kv-label">状态</span><span class="kv-val"><el-tag :type="detailData.vm.status === 'running' ? 'success' : 'danger'" size="small">{{ detailData.vm.status === 'running' ? '运行中' : detailData.vm.status === 'paused' ? '暂停' : '已停止' }}</el-tag></span></div>
+            <div class="kv-row"><span class="kv-label">节点</span><span class="kv-val">{{ detailData.vm.node_name }}</span></div>
+            <div class="kv-row"><span class="kv-label">集群</span><span class="kv-val">{{ detailData.vm.cluster_name }}</span></div>
+            <div class="kv-row" v-if="detailData.vm.has_template"><span class="kv-label">类型</span><span class="kv-val"><el-tag type="warning" size="small" effect="plain">模板</el-tag></span></div>
+            <div class="kv-row"><span class="kv-label">系统</span><span class="kv-val">{{ detailData.vm.os_type || '-' }}</span></div>
+            <div class="kv-row"><span class="kv-label">CPU</span><span class="kv-val">{{ detailData.vm.cpu_usage }}% · {{ detailData.vm.cpu_cores }}核 × {{ detailData.vm.cpu_sockets || 1 }}插槽</span></div>
+            <div class="kv-row"><span class="kv-label">内存</span><span class="kv-val">{{ fmtMB(detailData.vm.memory_used_mb) }} / {{ fmtMB(detailData.vm.memory_mb) }}</span></div>
+            <div class="kv-row" v-if="detailData.vm.balloon_min_mb"><span class="kv-label">Balloon</span><span class="kv-val">{{ fmtMB(detailData.vm.balloon_min_mb) }} ~ {{ fmtMB(detailData.vm.balloon_max_mb) }}</span></div>
+            <div class="kv-row"><span class="kv-label">磁盘</span><span class="kv-val">{{ detailData.vm.disk_gb }}GB / {{ detailData.vm.max_disk_gb }}GB</span></div>
+            <div class="kv-row"><span class="kv-label">网络</span><span class="kv-val">↓{{ fmtBits(detailData.vm.net_in_bps) }} ↑{{ fmtBits(detailData.vm.net_out_bps) }}</span></div>
+            <div class="kv-row"><span class="kv-label">磁盘 IOPS</span><span class="kv-val">读 {{ detailData.vm.disk_read_iops?.toFixed(1) || 0 }} / 写 {{ detailData.vm.disk_write_iops?.toFixed(1) || 0 }}</span></div>
+            <div class="kv-row" v-if="detailData.vm.uptime_seconds"><span class="kv-label">运行时长</span><span class="kv-val">{{ fmtUptime(detailData.vm.uptime_seconds) }}</span></div>
+            <div class="kv-row" v-if="detailData.vm.snapshot_count"><span class="kv-label">快照数</span><span class="kv-val">{{ detailData.vm.snapshot_count }}</span></div>
+            <div class="kv-row" v-if="detailData.vm.tags"><span class="kv-label">标签</span><span class="kv-val">{{ detailData.vm.tags }}</span></div>
+            <div class="kv-row" v-if="detailData.vm.description"><span class="kv-label">描述</span><span class="kv-val">{{ detailData.vm.description }}</span></div>
+            <div class="kv-row"><span class="kv-label">扫描时间</span><span class="kv-val mono">{{ fmtTime(detailData.vm.scanned_at) }}</span></div>
           </div>
         </div>
+        <!-- 配置信息 -->
         <div class="detail-section" v-if="detailData.config">
-          <h4>配置信息</h4>
-          <div class="detail-grid">
-            <div class="detail-item"><span class="detail-label">CPU 类型</span><span>{{ detailData.config.cpu_type || 'host' }}</span></div>
-            <div class="detail-item"><span class="detail-label">CPU 插槽</span><span>{{ detailData.config.cpu_sockets || 1 }}</span></div>
-            <div class="detail-item"><span class="detail-label">启动顺序</span><span class="mono">{{ detailData.config.boot_order || '-' }}</span></div>
-            <div class="detail-item"><span class="detail-label">QEMU Agent</span>
-              <el-tag :type="detailData.config.agent_enabled ? 'success' : 'info'" size="small">{{ detailData.config.agent_enabled ? '启用' : '未启用' }}</el-tag>
-            </div>
+          <h4>配置</h4>
+          <div class="detail-kv">
+            <div class="kv-row"><span class="kv-label">CPU 类型</span><span class="kv-val mono">{{ detailData.config.cpu_type || 'host' }}</span></div>
+            <div class="kv-row"><span class="kv-label">CPU 核心</span><span class="kv-val">{{ detailData.config.cpu_cores }}核 × {{ detailData.config.cpu_sockets || 1 }}插槽</span></div>
+            <div class="kv-row"><span class="kv-label">内存</span><span class="kv-val">{{ detailData.config.memory_mb ? fmtMB(detailData.config.memory_mb) : '-' }}</span></div>
+            <div class="kv-row" v-if="detailData.config.balloon_min_mb"><span class="kv-label">Balloon</span><span class="kv-val">{{ fmtMB(detailData.config.balloon_min_mb) }}</span></div>
+            <div class="kv-row" v-if="detailData.config.os_type"><span class="kv-label">系统类型</span><span class="kv-val">{{ detailData.config.os_type }}</span></div>
+            <div class="kv-row"><span class="kv-label">启动顺序</span><span class="kv-val mono">{{ detailData.config.boot_order || '-' }}</span></div>
+            <div class="kv-row"><span class="kv-label">QEMU Agent</span><span class="kv-val"><el-tag :type="detailData.config.agent_enabled ? 'success' : 'info'" size="small">{{ detailData.config.agent_enabled ? '启用' : '未启用' }}</el-tag></span></div>
+            <div class="kv-row"><span class="kv-label">HA</span><span class="kv-val"><el-tag :type="detailData.config.ha_enabled ? 'success' : 'info'" size="small">{{ detailData.config.ha_enabled ? (detailData.config.ha_group || '启用') : '未启用' }}</el-tag></span></div>
+            <div class="kv-row" v-if="detailData.config.tags"><span class="kv-label">标签</span><span class="kv-val">{{ detailData.config.tags }}</span></div>
+            <div class="kv-row" v-if="detailData.config.description"><span class="kv-label">描述</span><span class="kv-val">{{ detailData.config.description }}</span></div>
           </div>
         </div>
+        <!-- SCSI 磁盘 -->
         <div class="detail-section" v-if="detailData.config?.scsi_disks?.length">
           <h4>SCSI 磁盘</h4>
-          <el-table :data="detailData.config.scsi_disks" size="small" stripe>
-            <el-table-column prop="slot" label="槽位" width="100" />
-            <el-table-column prop="storage" label="存储" width="120" />
-            <el-table-column prop="raw" label="配置" />
-          </el-table>
+          <div class="device-list">
+            <div v-for="d in detailData.config.scsi_disks" :key="d.slot" class="device-chip">
+              <span class="chip-tag">scsi{{ d.slot }}</span>
+              <span class="chip-body">{{ d.storage || '-' }}</span>
+              <span class="chip-sub mono">{{ d.raw }}</span>
+            </div>
+          </div>
         </div>
+        <!-- IDE 设备 -->
         <div class="detail-section" v-if="detailData.config?.ide_disks?.length">
           <h4>IDE 设备</h4>
-          <el-table :data="detailData.config.ide_disks" size="small" stripe>
-            <el-table-column prop="slot" label="槽位" width="100" />
-            <el-table-column prop="storage" label="存储" width="120" />
-            <el-table-column prop="media" label="类型" width="80" />
-            <el-table-column prop="raw" label="配置" />
-          </el-table>
+          <div class="device-list">
+            <div v-for="d in detailData.config.ide_disks" :key="d.slot" class="device-chip">
+              <span class="chip-tag">ide{{ d.slot }}</span>
+              <span class="chip-body">{{ d.storage || '-' }}</span>
+              <el-tag v-if="d.media" size="small" type="info" effect="plain">{{ d.media }}</el-tag>
+              <span class="chip-sub mono">{{ d.raw }}</span>
+            </div>
+          </div>
         </div>
+        <!-- 网卡 -->
         <div class="detail-section" v-if="detailData.config?.net_devices?.length">
           <h4>网卡</h4>
-          <el-table :data="detailData.config.net_devices" size="small" stripe>
-            <el-table-column prop="slot" label="槽位" width="100" />
-            <el-table-column label="模型" width="100">
-              <template #default="{ row }">{{ row.model || '-' }}</template>
-            </el-table-column>
-            <el-table-column label="桥接" width="100">
-              <template #default="{ row }">{{ row.bridge || '-' }}</template>
-            </el-table-column>
-            <el-table-column label="MAC">
-              <template #default="{ row }">{{ row.hwaddr || '-' }}</template>
-            </el-table-column>
-          </el-table>
+          <div class="device-list">
+            <div v-for="n in detailData.config.net_devices" :key="n.slot" class="device-chip">
+              <span class="chip-tag">net{{ n.slot }}</span>
+              <span class="chip-body">{{ n.model || '-' }}</span>
+              <span class="chip-sub">桥接 {{ n.bridge || '-' }}</span>
+              <span class="chip-sub mono">{{ n.hwaddr || '-' }}</span>
+            </div>
+          </div>
         </div>
       </div>
+      <template #footer>
+        <el-button @click="detailVisible = false">关闭</el-button>
+      </template>
     </el-dialog>
   </div>
 </template>
@@ -190,6 +211,17 @@ function fmtBytes(bytes: number) {
   if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)}KB`
   return `${bytes}B`
 }
+function fmtBits(bps: number) {
+  if (!bps) return '0bps'
+  if (bps >= 1000000000) return `${(bps / 1000000000).toFixed(1)}Gbps`
+  if (bps >= 1000000) return `${(bps / 1000000).toFixed(1)}Mbps`
+  if (bps >= 1000) return `${(bps / 1000).toFixed(1)}Kbps`
+  return `${bps}bps`
+}
+function fmtTime(iso: string) {
+  if (!iso) return '-'
+  return new Date(iso).toLocaleString('zh-CN')
+}
 function fmtUptime(s: number) {
   if (!s) return '-'
   const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600)
@@ -211,13 +243,20 @@ function fmtUptime(s: number) {
 .usage-cell { display: flex; flex-direction: column; gap: 4px; }
 .usage-text { font-size: 12px; color: var(--text-muted); }
 .net-text { font-size: 12px; color: var(--text-secondary); }
-.detail-content { max-height: 60vh; overflow-y: auto; }
-.detail-section { margin-bottom: 20px; }
-.detail-section h4 { font-size: 15px; font-weight: 600; color: var(--text-primary); margin: 0 0 12px; }
-.detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.detail-item { display: flex; flex-direction: column; gap: 4px; }
-.detail-label { font-size: 12px; color: var(--text-muted); }
-.mono { font-family: monospace; font-size: 13px; }
+.detail-content { max-height: 70vh; overflow-y: auto; }
+.detail-section { margin-bottom: 16px; }
+.detail-section:last-child { margin-bottom: 0; }
+.detail-section h4 { font-size: 13px; font-weight: 600; color: var(--text-secondary); margin: 0 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border-color); text-transform: uppercase; letter-spacing: 0.5px; }
+.detail-kv { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 20px; }
+.kv-row { display: flex; align-items: center; padding: 5px 0; border-bottom: 1px dashed var(--border-color); }
+.kv-label { font-size: 13px; color: var(--text-muted); min-width: 72px; flex-shrink: 0; }
+.kv-val { font-size: 13px; color: var(--text-primary); }
+.mono { font-family: 'SF Mono', 'Menlo', monospace; font-size: 12px; }
+.device-list { display: flex; flex-direction: column; gap: 4px; }
+.device-chip { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--bg-secondary); border-radius: 8px; }
+.chip-tag { font-size: 12px; font-weight: 600; color: var(--color-primary); background: rgba(64, 158, 255, 0.1); padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
+.chip-body { font-size: 13px; font-weight: 500; color: var(--text-primary); }
+.chip-sub { font-size: 12px; color: var(--text-muted); }
 :deep(.el-table) { background: transparent; --el-table-bg-color: transparent; --el-table-tr-bg-color: transparent; --el-table-header-bg-color: transparent; --el-table-border-color: var(--border-color); --el-table-text-color: var(--text-primary); --el-table-header-text-color: var(--text-secondary); }
 :deep(.el-table::before) { display: none; }
 :deep(.el-table th.el-table__cell) { background: transparent; }
