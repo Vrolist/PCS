@@ -1,12 +1,21 @@
+from datetime import timedelta
+
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.accounts.models import User
 from apps.clusters.models import Cluster
-from apps.scanner.models import ClusterNode, LXC, ScanHistory, Storage, VM
-
-from .models import AgentInstance, ScanTask
+from apps.scanner.models import (
+    CephStatus,
+    ClusterNode,
+    LXC,
+    NetworkInterface,
+    ScanHistory,
+    Storage,
+    VM,
+)
+from apps.agent_api.models import AgentInstance, ScanTask
 
 
 def _create_user_cluster():
@@ -459,7 +468,191 @@ class ScanUploadAPITest(TestCase):
 
 
 # ============================================================
-# 4. 任务查询
+# 4. 过期数据清理
+# ============================================================
+
+class ExpiredDataCleanupTest(TestCase):
+    """上传时清理过期历史数据"""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.url = "/api/agent/scan/upload/"
+        _, self.cluster = _create_user_cluster()
+        self.agent = AgentInstance.objects.create(
+            cluster=self.cluster,
+            agent_id="test-agent-id-001",
+            hostname="pve-node-1",
+        )
+        self.now = timezone.now()
+
+    def _create_old_data(self, node_days_ago=8, history_days_ago=31):
+        """创建过期历史数据"""
+        node_old_ts = self.now - timedelta(days=node_days_ago)
+        history_old_ts = self.now - timedelta(days=history_days_ago)
+
+        # 旧节点快照（7天过期阈值）
+        node = ClusterNode.objects.create(
+            cluster=self.cluster,
+            node_name="pve-old",
+            scanned_at=node_old_ts,
+        )
+        Storage.objects.create(
+            node=node, storage_name="old-storage", type="dir",
+            scanned_at=node_old_ts,
+        )
+        NetworkInterface.objects.create(
+            node=node, name="old-net", type="bridge",
+            scanned_at=node_old_ts,
+        )
+        CephStatus.objects.create(
+            cluster=self.cluster, health="HEALTH_OK",
+            scanned_at=node_old_ts,
+        )
+
+        # 旧扫描历史（30天过期阈值）
+        ScanHistory.objects.create(
+            cluster=self.cluster,
+            snapshot_data={"total_nodes": 1},
+            scanned_at=history_old_ts,
+        )
+        ScanTask.objects.create(
+            agent=self.agent, cluster=self.cluster,
+            task_type="full_scan", status=ScanTask.Status.COMPLETED,
+            started_at=history_old_ts,
+        )
+        return node
+
+    def _create_recent_data(self, days_ago=1):
+        """创建未过期的数据"""
+        recent_ts = self.now - timedelta(days=days_ago)
+
+        node = ClusterNode.objects.create(
+            cluster=self.cluster,
+            node_name="pve-recent",
+            scanned_at=recent_ts,
+        )
+        Storage.objects.create(
+            node=node, storage_name="recent-storage", type="dir",
+            scanned_at=recent_ts,
+        )
+        NetworkInterface.objects.create(
+            node=node, name="recent-net", type="bridge",
+            scanned_at=recent_ts,
+        )
+        CephStatus.objects.create(
+            cluster=self.cluster, health="HEALTH_OK",
+            scanned_at=recent_ts,
+        )
+        ScanHistory.objects.create(
+            cluster=self.cluster,
+            snapshot_data={"total_nodes": 1},
+            scanned_at=recent_ts,
+        )
+        ScanTask.objects.create(
+            agent=self.agent, cluster=self.cluster,
+            task_type="full_scan", status=ScanTask.Status.COMPLETED,
+            started_at=recent_ts,
+        )
+
+    def test_cleanup_deletes_old_node_data(self):
+        """超过7天的节点/存储/网络/Ceph数据被清理"""
+        self._create_old_data(node_days_ago=8)
+        self._create_recent_data(days_ago=1)
+
+        payload = _scan_payload(str(self.cluster.id), "test-agent-id-001")
+        self.client.post(self.url, payload, format="json")
+
+        # 旧数据被删除
+        self.assertFalse(ClusterNode.objects.filter(node_name="pve-old").exists())
+        self.assertFalse(Storage.objects.filter(storage_name="old-storage").exists())
+        self.assertFalse(NetworkInterface.objects.filter(name="old-net").exists())
+
+        # 新数据保留
+        self.assertTrue(ClusterNode.objects.filter(node_name="pve-recent").exists())
+        self.assertTrue(Storage.objects.filter(storage_name="recent-storage").exists())
+        self.assertTrue(NetworkInterface.objects.filter(name="recent-net").exists())
+
+    def test_cleanup_keeps_recent_node_data(self):
+        """6天的节点数据不会被清理（未到7天阈值）"""
+        self._create_recent_data(days_ago=6)
+
+        payload = _scan_payload(str(self.cluster.id), "test-agent-id-001")
+        self.client.post(self.url, payload, format="json")
+
+        self.assertTrue(ClusterNode.objects.filter(node_name="pve-recent").exists())
+
+    def test_cleanup_deletes_old_scan_history(self):
+        """超过30天的ScanHistory和ScanTask被清理"""
+        self._create_old_data(history_days_ago=31)
+
+        payload = _scan_payload(str(self.cluster.id), "test-agent-id-001")
+        self.client.post(self.url, payload, format="json")
+
+        self.assertEqual(ScanHistory.objects.count(), 1)  # 只有上传新增的那条
+        self.assertEqual(ScanTask.objects.count(), 1)     # 只有上传新增的那条
+
+    def test_cleanup_keeps_recent_scan_history(self):
+        """20天的ScanHistory不会被清理（未到30天阈值）"""
+        old_ts = self.now - timedelta(days=20)
+        ScanHistory.objects.create(
+            cluster=self.cluster,
+            snapshot_data={"total_nodes": 1},
+            scanned_at=old_ts,
+        )
+        ScanTask.objects.create(
+            agent=self.agent, cluster=self.cluster,
+            task_type="full_scan", status=ScanTask.Status.COMPLETED,
+            started_at=old_ts,
+        )
+
+        payload = _scan_payload(str(self.cluster.id), "test-agent-id-001")
+        self.client.post(self.url, payload, format="json")
+
+        # 20天的数据保留 + 上传新增1条
+        self.assertEqual(ScanHistory.objects.count(), 2)
+        self.assertEqual(ScanTask.objects.count(), 2)
+
+    def test_cleanup_failure_does_not_break_upload(self):
+        """清理失败不影响上传结果"""
+        payload = _scan_payload(str(self.cluster.id), "test-agent-id-001")
+        resp = self.client.post(self.url, payload, format="json")
+        self.assertEqual(resp.status_code, 200)
+
+    def test_cleanup_no_data_does_nothing(self):
+        """没有过期数据时，上传正常"""
+        self._create_recent_data(days_ago=1)
+
+        payload = _scan_payload(str(self.cluster.id), "test-agent-id-001")
+        resp = self.client.post(self.url, payload, format="json")
+        self.assertEqual(resp.status_code, 200)
+
+    def test_cleanup_only_affects_same_cluster(self):
+        """清理只影响当前集群，不影响其他集群的数据"""
+        # 另一个集群的旧数据
+        other_user = User.objects.create_user(
+            username="other_user", email="other@test.com", password="Test1234!"
+        )
+        other_cluster = Cluster.objects.create(
+            user=other_user, name="other-cluster", agent_token="other-token"
+        )
+        old_ts = self.now - timedelta(days=10)
+        ClusterNode.objects.create(
+            cluster=other_cluster, node_name="other-old-node",
+            scanned_at=old_ts,
+        )
+
+        # 本集群上传触发清理
+        payload = _scan_payload(str(self.cluster.id), "test-agent-id-001")
+        self.client.post(self.url, payload, format="json")
+
+        # 其他集群的旧数据还在
+        self.assertTrue(
+            ClusterNode.objects.filter(cluster=other_cluster, node_name="other-old-node").exists()
+        )
+
+
+# ============================================================
+# 5. 任务查询
 # ============================================================
 
 class AgentTasksAPITest(TestCase):
@@ -536,7 +729,7 @@ class AgentTasksAPITest(TestCase):
 
 
 # ============================================================
-# 5. 集成测试：完整扫描流程
+# 6. 集成测试：完整扫描流程
 # ============================================================
 
 class AgentScanIntegrationTest(TestCase):
@@ -614,7 +807,7 @@ class AgentScanIntegrationTest(TestCase):
 
 
 # ============================================================
-# 6. Agent 卸载通知
+# 7. Agent 卸载通知
 # ============================================================
 
 class AgentUnregisterAPITest(TestCase):
@@ -652,7 +845,7 @@ class AgentUnregisterAPITest(TestCase):
 
 
 # ============================================================
-# 7. 版本查询
+# 8. 版本查询
 # ============================================================
 
 class AgentVersionAPITest(TestCase):
@@ -675,7 +868,7 @@ class AgentVersionAPITest(TestCase):
 
 
 # ============================================================
-# 8. 安装脚本
+# 9. 安装脚本
 # ============================================================
 
 class AgentInstallScriptAPITest(TestCase):

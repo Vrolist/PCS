@@ -34,7 +34,7 @@ pve-cluster-scan/
 │   │   ├── views.py        #   - 注册 / 心跳 / 扫描上传 / 任务下发 / 卸载 / 版本查询 / 安装脚本
 │   │   ├── urls.py         #   - /api/agent/ 路由（7 个端点）
 │   │   ├── install_script.py  # install.sh 模板生成
-│   │   ├── tests.py        #   - 40 个测试用例
+│   │   ├── tests.py        #   - 47 个测试用例（含 7 个过期数据清理测试）
 │   │   └── admin.py
 │   ├── dashboard/          # Dashboard 查询 API
 │   │   ├── views.py        #   - stats / alerts / trends / nodes
@@ -583,6 +583,21 @@ VM、LXC、VMConfig、LXCConfig 四个模型使用 **原地更新** 策略（`un
 
 其余模型（ClusterNode、Storage、NetworkInterface、CephStatus、ScanHistory、HAResource）仍按时间序保留历史记录，用于趋势分析。
 
+### 数据保留策略（Lazy on-upload 清理）
+
+每次 Agent 扫描上传成功时，自动清理**当前集群**的过期历史数据（事务外执行，失败不影响上传）：
+
+| 模型 | 保留天数 | 说明 |
+|------|---------|------|
+| ClusterNode | 7 天 | 节点快照变化慢，7 天足够趋势 |
+| Storage | 7 天 | 存储容量变化慢 |
+| NetworkInterface | 7 天 | 网络配置基本不变 |
+| CephStatus | 7 天 | 健康状态变化不频繁 |
+| ScanHistory | 30 天 | 趋势图核心数据源，需较长历史 |
+| ScanTask | 30 天 | 审计需要 |
+
+清理实现在 `apps/agent_api/views.py` 的 `_cleanup_expired()` 方法中，使用 `scanned_at__lt=cutoff` 批量 DELETE，走索引。
+
 ## 多 Agent 架构
 
 一个集群可部署多个 AgentInstance，每个 Agent 独立运行并上报数据：
@@ -592,7 +607,7 @@ VM、LXC、VMConfig、LXCConfig 四个模型使用 **原地更新** 策略（`un
 3. 定时执行扫描任务，上报到 `POST /api/agent/scan/upload/`（已有实现）
 4. Web 端可向特定 Agent 下发任务 `GET /api/agent/tasks/`（已有实现）
 5. 操作日志自动记录用户关键操作（登录/注册/CRUD/改密等）
-6. 后端 90 个测试用例覆盖完整流程：`python manage.py test apps.agent_api apps.clusters apps.dashboard`
+6. 后端 126 个测试用例覆盖完整流程：`python manage.py test apps.agent_api apps.clusters apps.dashboard`
 
 ## 管理员
 

@@ -222,6 +222,12 @@ class ScanUploadView(APIView):
             cluster.pve_version = d["version"]
             cluster.save(update_fields=["last_scanned_at", "pve_version"])
 
+            # 清理过期历史数据（事务外，失败不影响上传）
+            try:
+                self._cleanup_expired(cluster)
+            except Exception as e:
+                logger.warning(f"清理过期数据失败: {e}")
+
             return Response({"ok": True, "scan_task_id": scan_task.id})
 
         except Exception as e:
@@ -233,6 +239,34 @@ class ScanUploadView(APIView):
             agent.save(update_fields=["failed_scans", "error_message"])
             logger.exception("Scan upload failed")
             return Response({"error": str(e)}, status=500)
+
+    def _cleanup_expired(self, cluster):
+        """清理过期历史数据"""
+        now = timezone.now()
+        cutoff_7d = now - timedelta(days=7)
+        cutoff_30d = now - timedelta(days=30)
+        total = 0
+
+        # 7 天保留：节点/存储/网络/Ceph 快照
+        for qs in [
+            ClusterNode.objects.filter(cluster=cluster, scanned_at__lt=cutoff_7d),
+            Storage.objects.filter(node__cluster=cluster, scanned_at__lt=cutoff_7d),
+            NetworkInterface.objects.filter(node__cluster=cluster, scanned_at__lt=cutoff_7d),
+            CephStatus.objects.filter(cluster=cluster, scanned_at__lt=cutoff_7d),
+        ]:
+            count, _ = qs.delete()
+            total += count
+
+        # 30 天保留：扫描历史/任务记录
+        for qs in [
+            ScanHistory.objects.filter(cluster=cluster, scanned_at__lt=cutoff_30d),
+            ScanTask.objects.filter(cluster=cluster, started_at__lt=cutoff_30d),
+        ]:
+            count, _ = qs.delete()
+            total += count
+
+        if total > 0:
+            logger.info(f"集群 {cluster.name} 清理了 {total} 条过期历史数据")
 
     def _save_nodes(self, cluster, scan_task, nodes_data, scanned_at):
         """保存节点及其子资源"""

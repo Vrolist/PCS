@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 
 from apps.clusters.models import Cluster
 
@@ -80,7 +81,7 @@ class ScanTask(models.Model):
                                 help_text="Agent上报的完整JSON数据")
 
     # 时间
-    started_at = models.DateTimeField("开始时间", auto_now_add=True)
+    started_at = models.DateTimeField("开始时间", default=timezone.now)
     completed_at = models.DateTimeField("完成时间", null=True, blank=True)
     duration_seconds = models.FloatField("耗时(秒)", null=True, blank=True)
 
