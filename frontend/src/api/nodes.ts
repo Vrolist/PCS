@@ -26,6 +26,75 @@ export interface NodeInfo {
   scanned_at: string
 }
 
+export interface NodeDetailInfo extends NodeInfo {
+  memory_free_mb: number
+  swap_total_mb: number
+  swap_used_mb: number
+  diskstat: Array<Record<string, any>>
+  mac_address: string
+}
+
+export interface NodeStorage {
+  name: string
+  type: string
+  status: string
+  active: boolean
+  total_gb: number
+  used_gb: number
+  avail_gb: number
+  content_types: string
+  shared: boolean
+}
+
+export interface NodeNetwork {
+  name: string
+  type: string
+  active: boolean
+  method: string
+  address: string
+  gateway: string
+  speed_mbps: number
+}
+
+export interface NodeVM {
+  vmid: number
+  name: string
+  status: string
+  cpu_cores: number
+  cpu_usage: number
+  memory_mb: number
+  memory_used_mb: number
+  disk_gb: number
+  uptime_seconds: number
+}
+
+export interface NodeContainer {
+  vmid: number
+  name: string
+  status: string
+  cpu_cores: number
+  cpu_usage: number
+  memory_mb: number
+  memory_used_mb: number
+  swap_mb: number
+  swap_used_mb: number
+  disk_gb: number
+  uptime_seconds: number
+  has_template: boolean
+}
+
+export interface NodeDetail {
+  node: NodeDetailInfo
+  storages: NodeStorage[]
+  networks: NodeNetwork[]
+  vms: NodeVM[]
+  containers: NodeContainer[]
+}
+
 export function getNodes() {
   return request.get<any, NodeInfo[]>('/scanner/nodes/')
+}
+
+export function getNodeDetail(id: number) {
+  return request.get<any, NodeDetail>(`/scanner/nodes/${id}/detail/`)
 }

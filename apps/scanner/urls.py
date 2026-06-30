@@ -4,6 +4,7 @@ from . import views
 
 urlpatterns = [
     path("nodes/", views.NodeListView.as_view(), name="scanner-nodes"),
+    path("nodes/<int:node_id>/detail/", views.NodeDetailView.as_view(), name="scanner-node-detail"),
     path("vms/", views.VMListView.as_view(), name="scanner-vms"),
     path("vms/<int:vm_id>/detail/", views.VMDetailView.as_view(), name="scanner-vm-detail"),
     path("containers/", views.LXCListView.as_view(), name="scanner-containers"),

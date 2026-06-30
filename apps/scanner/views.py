@@ -72,6 +72,145 @@ class NodeListView(APIView):
         return Response(data)
 
 
+class NodeDetailView(APIView):
+    """GET /api/scanner/nodes/<id>/detail/ — 节点详情（含存储/网络/VM/容器）"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, node_id):
+        try:
+            node = ClusterNode.objects.select_related("cluster").get(pk=node_id)
+        except ClusterNode.DoesNotExist:
+            return Response({"error": "Node not found"}, status=404)
+
+        # 基本信息
+        data = {
+            "node": {
+                "id": node.id,
+                "cluster_id": node.cluster_id,
+                "cluster_name": node.cluster.name,
+                "node_name": node.node_name,
+                "status": node.status,
+                "cpu_model": node.cpu_model,
+                "cpu_cores": node.cpu_cores,
+                "cpu_sockets": node.cpu_sockets,
+                "cpu_load": node.cpu_load,
+                "memory_total_mb": node.memory_total_mb,
+                "memory_used_mb": node.memory_used_mb,
+                "memory_free_mb": node.memory_free_mb,
+                "memory_usage_pct": node.memory_usage_pct,
+                "rootfs_total_gb": node.rootfs_total_gb,
+                "rootfs_used_gb": node.rootfs_used_gb,
+                "rootfs_avail_gb": node.rootfs_avail_gb,
+                "swap_total_mb": node.swap_total_mb,
+                "swap_used_mb": node.swap_used_mb,
+                "disk_io_delay_ms": node.disk_io_delay_ms,
+                "diskstat": node.diskstat,
+                "ip_address": node.ip_address,
+                "mac_address": node.mac_address,
+                "pve_version": node.pve_version,
+                "kernel_version": node.kernel_version,
+                "uptime_seconds": node.uptime_seconds,
+                "is_ceph_node": node.is_ceph_node,
+                "is_ha_node": node.is_ha_node,
+                "scanned_at": node.scanned_at,
+            },
+            "storages": [],
+            "networks": [],
+            "vms": [],
+            "containers": [],
+        }
+
+        # 该节点的最新存储
+        storage_latest = (
+            Storage.objects
+            .filter(node=node)
+            .values("storage_name")
+            .annotate(last_scan=Max("scanned_at"))
+        )
+        storages = []
+        for item in storage_latest:
+            s = Storage.objects.filter(
+                node=node, storage_name=item["storage_name"],
+                scanned_at=item["last_scan"]
+            ).first()
+            if s:
+                storages.append({
+                    "name": s.storage_name, "type": s.type, "status": s.status,
+                    "active": s.active, "total_gb": s.total_gb, "used_gb": s.used_gb,
+                    "avail_gb": s.avail_gb, "content_types": s.content_types, "shared": s.shared,
+                })
+        data["storages"] = storages
+
+        # 该节点的最新网络接口
+        net_latest = (
+            NetworkInterface.objects
+            .filter(node=node)
+            .values("name")
+            .annotate(last_scan=Max("scanned_at"))
+        )
+        networks = []
+        for item in net_latest:
+            ni = NetworkInterface.objects.filter(
+                node=node, name=item["name"],
+                scanned_at=item["last_scan"]
+            ).first()
+            if ni:
+                networks.append({
+                    "name": ni.name, "type": ni.type, "active": ni.active,
+                    "method": ni.method, "address": ni.address,
+                    "gateway": ni.gateway, "speed_mbps": ni.speed_mbps,
+                })
+        data["networks"] = networks
+
+        # 该节点最新扫描的 VM
+        vm_latest = (
+            VM.objects
+            .filter(node=node)
+            .values("vmid")
+            .annotate(last_scan=Max("scanned_at"))
+        )
+        vms = []
+        for item in vm_latest:
+            vm = VM.objects.filter(
+                node=node, vmid=item["vmid"],
+                scanned_at=item["last_scan"]
+            ).first()
+            if vm:
+                vms.append({
+                    "vmid": vm.vmid, "name": vm.name, "status": vm.status,
+                    "cpu_cores": vm.cpu_cores, "cpu_usage": vm.cpu_usage,
+                    "memory_mb": vm.memory_mb, "memory_used_mb": vm.memory_used_mb,
+                    "disk_gb": vm.max_disk_gb, "uptime_seconds": vm.uptime_seconds,
+                })
+        data["vms"] = vms
+
+        # 该节点最新扫描的 LXC
+        lxc_latest = (
+            LXC.objects
+            .filter(node=node)
+            .values("vmid")
+            .annotate(last_scan=Max("scanned_at"))
+        )
+        containers = []
+        for item in lxc_latest:
+            ct = LXC.objects.filter(
+                node=node, vmid=item["vmid"],
+                scanned_at=item["last_scan"]
+            ).first()
+            if ct:
+                containers.append({
+                    "vmid": ct.vmid, "name": ct.name, "status": ct.status,
+                    "cpu_cores": ct.cpu_cores, "cpu_usage": ct.cpu_usage,
+                    "memory_mb": ct.memory_mb, "memory_used_mb": ct.memory_used_mb,
+                    "swap_mb": ct.swap_mb, "swap_used_mb": ct.swap_used_mb,
+                    "disk_gb": ct.disk_gb, "uptime_seconds": ct.uptime_seconds,
+                    "has_template": ct.has_template,
+                })
+        data["containers"] = containers
+
+        return Response(data)
+
+
 class StorageListView(APIView):
     """GET /api/scanner/storage/ — 存储列表"""
     permission_classes = [IsAuthenticated]
