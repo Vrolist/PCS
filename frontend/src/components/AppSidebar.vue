@@ -35,49 +35,49 @@
       <template #title><span>控制台</span></template>
     </el-menu-item>
 
-    <el-menu-item index="/clusters" class="sidebar-item">
+    <el-menu-item index="/dashboard/clusters" class="sidebar-item">
       <div class="item-icon-wrap">
         <el-icon><Connection /></el-icon>
       </div>
       <template #title><span>集群管理</span></template>
     </el-menu-item>
 
-    <el-menu-item index="/nodes" class="sidebar-item">
+    <el-menu-item index="/dashboard/nodes" class="sidebar-item">
       <div class="item-icon-wrap">
         <el-icon><Cpu /></el-icon>
       </div>
       <template #title><span>节点管理</span></template>
     </el-menu-item>
 
-    <el-menu-item index="/vms" class="sidebar-item">
+    <el-menu-item index="/dashboard/vms" class="sidebar-item">
       <div class="item-icon-wrap">
         <el-icon><Cpu /></el-icon>
       </div>
       <template #title><span>虚拟机</span></template>
     </el-menu-item>
 
-    <el-menu-item index="/containers" class="sidebar-item">
+    <el-menu-item index="/dashboard/containers" class="sidebar-item">
       <div class="item-icon-wrap">
         <el-icon><Box /></el-icon>
       </div>
       <template #title><span>容器</span></template>
     </el-menu-item>
 
-    <el-menu-item index="/storage" class="sidebar-item">
+    <el-menu-item index="/dashboard/storage" class="sidebar-item">
       <div class="item-icon-wrap">
         <el-icon><Coin /></el-icon>
       </div>
       <template #title><span>存储管理</span></template>
     </el-menu-item>
 
-    <el-menu-item index="/networks" class="sidebar-item">
+    <el-menu-item index="/dashboard/networks" class="sidebar-item">
       <div class="item-icon-wrap">
         <el-icon><Connection /></el-icon>
       </div>
       <template #title><span>网络接口</span></template>
     </el-menu-item>
 
-    <el-menu-item index="/ceph" class="sidebar-item">
+    <el-menu-item index="/dashboard/ceph" class="sidebar-item">
       <div class="item-icon-wrap">
         <el-icon><Box /></el-icon>
       </div>
@@ -88,14 +88,14 @@
       <span v-if="!appStore.sidebarCollapsed" class="menu-label">运维</span>
     </div>
 
-    <el-menu-item index="/alerts" class="sidebar-item">
+    <el-menu-item index="/dashboard/alerts" class="sidebar-item">
       <div class="item-icon-wrap">
         <el-icon><Bell /></el-icon>
       </div>
       <template #title><span>告警中心</span></template>
     </el-menu-item>
 
-    <el-menu-item index="/services" class="sidebar-item">
+    <el-menu-item index="/dashboard/services" class="sidebar-item">
       <div class="item-icon-wrap">
         <el-icon><Service /></el-icon>
       </div>
@@ -106,21 +106,21 @@
       <span v-if="!appStore.sidebarCollapsed" class="menu-label">用户</span>
     </div>
 
-    <el-menu-item index="/settings" class="sidebar-item">
+    <el-menu-item index="/dashboard/settings" class="sidebar-item">
       <div class="item-icon-wrap">
         <el-icon><User /></el-icon>
       </div>
       <template #title><span>用户信息</span></template>
     </el-menu-item>
 
-    <el-menu-item index="/user-logs" class="sidebar-item">
+    <el-menu-item index="/dashboard/user-logs" class="sidebar-item">
       <div class="item-icon-wrap">
         <el-icon><Document /></el-icon>
       </div>
       <template #title><span>操作日志</span></template>
     </el-menu-item>
 
-    <el-menu-item index="/user-notifications" class="sidebar-item">
+    <el-menu-item index="/dashboard/user-notifications" class="sidebar-item">
       <div class="item-icon-wrap">
         <el-icon><Bell /></el-icon>
       </div>

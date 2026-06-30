@@ -28,10 +28,14 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/',
+    redirect: '/dashboard',
+  },
+  {
+    path: '/dashboard',
     component: () => import('@/layouts/MainLayout.vue'),
     children: [
       {
-        path: 'dashboard',
+        path: '',
         name: 'Dashboard',
         component: () => import('@/views/dashboard/index.vue'),
         meta: { title: '控制台', icon: 'Monitor' },

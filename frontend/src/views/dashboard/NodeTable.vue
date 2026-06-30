@@ -2,7 +2,7 @@
   <div class="node-table-card">
     <div class="card-header">
       <span class="card-title">节点详情</span>
-      <a href="/clusters" class="view-all">查看全部</a>
+      <router-link to="/dashboard/clusters" class="view-all">查看全部</router-link>
     </div>
     <div v-if="loading" class="node-loading">
       <el-icon class="is-loading" :size="20"><Loading /></el-icon>

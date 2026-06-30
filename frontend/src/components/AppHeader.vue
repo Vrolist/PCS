@@ -22,11 +22,11 @@
         </div>
         <template #dropdown>
           <el-dropdown-menu class="header-dropdown">
-            <el-dropdown-item @click="$router.push('/settings')">
+            <el-dropdown-item @click="$router.push('/dashboard/settings')">
               <el-icon><User /></el-icon>
               <span>用户信息</span>
             </el-dropdown-item>
-            <el-dropdown-item @click="$router.push('/change-password')">
+            <el-dropdown-item @click="$router.push('/dashboard/change-password')">
               <el-icon><Key /></el-icon>
               <span>修改密码</span>
             </el-dropdown-item>
