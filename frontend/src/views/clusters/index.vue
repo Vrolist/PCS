@@ -206,7 +206,19 @@
                 <el-tag :type="agentStatusType(row.status)" size="small">{{ agentStatusLabel(row.status) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="version" label="版本" width="80" />
+            <el-table-column label="版本" width="120">
+              <template #default="{ row }">
+                <span style="margin-right: 4px">{{ row.version }}</span>
+                <el-tag
+                  v-if="latestAgentVersion && compareVersions(row.version, latestAgentVersion) < 0"
+                  type="warning" size="small" effect="dark"
+                >可更新</el-tag>
+                <el-tag
+                  v-else-if="latestAgentVersion"
+                  type="success" size="small" effect="dark"
+                >最新</el-tag>
+              </template>
+            </el-table-column>
             <el-table-column prop="total_scans" label="扫描次数" width="90" />
             <el-table-column label="最后心跳" min-width="140">
               <template #default="{ row }">
@@ -226,7 +238,7 @@ import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance } from 'element-plus'
 import { Loading, View, Delete, CopyDocument, VideoPause, CircleCheck } from '@element-plus/icons-vue'
-import { getClusters, getCluster, createCluster, updateCluster, deleteCluster } from '@/api/clusters'
+import { getClusters, getCluster, createCluster, updateCluster, deleteCluster, getLatestAgentVersion } from '@/api/clusters'
 import type { Cluster, ClusterDetail } from '@/api/clusters'
 
 const loading = ref(true)
@@ -236,6 +248,27 @@ const creating = ref(false)
 const showDetail = ref(false)
 const detail = ref<ClusterDetail | null>(null)
 const createFormRef = ref<FormInstance>()
+const latestAgentVersion = ref('')
+
+function compareVersions(a: string, b: string): number {
+  const pa = a.split('.').map(Number)
+  const pb = b.split('.').map(Number)
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const na = pa[i] || 0
+    const nb = pb[i] || 0
+    if (na !== nb) return na - nb
+  }
+  return 0
+}
+
+async function fetchLatestAgentVersion() {
+  try {
+    const res = await getLatestAgentVersion()
+    latestAgentVersion.value = res.latest_version
+  } catch {
+    // non-critical, silently ignore
+  }
+}
 
 const createForm = ref({ name: '', description: '', pve_endpoint: '', pve_token: '' })
 const createRules = {
@@ -367,7 +400,10 @@ function agentStatusLabel(s: string) {
   return { online: '在线', offline: '离线', error: '错误', paused: '暂停' }[s] || s
 }
 
-onMounted(loadClusters)
+onMounted(() => {
+  loadClusters()
+  fetchLatestAgentVersion()
+})
 </script>
 
 <style scoped>

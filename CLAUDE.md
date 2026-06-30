@@ -195,12 +195,20 @@ curl 安装脚本
 
 Agent 运行中:
   → PVE API 认证 (POST /access/ticket)
-  → 心跳循环 (每 60s POST /api/agent/heartbeat/)
+  → 心跳循环 (每 60s POST /api/agent/heartbeat/, 含 version)
+    → 收到 410 → _stop_permanently() (systemctl disable + exit)
   → 扫描循环 (每 3600s)
     → 调用 PVE API 采集所有节点
     → 数据清洗 (bytes→MB/GB, CPU→%)
     → POST /api/agent/scan/upload/
+    → 收到 423 → 暂停上传，心跳保持 (deactivated)
+    → 收到 410 → _stop_permanently() (集群已删除)
     → 检查下发任务 GET /api/agent/tasks/
+
+Agent 版本提示:
+  Web 前端 Agent 表格显示 version 列
+  → agent.version < latest_version → 橙色「可更新」标签
+  → agent.version == latest_version → 绿色「最新」标签
 ```
 
 ## API 端点
@@ -269,11 +277,17 @@ POST /api/agent/register/
 → {"agent_id": "hex-uuid", "scan_interval": 3600, "status": "online"}
 ```
 
-**心跳上报：**
+**心跳上报（包含版本号）：**
 ```json
 POST /api/agent/heartbeat/
-{"agent_id": "hex-uuid", "status": "online", "current_task": ""}
+{"agent_id": "hex-uuid", "status": "online", "current_task": "", "version": "0.3.0"}
 → {"ok": true}
+```
+
+**集群停用/删除特殊响应：**
+```
+集群停用: POST /api/agent/scan/upload/ → 423 (is_active=False)
+集群删除: POST /api/agent/heartbeat/ 或 upload/ → 410 (cluster=None, AgentInstance 通过 SET_NULL 保留)
 ```
 
 **扫描上传：**
@@ -303,7 +317,7 @@ POST /api/agent/unregister/
 **版本查询：**
 ```
 GET /api/agent/version/
-→ {"latest_version": "0.2.0", "download_url": "https://..."}
+→ {"latest_version": "0.3.0", "download_url": "/api/agent/install.sh", "changelog": "v0.3.0: 集群停用/删除感知，心跳上报版本号"}
 ```
 
 **安装脚本获取：**
@@ -474,7 +488,7 @@ GET /api/scanner/containers/1/detail/
 - **Cluster** - 用户的 PVE 集群，含 agent_token 鉴权
 
 ### agent_api (Agent 多实例管理)
-- **AgentInstance** - Agent 进程实例，支持多 Agent 部署
+- **AgentInstance** - Agent 进程实例，支持多 Agent 部署。`cluster` FK 使用 `SET_NULL`（集群删除后 agent 记录保留，但 cluster=None，心跳/上传返回 410）
 - **ScanTask** - 每次扫描任务记录
 
 ### scanner (扫描数据与检测)
@@ -627,6 +641,9 @@ VM、LXC、VMConfig、LXCConfig 四个模型使用 **原地更新** 策略（`un
 8. ~~操作日志~~ ✅ 已完成（UserLog 模型+API+前端分页列表）
 9. ~~用户信息设置页面~~ ✅ 已完成（编辑资料+安全设置）
 10. ~~数据库存储优化~~ ✅ 已完成（VM/LXC/VMConfig/LXCConfig 原地更新，节省 ~99.9% 存储）
-11. 自动检测引擎
-12. 仪表盘真实数据进一步接入（告警、趋势数据源）
-13. 各管理页面功能完善（告警/服务/通知等）
+11. ~~数据保留清理~~ ✅ 已完成（Lazy on-upload 清理，7天/30天阈值）
+12. ~~集群停用/恢复/删除完成链路~~ ✅ 已完成（is_active→423, deleted→410, agent _stop_permanently）
+13. ~~Agent 版本更新提示~~ ✅ 已完成（前端 agent 表格显示「最新」/「可更新」标签）
+14. 自动检测引擎
+15. 仪表盘真实数据进一步接入（告警、趋势数据源）
+16. 各管理页面功能完善（告警/服务/通知等）

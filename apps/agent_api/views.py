@@ -132,12 +132,21 @@ class AgentHeartbeatView(APIView):
         except AgentInstance.DoesNotExist:
             return Response({"error": "Agent not found"}, status=404)
 
+        # 集群已被删除，永久停止 Agent
+        if agent.cluster is None:
+            return Response(
+                {"error": "Cluster has been deleted, agent should stop permanently"},
+                status=410,
+            )
+
         agent.last_heartbeat_at = timezone.now()
         agent.status = d["status"]
         agent.current_task = d.get("current_task", "")
         agent.error_message = d.get("error_message", "")
+        agent.version = d.get("version", agent.version)
         agent.save(update_fields=[
-            "last_heartbeat_at", "status", "current_task", "error_message", "updated_at"
+            "last_heartbeat_at", "status", "current_task", "error_message",
+            "version", "updated_at",
         ])
 
         return Response({"ok": True})
@@ -157,6 +166,13 @@ class ScanUploadView(APIView):
             agent = AgentInstance.objects.get(agent_id=d["agent_id"])
         except AgentInstance.DoesNotExist:
             return Response({"error": "Agent not found"}, status=404)
+
+        # 集群已被删除，永久停止 Agent
+        if agent.cluster is None:
+            return Response(
+                {"error": "Cluster has been deleted, agent should stop permanently"},
+                status=410,
+            )
 
         # 验证集群
         try:
@@ -541,9 +557,9 @@ class AgentTasksView(APIView):
 # Agent 版本常量（平台侧维护）
 # ============================================================
 
-AGENT_LATEST_VERSION = "0.2.0"
+AGENT_LATEST_VERSION = "0.3.0"
 AGENT_DOWNLOAD_URL = "/api/agent/install.sh"  # 从平台下载
-AGENT_CHANGELOG = "v0.2.0: 简化为单文件，零依赖"
+AGENT_CHANGELOG = "v0.3.0: 集群停用/删除感知，心跳上报版本号"
 
 
 class AgentUnregisterView(APIView):
@@ -647,7 +663,7 @@ INSTALL_DIR="/opt/$AGENT_NAME"
 
 echo "=============================="
 echo "  PVE Cluster Scan Agent"
-echo "  安装程序 v0.2.0"
+echo "  安装程序 v0.3.0"
 echo "=============================="
 echo ""
 
@@ -728,7 +744,7 @@ REGISTER_RESULT=$(curl -s -X POST "$PLATFORM_URL/api/agent/register/" \\
         \\"pve_password\\": \\"$PVE_TOKEN\\",
         \\"hostname\\": \\"$HOSTNAME\\",
         \\"scan_interval\\": 300,
-        \\"version\\": \\"0.2.0\\"
+        \\"version\\": \\"0.3.0\\"
     }}")
 
 AGENT_ID=$(echo "$REGISTER_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('agent_id',''))" 2>/dev/null || true)

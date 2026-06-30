@@ -57,3 +57,13 @@ export function updateCluster(id: number, data: Partial<Cluster>) {
 export function deleteCluster(id: number) {
   return request.delete(`/clusters/${id}/`)
 }
+
+export interface AgentVersion {
+  latest_version: string
+  download_url: string
+  changelog: string
+}
+
+export function getLatestAgentVersion() {
+  return request.get<any, AgentVersion>('/agent/version/')
+}

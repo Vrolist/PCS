@@ -12,8 +12,8 @@ class AgentInstance(models.Model):
         ERROR = "error", "错误"
         PAUSED = "paused", "暂停"
 
-    cluster = models.ForeignKey(Cluster, on_delete=models.CASCADE, verbose_name="所属集群",
-                                related_name="agents")
+    cluster = models.ForeignKey(Cluster, on_delete=models.SET_NULL, null=True, blank=True,
+                                verbose_name="所属集群", related_name="agents")
     agent_id = models.CharField("Agent ID", max_length=64, unique=True, db_index=True,
                                 help_text="Agent自生成唯一标识 (如 hostname+pid)")
     version = models.CharField("Agent版本", max_length=32)

@@ -35,7 +35,7 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 
 # 路径常量
 INSTALL_DIR = Path("/opt/pcs-agent")
@@ -599,15 +599,21 @@ class PlatformClient:
     def unregister(self, agent_id):
         return http_post(f"{self.base_url}/api/agent/unregister/", {"agent_id": agent_id})
 
-    def heartbeat(self, agent_id, status="online", current_task="", error_message=""):
+    def heartbeat(self, agent_id, status="online", current_task="", error_message="", version=""):
         payload = {
             "agent_id": agent_id,
             "status": status,
             "current_task": current_task,
+            "version": version,
         }
         if error_message:
             payload["error_message"] = error_message
-        return http_post(f"{self.base_url}/api/agent/heartbeat/", payload)
+        try:
+            return http_post(f"{self.base_url}/api/agent/heartbeat/", payload)
+        except urllib.error.HTTPError as e:
+            if e.code == 410:
+                return {"_deleted": True}
+            raise
 
     def upload_scan(self, agent_id, cluster_id, scan_data):
         try:
@@ -619,6 +625,8 @@ class PlatformClient:
         except urllib.error.HTTPError as e:
             if e.code == 423:
                 return {"_deactivated": True}
+            if e.code == 410:
+                return {"_deleted": True}
             raise
 
     def get_tasks(self, agent_id):
@@ -658,6 +666,7 @@ class Agent:
                 self.platform.heartbeat(
                     self.config.agent_id,
                     status="error",
+                    version=VERSION,
                     error_message=f"PVE 认证失败: {e}",
                 )
             except Exception:
@@ -676,6 +685,7 @@ class Agent:
                 self.platform.heartbeat(
                     self.config.agent_id,
                     status="error",
+                    version=VERSION,
                     error_message=f"扫描失败: {e}",
                 )
             except Exception:
@@ -689,6 +699,16 @@ class Agent:
         self.pve.authenticate()
         self._do_scan()
 
+    def _stop_permanently(self, reason="集群已删除"):
+        """永久停止 Agent，禁止 systemd 重启"""
+        logger.warning(f"{reason}，停止 Agent 并禁用自动重启")
+        self._running = False
+        try:
+            os.system("systemctl disable pcs-agent 2>/dev/null")
+        except Exception:
+            pass
+        sys.exit(0)
+
     def _signal_handler(self, signum, frame):
         logger.info(f"收到信号 {signum}，停止 agent...")
         self._running = False
@@ -697,7 +717,13 @@ class Agent:
     def _heartbeat_loop(self):
         while self._running:
             try:
-                self.platform.heartbeat(self.config.agent_id, status="online")
+                result = self.platform.heartbeat(
+                    self.config.agent_id, status="online",
+                    version=VERSION,
+                )
+                if isinstance(result, dict) and result.get("_deleted"):
+                    self._stop_permanently("集群已被删除（心跳检测）")
+                    return
             except Exception as e:
                 logger.warning(f"心跳失败: {e}")
             time.sleep(self.config.heartbeat_interval)
@@ -713,7 +739,10 @@ class Agent:
     def _do_scan(self):
         logger.info("=== 开始扫描 ===")
         try:
-            self.platform.heartbeat(self.config.agent_id, status="online", current_task="scanning")
+            self.platform.heartbeat(
+                self.config.agent_id, status="online", current_task="scanning",
+                version=VERSION,
+            )
         except Exception:
             pass
 
@@ -728,6 +757,11 @@ class Agent:
 
             result = self.platform.upload_scan(self.config.agent_id, self.config.cluster_id, scan_data)
 
+            # 集群已被删除，永久停止
+            if isinstance(result, dict) and result.get("_deleted"):
+                self._stop_permanently("集群已被删除（上传检测）")
+                return
+
             # 集群已停用，不上报数据，保持心跳等待恢复
             if isinstance(result, dict) and result.get("_deactivated"):
                 logger.warning("集群已停用，暂停数据上报，继续心跳等待恢复...")
@@ -735,6 +769,7 @@ class Agent:
                     self.platform.heartbeat(
                         self.config.agent_id,
                         status="paused",
+                        version=VERSION,
                         current_task="deactivated",
                         error_message="集群已停用，等待恢复",
                     )
@@ -746,7 +781,10 @@ class Agent:
 
             # 扫描成功，恢复在线状态
             try:
-                self.platform.heartbeat(self.config.agent_id, status="online", current_task="")
+                self.platform.heartbeat(
+                    self.config.agent_id, status="online", current_task="",
+                    version=VERSION,
+                )
             except Exception:
                 pass
 
@@ -758,6 +796,7 @@ class Agent:
                 self.platform.heartbeat(
                     self.config.agent_id,
                     status="error",
+                    version=VERSION,
                     error_message=error_msg,
                 )
             except Exception:

@@ -864,7 +864,7 @@ class AgentVersionAPITest(TestCase):
 
     def test_version_has_current(self):
         resp = self.client.get(self.url)
-        self.assertEqual(resp.data["latest_version"], "0.2.0")
+        self.assertEqual(resp.data["latest_version"], "0.3.0")
 
 
 # ============================================================
@@ -908,3 +908,70 @@ class AgentInstallScriptAPITest(TestCase):
         content = resp.content.decode()
         self.assertIn("卸载", content)
         self.assertIn("systemctl stop", content)
+
+
+# ============================================================
+# 10. 集群删除 → Agent 410 响应
+# ============================================================
+
+class AgentDeletedClusterTest(TestCase):
+    """集群删除后，Agent 心跳/上传返回 410"""
+
+    def setUp(self):
+        self.client = APIClient()
+        _, self.cluster = _create_user_cluster()
+        self.agent = AgentInstance.objects.create(
+            cluster=self.cluster,
+            agent_id="test-deleted-agent",
+            hostname="pve-deleted-node",
+            version="0.3.0",
+        )
+
+    def _delete_cluster(self):
+        """删除集群（SET_NULL 会使 agent.cluster → None）"""
+        self.cluster.delete()
+        # 验证 agent 仍在，但 cluster 为 None
+        self.agent.refresh_from_db()
+        self.assertIsNone(self.agent.cluster)
+
+    def test_heartbeat_returns_410_after_cluster_deleted(self):
+        """集群删除后，心跳返回 410"""
+        self._delete_cluster()
+        resp = self.client.post("/api/agent/heartbeat/", {
+            "agent_id": "test-deleted-agent",
+            "status": "online",
+            "version": "0.3.0",
+        })
+        self.assertEqual(resp.status_code, 410)
+        self.assertIn("deleted", resp.data.get("error", "").lower())
+
+    def test_upload_returns_410_after_cluster_deleted(self):
+        """集群删除后，上传返回 410"""
+        self._delete_cluster()
+        payload = _scan_payload(str(self.cluster.id), "test-deleted-agent")
+        resp = self.client.post("/api/agent/scan/upload/", payload, format="json")
+        self.assertEqual(resp.status_code, 410)
+        self.assertIn("deleted", resp.data.get("error", "").lower())
+
+    def test_heartbeat_updates_version(self):
+        """心跳报文中的版本号被更新到 AgentInstance"""
+        resp = self.client.post("/api/agent/heartbeat/", {
+            "agent_id": "test-deleted-agent",
+            "status": "online",
+            "version": "0.3.0",
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.agent.refresh_from_db()
+        self.assertEqual(self.agent.version, "0.3.0")
+
+    def test_heartbeat_empty_version_does_not_overwrite(self):
+        """心跳不传 version 时，已存的版本号不变"""
+        self.agent.version = "0.2.0"
+        self.agent.save(update_fields=["version"])
+        resp = self.client.post("/api/agent/heartbeat/", {
+            "agent_id": "test-deleted-agent",
+            "status": "online",
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.agent.refresh_from_db()
+        self.assertEqual(self.agent.version, "0.2.0")
