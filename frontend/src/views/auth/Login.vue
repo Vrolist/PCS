@@ -140,6 +140,7 @@ async function handleLogin() {
   try {
     const res: any = await login(form)
     authStore.setToken(res.access)
+    if (res.refresh) authStore.setRefreshToken(res.refresh)
     ElMessage.success('登录成功')
     router.push('/dashboard')
   } catch (err: any) {
