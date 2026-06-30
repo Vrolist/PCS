@@ -12,6 +12,7 @@ export interface Cluster {
   total_storage: number
   agent_count: number
   online_agents: number
+  is_active: boolean
   last_scanned_at: string | null
   created_at: string
 }

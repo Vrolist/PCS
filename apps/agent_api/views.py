@@ -67,6 +67,10 @@ class AgentRegisterView(APIView):
         except Cluster.DoesNotExist:
             return Response({"error": "Invalid agent_token"}, status=403)
 
+        # 集群已停用，拒绝注册
+        if not cluster.is_active:
+            return Response({"error": "Cluster is deactivated, registration rejected"}, status=423)
+
         # 检查该集群下是否已注册过相同 hostname 的 Agent
         agent = AgentInstance.objects.filter(
             cluster=cluster, hostname=d["hostname"]
@@ -159,6 +163,13 @@ class ScanUploadView(APIView):
             cluster = Cluster.objects.get(id=d["cluster_id"])
         except Cluster.DoesNotExist:
             return Response({"error": "Cluster not found"}, status=404)
+
+        # 集群已停用，拒绝数据上传
+        if not cluster.is_active:
+            return Response(
+                {"error": "Cluster is deactivated, data upload rejected"},
+                status=423,
+            )
 
         scanned_at = d["scanned_at"]
         nodes_data = d["nodes"]
@@ -548,6 +559,9 @@ class AgentPVEInfoView(APIView):
             cluster = Cluster.objects.get(agent_token=token)
         except Cluster.DoesNotExist:
             return Response({"error": "invalid token"}, status=404)
+
+        if not cluster.is_active:
+            return Response({"error": "Cluster is deactivated"}, status=423)
 
         return Response({
             "pve_endpoint": cluster.pve_endpoint,

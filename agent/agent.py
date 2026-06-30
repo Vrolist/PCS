@@ -610,11 +610,16 @@ class PlatformClient:
         return http_post(f"{self.base_url}/api/agent/heartbeat/", payload)
 
     def upload_scan(self, agent_id, cluster_id, scan_data):
-        return http_post(f"{self.base_url}/api/agent/scan/upload/", {
-            "agent_id": agent_id,
-            "cluster_id": cluster_id,
-            **scan_data,
-        })
+        try:
+            return http_post(f"{self.base_url}/api/agent/scan/upload/", {
+                "agent_id": agent_id,
+                "cluster_id": cluster_id,
+                **scan_data,
+            })
+        except urllib.error.HTTPError as e:
+            if e.code == 423:
+                return {"_deactivated": True}
+            raise
 
     def get_tasks(self, agent_id):
         return http_get(f"{self.base_url}/api/agent/tasks/?agent_id={agent_id}")
@@ -722,6 +727,21 @@ class Agent:
             logger.info(f"扫描完成: {len(scan_data['nodes'])} 个节点")
 
             result = self.platform.upload_scan(self.config.agent_id, self.config.cluster_id, scan_data)
+
+            # 集群已停用，不上报数据，保持心跳等待恢复
+            if isinstance(result, dict) and result.get("_deactivated"):
+                logger.warning("集群已停用，暂停数据上报，继续心跳等待恢复...")
+                try:
+                    self.platform.heartbeat(
+                        self.config.agent_id,
+                        status="paused",
+                        current_task="deactivated",
+                        error_message="集群已停用，等待恢复",
+                    )
+                except Exception:
+                    pass
+                return
+
             logger.info(f"上传成功: {result}")
 
             # 扫描成功，恢复在线状态
