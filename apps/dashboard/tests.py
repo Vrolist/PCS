@@ -38,6 +38,7 @@ class DashboardStatsTest(TestCase):
             "total_nodes": 0,
             "online_nodes": 0,
             "total_vms": 0,
+            "total_containers": 0,
             "active_alerts": 0,
         })
 

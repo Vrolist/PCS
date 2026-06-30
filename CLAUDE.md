@@ -15,11 +15,11 @@ pve-cluster-scan/
 │   │   ├── templatetags/
 │   │   │   └── vite_tags.py       # - vite_asset（生产模式 manifest 查找）
 │   │   └── views.py
-│   ├── accounts/           # 用户认证 & 套餐管理
-│   │   ├── models.py       #   - User / Plan / UserPlan / PasswordResetCode
+│   ├── accounts/           # 用户认证 & 套餐管理 & 操作日志
+│   │   ├── models.py       #   - User / Plan / UserPlan / PasswordResetCode / UserLog
 │   │   ├── serializers.py  #   - Login / Register / User / PasswordReset
-│   │   ├── views.py        #   - 登录 / 注册 / 用户信息 / 密码重置
-│   │   ├── urls.py         #   - /api/auth/ 路由
+│   │   ├── views.py        #   - 登录 / 注册 / 用户信息 / 密码重置 / 操作日志列表
+│   │   ├── urls.py         #   - /api/auth/ 路由（含 logs/）
 │   │   └── admin.py
 │   ├── clusters/           # 集群管理（CRUD + Agent 列表）
 │   │   ├── models.py       #   - Cluster（含 agent_token）
@@ -43,7 +43,7 @@ pve-cluster-scan/
 │   └── scanner/            # 扫描数据 & 自动检测
 │       ├── views.py        #   - 节点/VM/容器/存储/网络/Ceph/HA 列表+详情
 │       ├── urls.py         #   - /api/scanner/ 路由（10 个端点）
-│       └── models.py       #   - ClusterNode/VM/LXC/Storage/NetworkInterface/CephStatus/ScanHistory/DetectionRule/DetectionResult
+│       └── models.py       #   - ClusterNode/VM/LXC/VMConfig/LXCConfig/Storage/NetworkInterface/CephStatus/ScanHistory/DetectionRule/DetectionResult
 ├── frontend/               # Vue 3 + Vite 前端
 │   ├── src/
 │   │   ├── views/
@@ -65,8 +65,8 @@ pve-cluster-scan/
 │   │   │   ├── containers/index.vue           # 容器（表格+详情弹窗）
 │   │   │   ├── alerts/index.vue               # 告警中心（空状态+el-card）
 │   │   │   ├── services/index.vue             # 运维服务（空状态+el-card）
-│   │   │   ├── settings/index.vue             # 系统设置（空状态+el-card）
-│   │   │   ├── user-logs/index.vue            # 操作日志（空状态）
+│   │   │   ├── settings/index.vue             # 用户信息（完整编辑界面）
+│   │   │   ├── user-logs/index.vue            # 操作日志（分页表格+筛选）
 │   │   │   └── user-notifications/index.vue   # 通知设置（空状态）
 │   │   ├── components/
 │   │   │   ├── AppSidebar.vue        # 侧边栏导航（含折叠图标居中）
@@ -79,7 +79,7 @@ pve-cluster-scan/
 │   │   │   └── theme.ts              # 亮暗主题（默认暗色）
 │   │   ├── api/
 │   │   │   ├── request.ts            # Axios 实例 + 拦截器
-│   │   │   ├── auth.ts               # 登录/注册/密码重置 API
+│   │   │   ├── auth.ts               # 登录/注册/密码重置/用户信息/操作日志 API
 │   │   │   ├── clusters.ts           # 集群 CRUD + Agent 查询 API
 │   │   │   ├── dashboard.ts          # Dashboard 统计/告警/趋势/节点 API
 │   │   │   └── nodes.ts              # 节点/详情 API
@@ -152,7 +152,7 @@ python manage.py makemigrations <app_name>
 python manage.py migrate
 
 # 运行测试
-python manage.py test apps.agent_api apps.clusters --verbosity=2
+python manage.py test apps.agent_api apps.clusters apps.dashboard --verbosity=2
 ```
 
 ## Agent
@@ -212,8 +212,10 @@ Agent 运行中:
 | POST | `/api/auth/login/` | 登录（支持用户名或邮箱） | ❌ |
 | POST | `/api/auth/register/` | 注册（用户名+邮箱+密码必填） | ❌ |
 | GET | `/api/auth/user/` | 获取当前用户信息 | ✅ JWT |
+| PATCH | `/api/auth/user/` | 更新用户信息（phone/company） | ✅ JWT |
 | POST | `/api/auth/password-reset/` | 发送密码重置验证码 | ❌ |
 | POST | `/api/auth/password-reset/confirm/` | 确认重置密码 | ❌ |
+| GET | `/api/auth/logs/` | 操作日志（分页，支持 action 筛选） | ✅ JWT |
 
 **登录请求示例：**
 ```json
@@ -226,6 +228,26 @@ POST /api/auth/login/
 ```
 1. POST /api/auth/password-reset/  →  {"email": "..."}  → 返回 dev_code（开发模式）
 2. POST /api/auth/password-reset/confirm/  →  {"code": "...", "new_password": "...", "new_password2": "..."}
+```
+
+**操作日志响应：**
+```json
+GET /api/auth/logs/?page=1&page_size=20&action=login
+→ {
+    "count": 50,
+    "results": [
+      {
+        "id": 1,
+        "action": "login",
+        "action_display": "登录",
+        "resource_type": "",
+        "resource_id": null,
+        "detail": "用户登录",
+        "ip_address": "192.168.1.1",
+        "created_at": "2026-06-30T10:00:00Z"
+      }
+    ]
+  }
 ```
 
 ### Agent 通信 `/api/agent/`
@@ -292,7 +314,7 @@ GET /api/agent/install.sh?token=<agent_token>&platform=<platform_url>
 
 ### Dashboard `/api/dashboard/`
 
-**Stats 响应新增 `total_containers` 字段：**
+**Stats 响应：**
 ```json
 GET /api/dashboard/stats/
 → {"total_clusters": 1, "total_nodes": 3, "online_nodes": 3, "total_vms": 16, "total_containers": 67, "active_alerts": 0}
@@ -347,20 +369,20 @@ GET /api/clusters/1/
 
 | 方法 | 路径 | 说明 | 认证 |
 |------|------|------|------|
-| GET | `/scanner/nodes/` | 节点列表（含集群名，按扫描时间倒序） | ✅ JWT |
-| GET | `/scanner/nodes/:id/detail/` | 节点详情（关联存储/网络/VM/容器） | ✅ JWT |
-| GET | `/scanner/vms/` | 虚拟机列表（含集群名+节点名） | ✅ JWT |
-| GET | `/scanner/vms/:id/detail/` | 虚拟机详情（CPU/内存/磁盘/网络/HA/标签等） | ✅ JWT |
-| GET | `/scanner/containers/` | LXC 容器列表 | ✅ JWT |
-| GET | `/scanner/containers/:id/detail/` | 容器详情（含 IP 地址、HA 等） | ✅ JWT |
-| GET | `/scanner/storage/` | 存储列表 | ✅ JWT |
-| GET | `/scanner/networks/` | 网络接口列表 | ✅ JWT |
-| GET | `/scanner/ceph/` | Ceph 集群状态 | ✅ JWT |
-| GET | `/scanner/ha/` | HA 资源组列表 | ✅ JWT |
+| GET | `/api/scanner/nodes/` | 节点列表（含集群名，按扫描时间倒序） | ✅ JWT |
+| GET | `/api/scanner/nodes/:id/detail/` | 节点详情（关联存储/网络/VM/容器） | ✅ JWT |
+| GET | `/api/scanner/vms/` | 虚拟机列表（含集群名+节点名） | ✅ JWT |
+| GET | `/api/scanner/vms/:id/detail/` | 虚拟机详情（CPU/内存/磁盘/网络/HA/标签等） | ✅ JWT |
+| GET | `/api/scanner/containers/` | LXC 容器列表 | ✅ JWT |
+| GET | `/api/scanner/containers/:id/detail/` | 容器详情（含 IP 地址、HA 等） | ✅ JWT |
+| GET | `/api/scanner/storage/` | 存储列表 | ✅ JWT |
+| GET | `/api/scanner/networks/` | 网络接口列表 | ✅ JWT |
+| GET | `/api/scanner/ceph/` | Ceph 集群状态 | ✅ JWT |
+| GET | `/api/scanner/ha/` | HA 资源组列表 | ✅ JWT |
 
 **节点详情响应：**
 ```json
-GET /scanner/nodes/1/detail/
+GET /api/scanner/nodes/1/detail/
 {
   "node": { "id": 1, "node_name": "pve-1", "status": "online", "cpu_load": 35.0, "memory_total_mb": 32000, ... },
   "storages": [{ "name": "local", "type": "dir", ... }],
@@ -372,7 +394,7 @@ GET /scanner/nodes/1/detail/
 
 **VM 详情响应（含补充字段）：**
 ```json
-GET /scanner/vms/1/detail/
+GET /api/scanner/vms/1/detail/
 {
   "vm": { "vmid": 100, "name": "ubuntu", "cpu_cores": 2, "cpu_sockets": 1, "balloon_min_mb": 1024, "balloon_max_mb": 4096, "disk_read_iops": 100, "disk_write_iops": 50, "snapshot_count": 2, "has_template": false, "description": "..." },
   "config": { "ha_enabled": false, "ha_group": null }
@@ -381,7 +403,7 @@ GET /scanner/vms/1/detail/
 
 **容器详情响应（含 IP 地址）：**
 ```json
-GET /scanner/containers/1/detail/
+GET /api/scanner/containers/1/detail/
 {
   "container": { ..., "ip_address": "192.168.1.100" },
   "config": { ... }
@@ -406,9 +428,9 @@ GET /scanner/containers/1/detail/
 | `/dashboard/ceph` | Ceph 存储 | Ceph 集群状态 | ✅ |
 | `/dashboard/alerts` | 告警中心 | 告警记录与处理（待实现） | ✅ |
 | `/dashboard/services` | 运维服务 | 远程运维订阅（待实现） | ✅ |
-| `/dashboard/settings` | 用户信息 | 账户基本信息 | ✅ |
+| `/dashboard/settings` | 用户信息 | 编辑资料 + 安全设置（完整界面） | ✅ |
 | `/dashboard/change-password` | 修改密码 | 修改登录密码 | ✅ |
-| `/dashboard/user-logs` | 操作日志 | 用户操作记录（待实现） | ✅ |
+| `/dashboard/user-logs` | 操作日志 | 用户操作记录（分页表格+筛选） | ✅ |
 | `/dashboard/user-notifications` | 通知设置 | 通知偏好（待实现） | ✅ |
 | `/admin/` | Django Admin | 后台管理 | 管理员 |
 
@@ -446,6 +468,7 @@ GET /scanner/containers/1/detail/
 - **PasswordResetCode** - 密码重置验证码（含过期时间、已使用标记）
 - **Plan** - 套餐体系 Free/Pro/Enterprise
 - **UserPlan** - 用户订阅关系
+- **UserLog** - 操作日志（记录用户的登录/注册/CRUD/改密等操作）
 
 ### clusters (集群管理)
 - **Cluster** - 用户的 PVE 集群，含 agent_token 鉴权
@@ -456,12 +479,15 @@ GET /scanner/containers/1/detail/
 
 ### scanner (扫描数据与检测)
 - **ClusterNode** - PVE 节点（CPU/内存/磁盘/磁盘I/O延迟/网络）
-- **VM** - 虚拟机 QEMU
-- **LXC** - LXC 容器
+- **VM** - 虚拟机 QEMU（`unique_together = ("node", "vmid")`，原地更新）
+- **VMConfig** - VM 详细配置（`unique_together = ("vm",)`，原地更新）
+- **LXC** - LXC 容器（`unique_together = ("node", "vmid")`，原地更新）
+- **LXCConfig** - LXC 容器详细配置（`unique_together = ("container",)`，原地更新）
 - **Storage** - 存储
 - **NetworkInterface** - 网络接口
 - **CephStatus** - Ceph 集群状态
 - **ScanHistory** - 扫描汇总快照（趋势图表用）
+- **HAResource** - HA 高可用资源
 - **DetectionRule** - 自动检测规则配置
 - **DetectionResult** - 检测结果
 
@@ -490,7 +516,10 @@ for each node:
   GET /nodes/{node}/lxc          → LXC 列表
   GET /nodes/{node}/storage      → 存储列表
   GET /nodes/{node}/network      → 网络接口
+  GET /nodes/{node}/qemu/{vmid}/config  → VM 详细配置
+  GET /nodes/{node}/lxc/{vmid}/config   → LXC 详细配置
 GET  /cluster/ceph/status        → Ceph 健康状态 (如有)
+GET  /cluster/ha/resources       → HA 资源列表 (如有)
 ```
 
 ### 关键字段映射（PVE API → DB）
@@ -536,12 +565,23 @@ POST /api/agent/scan/upload/
 
 ```
 PVE 节点 (Agent) → PVE API (HTTPS :8006) → Agent 数据清洗 → POST /api/agent/scan/upload/
-→ Django 入库 (ClusterNode/VM/LXC/Storage/NetworkInterface/CephStatus/ScanHistory)
+→ Django 入库 (ClusterNode/VM/LXC/VMConfig/LXCConfig/Storage/NetworkInterface/CephStatus/ScanHistory/HAResource)
 → 触发自动检测 (DetectionRule → DetectionResult)
 → Web API → Vue 前端展示
 ```
 
+### 存储优化
 
+VM、LXC、VMConfig、LXCConfig 四个模型使用 **原地更新** 策略（`unique_together` 不含 `scanned_at`，写入用 `update_or_create`），每次扫描覆盖最新数据，不产生历史冗余行。
+
+| 模型 | unique_together | 策略 | 30天节省 |
+|------|----------------|------|---------|
+| VM | `(node, vmid)` | update_or_create | ~99.9%（720行→1行） |
+| LXC | `(node, vmid)` | update_or_create | ~99.9%（720行→1行） |
+| VMConfig | `(vm,)` | update_or_create | ~99.9%（720行→1行） |
+| LXCConfig | `(container,)` | update_or_create | ~99.9%（720行→1行） |
+
+其余模型（ClusterNode、Storage、NetworkInterface、CephStatus、ScanHistory、HAResource）仍按时间序保留历史记录，用于趋势分析。
 
 ## 多 Agent 架构
 
@@ -551,7 +591,8 @@ PVE 节点 (Agent) → PVE API (HTTPS :8006) → Agent 数据清洗 → POST /ap
 2. 每隔 60s 发送心跳 `POST /api/agent/heartbeat/`（已有实现）
 3. 定时执行扫描任务，上报到 `POST /api/agent/scan/upload/`（已有实现）
 4. Web 端可向特定 Agent 下发任务 `GET /api/agent/tasks/`（已有实现）
-5. 后端 88 个测试用例覆盖完整流程：`python manage.py test apps.agent_api apps.clusters apps.dashboard`
+5. 操作日志自动记录用户关键操作（登录/注册/CRUD/改密等）
+6. 后端 90 个测试用例覆盖完整流程：`python manage.py test apps.agent_api apps.clusters apps.dashboard`
 
 ## 管理员
 
@@ -568,6 +609,9 @@ PVE 节点 (Agent) → PVE API (HTTPS :8006) → Agent 数据清洗 → POST /ap
 5. ~~Agent CLI 工具~~ ✅ 已完成（单文件 agent.py，零依赖，curl 一键安装）
 6. ~~集群 CRUD API + 前端对接~~ ✅ 已完成（CRUD API + Agent 列表 + 安装命令展示）
 7. ~~节点/VM/容器管理页面~~ ✅ 已完成（表格+详情弹窗+详情API）
-8. 自动检测引擎
-9. 仪表盘真实数据进一步接入（告警、趋势数据源）
-10. 各管理页面功能完善（告警/服务/日志/通知等）
+8. ~~操作日志~~ ✅ 已完成（UserLog 模型+API+前端分页列表）
+9. ~~用户信息设置页面~~ ✅ 已完成（编辑资料+安全设置）
+10. ~~数据库存储优化~~ ✅ 已完成（VM/LXC/VMConfig/LXCConfig 原地更新，节省 ~99.9% 存储）
+11. 自动检测引擎
+12. 仪表盘真实数据进一步接入（告警、趋势数据源）
+13. 各管理页面功能完善（告警/服务/通知等）

@@ -111,7 +111,7 @@ class VM(models.Model):
     class Meta:
         verbose_name = "虚拟机"
         verbose_name_plural = "虚拟机"
-        unique_together = ("node", "vmid", "scanned_at")
+        unique_together = ("node", "vmid")
         ordering = ["node", "vmid"]
 
     def __str__(self):
@@ -147,7 +147,7 @@ class LXC(models.Model):
     class Meta:
         verbose_name = "LXC容器"
         verbose_name_plural = "LXC容器"
-        unique_together = ("node", "vmid", "scanned_at")
+        unique_together = ("node", "vmid")
         ordering = ["node", "vmid"]
 
     def __str__(self):
@@ -282,11 +282,11 @@ class VMConfig(models.Model):
     class Meta:
         verbose_name = "VM配置"
         verbose_name_plural = "VM配置"
-        unique_together = ("vm", "scanned_at")
+        unique_together = ("vm",)
         ordering = ["vm"]
 
     def __str__(self):
-        return f"Config: {self.vm.name} @ {self.scanned_at}"
+        return f"Config: {self.vm.name}"
 
 
 class LXCConfig(models.Model):
@@ -326,11 +326,11 @@ class LXCConfig(models.Model):
     class Meta:
         verbose_name = "LXC配置"
         verbose_name_plural = "LXC配置"
-        unique_together = ("container", "scanned_at")
+        unique_together = ("container",)
         ordering = ["container"]
 
     def __str__(self):
-        return f"Config: {self.container.name} @ {self.scanned_at}"
+        return f"Config: {self.container.name}"
 
 
 class HAResource(models.Model):

@@ -256,57 +256,105 @@ class ScanUploadView(APIView):
                 scanned_at=scanned_at,
             )
 
-            # VM
+            # VM + VMConfig
+            vm_configs = node_data.get("vm_configs", {})
             for vm_data in node_data.get("vms", []):
-                VM.objects.create(
-                    node=node,
-                    scan=scan_task,
-                    vmid=vm_data["vmid"],
-                    name=vm_data.get("name", ""),
-                    status=vm_data.get("status", "unknown"),
-                    cpu_cores=vm_data.get("cpu_cores"),
-                    cpu_sockets=vm_data.get("cpu_sockets"),
-                    cpu_usage=vm_data.get("cpu_usage"),
-                    memory_mb=vm_data.get("memory_mb"),
-                    memory_used_mb=vm_data.get("memory_used_mb"),
-                    balloon_min_mb=vm_data.get("balloon_min_mb"),
-                    balloon_max_mb=vm_data.get("balloon_max_mb"),
-                    disk_gb=vm_data.get("disk_gb"),
-                    max_disk_gb=vm_data.get("max_disk_gb"),
-                    disk_write_iops=vm_data.get("disk_write_iops"),
-                    disk_read_iops=vm_data.get("disk_read_iops"),
-                    net_in_bps=vm_data.get("net_in_bps"),
-                    net_out_bps=vm_data.get("net_out_bps"),
-                    uptime_seconds=vm_data.get("uptime_seconds"),
-                    os_type=vm_data.get("os_type", ""),
-                    snapshot_count=vm_data.get("snapshot_count", 0),
-                    has_template=vm_data.get("has_template", False),
-                    tags=vm_data.get("tags", ""),
-                    description=vm_data.get("description", ""),
-                    scanned_at=scanned_at,
+                vm, _ = VM.objects.update_or_create(
+                    node=node, vmid=vm_data["vmid"],
+                    defaults={
+                        "scan": scan_task,
+                        "name": vm_data.get("name", ""),
+                        "status": vm_data.get("status", "unknown"),
+                        "cpu_cores": vm_data.get("cpu_cores"),
+                        "cpu_sockets": vm_data.get("cpu_sockets"),
+                        "cpu_usage": vm_data.get("cpu_usage"),
+                        "memory_mb": vm_data.get("memory_mb"),
+                        "memory_used_mb": vm_data.get("memory_used_mb"),
+                        "balloon_min_mb": vm_data.get("balloon_min_mb"),
+                        "balloon_max_mb": vm_data.get("balloon_max_mb"),
+                        "disk_gb": vm_data.get("disk_gb"),
+                        "max_disk_gb": vm_data.get("max_disk_gb"),
+                        "disk_write_iops": vm_data.get("disk_write_iops"),
+                        "disk_read_iops": vm_data.get("disk_read_iops"),
+                        "net_in_bps": vm_data.get("net_in_bps"),
+                        "net_out_bps": vm_data.get("net_out_bps"),
+                        "uptime_seconds": vm_data.get("uptime_seconds"),
+                        "os_type": vm_data.get("os_type", ""),
+                        "snapshot_count": vm_data.get("snapshot_count", 0),
+                        "has_template": vm_data.get("has_template", False),
+                        "tags": vm_data.get("tags", ""),
+                        "description": vm_data.get("description", ""),
+                        "scanned_at": scanned_at,
+                    },
                 )
+                cfg = vm_configs.get(str(vm_data["vmid"]), {})
+                if cfg:
+                    VMConfig.objects.update_or_create(
+                        vm=vm,
+                        defaults={
+                            "scan": scan_task,
+                            "cpu_type": cfg.get("cpu_type", ""),
+                            "cpu_cores": cfg.get("cpu_cores"),
+                            "cpu_sockets": cfg.get("cpu_sockets"),
+                            "memory_mb": cfg.get("memory_mb"),
+                            "balloon_min_mb": cfg.get("balloon_min_mb"),
+                            "os_type": cfg.get("os_type", ""),
+                            "boot_order": cfg.get("boot_order", ""),
+                            "scsi_disks": cfg.get("scsi_disks", []),
+                            "ide_disks": cfg.get("ide_disks", []),
+                            "net_devices": cfg.get("net_devices", []),
+                            "agent_enabled": cfg.get("agent_enabled", False),
+                            "description": cfg.get("description", ""),
+                            "tags": cfg.get("tags", ""),
+                            "raw_config": cfg,
+                            "scanned_at": scanned_at,
+                        },
+                    )
 
-            # LXC
+            # LXC + LXCConfig
+            lxc_configs = node_data.get("lxc_configs", {})
             for lxc_data in node_data.get("containers", []):
-                LXC.objects.create(
-                    node=node,
-                    scan=scan_task,
-                    vmid=lxc_data["vmid"],
-                    name=lxc_data.get("name", ""),
-                    status=lxc_data.get("status", "unknown"),
-                    cpu_cores=lxc_data.get("cpu_cores"),
-                    cpu_usage=lxc_data.get("cpu_usage"),
-                    memory_mb=lxc_data.get("memory_mb"),
-                    memory_used_mb=lxc_data.get("memory_used_mb"),
-                    swap_mb=lxc_data.get("swap_mb"),
-                    swap_used_mb=lxc_data.get("swap_used_mb"),
-                    disk_gb=lxc_data.get("disk_gb"),
-                    uptime_seconds=lxc_data.get("uptime_seconds"),
-                    tags=lxc_data.get("tags", ""),
-                    description=lxc_data.get("description", ""),
-                    has_template=lxc_data.get("has_template", False),
-                    scanned_at=scanned_at,
+                ct, _ = LXC.objects.update_or_create(
+                    node=node, vmid=lxc_data["vmid"],
+                    defaults={
+                        "scan": scan_task,
+                        "name": lxc_data.get("name", ""),
+                        "status": lxc_data.get("status", "unknown"),
+                        "cpu_cores": lxc_data.get("cpu_cores"),
+                        "cpu_usage": lxc_data.get("cpu_usage"),
+                        "memory_mb": lxc_data.get("memory_mb"),
+                        "memory_used_mb": lxc_data.get("memory_used_mb"),
+                        "swap_mb": lxc_data.get("swap_mb"),
+                        "swap_used_mb": lxc_data.get("swap_used_mb"),
+                        "disk_gb": lxc_data.get("disk_gb"),
+                        "uptime_seconds": lxc_data.get("uptime_seconds"),
+                        "tags": lxc_data.get("tags", ""),
+                        "description": lxc_data.get("description", ""),
+                        "has_template": lxc_data.get("has_template", False),
+                        "scanned_at": scanned_at,
+                    },
                 )
+                cfg = lxc_configs.get(str(lxc_data["vmid"]), {})
+                if cfg:
+                    LXCConfig.objects.update_or_create(
+                        container=ct,
+                        defaults={
+                            "scan": scan_task,
+                            "hostname": cfg.get("hostname", ""),
+                            "cpu_cores": cfg.get("cpu_cores"),
+                            "memory_mb": cfg.get("memory_mb"),
+                            "swap_mb": cfg.get("swap_mb"),
+                            "os_type": cfg.get("os_type", ""),
+                            "rootfs": cfg.get("rootfs", {}),
+                            "mount_points": cfg.get("mount_points", []),
+                            "net_devices": cfg.get("net_devices", []),
+                            "description": cfg.get("description", ""),
+                            "tags": cfg.get("tags", ""),
+                            "startup_order": cfg.get("startup_order", ""),
+                            "raw_config": cfg,
+                            "scanned_at": scanned_at,
+                        },
+                    )
 
             # Storage
             for st_data in node_data.get("storages", []):
@@ -340,54 +388,6 @@ class ScanUploadView(APIView):
                     speed_mbps=net_data.get("speed_mbps"),
                     scanned_at=scanned_at,
                 )
-
-            # VM Configs
-            vm_configs = node_data.get("vm_configs", {})
-            for vm in VM.objects.filter(node=node, scanned_at=scanned_at):
-                cfg = vm_configs.get(str(vm.vmid), {})
-                if cfg:
-                    VMConfig.objects.create(
-                        vm=vm,
-                        scan=scan_task,
-                        cpu_type=cfg.get("cpu_type", ""),
-                        cpu_cores=cfg.get("cpu_cores"),
-                        cpu_sockets=cfg.get("cpu_sockets"),
-                        memory_mb=cfg.get("memory_mb"),
-                        balloon_min_mb=cfg.get("balloon_min_mb"),
-                        os_type=cfg.get("os_type", ""),
-                        boot_order=cfg.get("boot_order", ""),
-                        scsi_disks=cfg.get("scsi_disks", []),
-                        ide_disks=cfg.get("ide_disks", []),
-                        net_devices=cfg.get("net_devices", []),
-                        agent_enabled=cfg.get("agent_enabled", False),
-                        description=cfg.get("description", ""),
-                        tags=cfg.get("tags", ""),
-                        raw_config=cfg,
-                        scanned_at=scanned_at,
-                    )
-
-            # LXC Configs
-            lxc_configs = node_data.get("lxc_configs", {})
-            for ct in LXC.objects.filter(node=node, scanned_at=scanned_at):
-                cfg = lxc_configs.get(str(ct.vmid), {})
-                if cfg:
-                    LXCConfig.objects.create(
-                        container=ct,
-                        scan=scan_task,
-                        hostname=cfg.get("hostname", ""),
-                        cpu_cores=cfg.get("cpu_cores"),
-                        memory_mb=cfg.get("memory_mb"),
-                        swap_mb=cfg.get("swap_mb"),
-                        os_type=cfg.get("os_type", ""),
-                        rootfs=cfg.get("rootfs", {}),
-                        mount_points=cfg.get("mount_points", []),
-                        net_devices=cfg.get("net_devices", []),
-                        description=cfg.get("description", ""),
-                        tags=cfg.get("tags", ""),
-                        startup_order=cfg.get("startup_order", ""),
-                        raw_config=cfg,
-                        scanned_at=scanned_at,
-                    )
 
     def _save_ceph(self, cluster, scan_task, ceph_data, scanned_at):
         """保存 Ceph 状态"""
