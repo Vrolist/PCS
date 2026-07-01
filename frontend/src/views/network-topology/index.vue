@@ -54,7 +54,9 @@
             <rect x="0" y="0" :width="ifaceWidth" :height="ifaceHeight" rx="8"
               :fill="getIfaceFill(iface.type)" :stroke="getIfaceStroke(iface.type)" stroke-width="1.5" />
             <text :x="ifaceWidth / 2" y="18" text-anchor="middle" class="iface-label">{{ iface.name }}</text>
-            <text :x="ifaceWidth / 2" y="34" text-anchor="middle" class="iface-type">{{ iface.type }}</text>
+            <text :x="ifaceWidth / 2" y="34" text-anchor="middle" class="iface-type">
+              {{ iface.type === 'bridge' && iface.bridge_ports ? `bridge · ${(iface.bridge_ports || '').split(/\s+/).length} ports` : iface.type }}
+            </text>
             <circle :cx="ifaceWidth - 8" cy="8" r="4" :fill="iface.status === 'up' ? '#67c23a' : '#f56c6c'" />
           </g>
         </svg>
@@ -130,28 +132,56 @@ function initPositions() {
   })
 
   const nodeEntries = Array.from(groups.entries())
-  const nodeSpacing = 340 // 每个节点区域的宽度
+  const nodeSpacing = 380
 
-  // 节点水平排列
   const nodes: NodePos[] = []
-  nodeEntries.forEach(([nodeName, ifaces], idx) => {
-    const nodeIface = ifaces.find(i => i.type === 'bridge' && i.name === 'vmbr0') || ifaces[0]
-    const x = 60 + idx * nodeSpacing
-    nodes.push({ name: nodeName, x, y: 40, ip: nodeIface?.address || '' })
-  })
-  nodePositions.value = nodes
-
-  // 接口垂直排列在节点下方
   const ifaces: IfacePos[] = []
-  nodes.forEach(np => {
-    const nodeIfaces = groups.get(np.name) || []
-    nodeIfaces.forEach((iface, idx) => {
-      ifaces.push({ ...iface, x: np.x, y: np.y + nodeHeight + 30 + idx * ifaceGapY })
+
+  nodeEntries.forEach(([nodeName, allIfaces], idx) => {
+    const x = 60 + idx * nodeSpacing
+    // 节点 IP 取自 bridge 的 address
+    const bridgeIface = allIfaces.find(i => i.type === 'bridge' && i.name === 'vmbr0') || allIfaces.find(i => i.type === 'bridge')
+    nodes.push({ name: nodeName, x, y: 40, ip: bridgeIface?.address || '' })
+
+    // 构建 bridge → ports 映射
+    const bridges = allIfaces.filter(i => i.type === 'bridge')
+    const childMap = new Map<string, NetworkInterface[]>()  // bridge_name → child ifaces
+    const bridgePortNames = new Set<string>()
+
+    bridges.forEach(b => {
+      const ports = (b.bridge_ports || '').split(/\s+/).filter(Boolean)
+      const children = allIfaces.filter(i => ports.includes(i.name))
+      childMap.set(b.name, children)
+      children.forEach(c => bridgePortNames.add(c.name))
+    })
+
+    // 独立接口（不属于任何 bridge）
+    const standalone = allIfaces.filter(i => i.type !== 'bridge' && !bridgePortNames.has(i.name))
+
+    let curY = nodes[idx].y + nodeHeight + 30
+
+    // 先画 bridge 及其子接口
+    bridges.forEach(bridge => {
+      ifaces.push({ ...bridge, x, y: curY, nodeName })
+      curY += ifaceGapY
+
+      const children = childMap.get(bridge.name) || []
+      children.forEach(child => {
+        ifaces.push({ ...child, x: x + 30, y: curY, nodeName })
+        curY += ifaceGapY
+      })
+    })
+
+    // 再画独立接口
+    standalone.forEach(si => {
+      ifaces.push({ ...si, x, y: curY, nodeName })
+      curY += ifaceGapY
     })
   })
+
+  nodePositions.value = nodes
   interfacePositions.value = ifaces
 
-  // 计算并存储初始尺寸（固定不变）
   initialSvgWidth.value = nodes.length > 0
     ? nodes[nodes.length - 1].x + nodeWidth + 120
     : 400
@@ -175,9 +205,14 @@ const connections = computed<Connection[]>(() => {
   nodePositions.value.forEach(np => {
     const ifaces = interfacePositions.value.filter(i => i.node_name === np.name)
     ifaces.forEach(iface => {
+      // 找父级：如果接口是 bridge 的子端口，连到 bridge；否则连到节点
+      const parentBridge = ifaces.find(
+        i => i.type === 'bridge' && (i.bridge_ports || '').split(/\s+/).includes(iface.name)
+      )
+      const isChildOfBridge = !!parentBridge
       conns.push({
-        x1: np.x + nodeWidth / 2,
-        y1: np.y + nodeHeight,
+        x1: parentBridge ? parentBridge.x + ifaceWidth / 2 : np.x + nodeWidth / 2,
+        y1: parentBridge ? parentBridge.y + ifaceHeight : np.y + nodeHeight,
         x2: iface.x + ifaceWidth / 2,
         y2: iface.y,
         color: getIfaceColor(iface.type)
