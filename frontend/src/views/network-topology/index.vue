@@ -6,8 +6,8 @@
         <p class="page-desc">可视化展示 PVE 集群网络架构</p>
       </div>
       <div class="header-actions">
-        <el-select v-model="selectedNode" placeholder="全部节点" clearable style="width: 160px">
-          <el-option v-for="n in nodeList" :key="n" :label="n" :value="n" />
+        <el-select v-model="selectedCluster" placeholder="选择集群" style="width: 200px">
+          <el-option v-for="c in clusterList" :key="c" :label="c" :value="c" />
         </el-select>
         <div class="zoom-controls">
           <el-button-group>
@@ -92,12 +92,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { getNetworkList, type NetworkInterface } from '@/api/networks'
 
 const loading = ref(true)
 const topologyData = ref<NetworkInterface[]>([])
-const selectedNode = ref('')
+const selectedCluster = ref('')
 
 const nodeWidth = 140
 const nodeHeight = 56
@@ -119,15 +119,18 @@ const maxScale = 3
 const initialSvgWidth = ref(400)
 const initialSvgHeight = ref(200)
 
-const nodeList = computed(() => {
-  const set = new Set(topologyData.value.map(n => n.node_name))
+const clusterList = computed(() => {
+  const set = new Set(topologyData.value.map(n => n.cluster_name))
   return Array.from(set).sort()
 })
 
 const filteredData = computed(() => {
-  if (!selectedNode.value) return topologyData.value
-  return topologyData.value.filter(n => n.node_name === selectedNode.value)
+  if (!selectedCluster.value) return topologyData.value
+  return topologyData.value.filter(n => n.cluster_name === selectedCluster.value)
 })
+
+// 集群切换时重新布局
+watch(filteredData, () => { initPositions() })
 
 const nodeFill = 'var(--bg-card, #fff)'
 const nodeStroke = '#409eff'
@@ -226,10 +229,14 @@ function initPositions() {
     })
 
     // 顶层接口：排除已被 bridge 或 bond 收纳的接口
-    const topLevel = allIfaces.filter(i =>
-      i.type === 'bridge' || i.type === 'bond' ||
-      (!bridgePortNames.has(i.name) && !bondSlaveNames.has(i.name))
-    )
+    const topLevel = allIfaces.filter(i => {
+      if (i.type === 'bridge') return true
+      // bond：如果已被某个 bridge 的 bridge_ports 包含，不算顶层
+      if (i.type === 'bond' && !bridgePortNames.has(i.name)) return true
+      // 其他：未被任何 bridge/bond 收纳才算顶层
+      if (i.type !== 'bridge' && i.type !== 'bond' && !bridgePortNames.has(i.name) && !bondSlaveNames.has(i.name)) return true
+      return false
+    })
 
     let curY = nodes[idx].y + nodeHeight + 30
 
@@ -504,7 +511,7 @@ function zoomOut() {
 }
 
 function resetView() {
-  selectedNode.value = ''
+  selectedCluster.value = clusterList.value[0] || ''
   scale.value = 1
   initPositions()
 }
@@ -543,6 +550,10 @@ onMounted(async () => {
   loading.value = true
   try {
     topologyData.value = await getNetworkList()
+    // 默认选择第一个集群
+    if (clusterList.value.length && !selectedCluster.value) {
+      selectedCluster.value = clusterList.value[0]
+    }
     initPositions()
   } catch {} finally {
     loading.value = false
