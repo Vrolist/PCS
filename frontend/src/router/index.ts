@@ -83,6 +83,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '网络接口', icon: 'Connection' },
       },
       {
+        path: 'network-topology',
+        name: 'NetworkTopology',
+        component: () => import('@/views/network-topology/index.vue'),
+        meta: { title: '网络拓扑', icon: 'Share' },
+      },
+      {
         path: 'ceph',
         name: 'Ceph',
         component: () => import('@/views/ceph/index.vue'),

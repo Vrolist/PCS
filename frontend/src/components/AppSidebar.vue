@@ -77,6 +77,13 @@
       <template #title><span>网络接口</span></template>
     </el-menu-item>
 
+    <el-menu-item index="/dashboard/network-topology" class="sidebar-item">
+      <div class="item-icon-wrap">
+        <el-icon><Share /></el-icon>
+      </div>
+      <template #title><span>网络拓扑</span></template>
+    </el-menu-item>
+
     <el-menu-item index="/dashboard/ceph" class="sidebar-item">
       <div class="item-icon-wrap">
         <el-icon><Box /></el-icon>
@@ -133,7 +140,7 @@
 import { useRoute } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { useThemeStore } from '@/stores/theme'
-import { Monitor, Connection, Cpu, Box, Bell, Service, User, Document, Coin } from '@element-plus/icons-vue'
+import { Monitor, Connection, Cpu, Box, Bell, Service, User, Document, Coin, Share } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const appStore = useAppStore()
