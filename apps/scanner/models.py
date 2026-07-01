@@ -195,13 +195,23 @@ class NetworkInterface(models.Model):
     scan = models.ForeignKey(ScanTask, on_delete=models.SET_NULL, null=True, blank=True)
 
     name = models.CharField("接口名", max_length=64, help_text="vmbr0 / bond0 / eno1")
-    type = models.CharField("类型", max_length=32, help_text="bridge / bond / eth")
+    type = models.CharField("类型", max_length=32, help_text="eth / bond / bridge / vlan")
     active = models.BooleanField("启用", default=True)
     method = models.CharField("寻址方式", max_length=32, blank=True,
                               help_text="static / dhcp")
     address = models.CharField("地址", max_length=64, blank=True, help_text="192.168.1.1/24")
     gateway = models.CharField("网关", max_length=64, blank=True)
     speed_mbps = models.IntegerField("速率(Mbps)", null=True, blank=True)
+
+    # 拓扑关系
+    bridge_ports = models.CharField("Bridge端口", max_length=256, blank=True,
+        help_text="bridge 包含的物理端口，如 eno1 eno2")
+    bond_mode = models.CharField("Bond模式", max_length=32, blank=True,
+        help_text="balance-rr / 802.3ad / balance-xor / ...")
+    bond_slaves = models.CharField("Bond从接口", max_length=256, blank=True,
+        help_text="bond 包含的物理端口，如 eno1 eno2")
+    vlan_id = models.IntegerField("VLAN ID", null=True, blank=True)
+    mtu = models.IntegerField("MTU", null=True, blank=True)
 
     scanned_at = models.DateTimeField("扫描时间", db_index=True)
 

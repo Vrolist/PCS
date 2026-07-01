@@ -24,9 +24,11 @@ PVE Cluster Scan Agent — 单文件版，无外部依赖
 import json
 import logging
 import os
+import shutil
 import signal
 import socket
 import ssl
+import subprocess
 import sys
 import time
 import threading
@@ -35,7 +37,7 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-VERSION = "0.3.0"
+VERSION = "0.5.7"
 
 # 路径常量
 INSTALL_DIR = Path("/opt/pcs-agent")
@@ -80,7 +82,7 @@ class Config:
         self.pve_username = "root@pam"
         self.pve_password = ""
         self.scan_interval = 300
-        self.heartbeat_interval = 300
+        self.heartbeat_interval = 120
 
     def load(self):
         if not CONFIG_FILE.exists():
@@ -540,6 +542,11 @@ def _scan_networks(pve, node):
         "address": net.get("address", ""),
         "gateway": net.get("gateway", ""),
         "speed_mbps": net.get("speed"),
+        "bridge_ports": net.get("bridge_ports", ""),
+        "bond_mode": net.get("bond_mode", ""),
+        "bond_slaves": net.get("bond_slaves", ""),
+        "vlan_id": net.get("vlan_id"),
+        "mtu": net.get("mtu"),
     } for net in net_list]
 
 
@@ -714,6 +721,120 @@ class Agent:
         self._running = False
         sys.exit(0)
 
+    def _handle_update(self, update_info):
+        """处理平台下发的更新指令"""
+        download_url = update_info.get("download_url")
+        latest_version = update_info.get("latest_version")
+        changelog = update_info.get("changelog", "")
+
+        if not download_url:
+            return
+
+        logger.info(f"检测到新版本 {latest_version}，changelog: {changelog}")
+        logger.info(f"开始下载: {download_url}")
+
+        # 1. 下载新版本到临时文件
+        tmp_path = str(INSTALL_DIR / "agent.py.new")
+        try:
+            urllib.request.urlretrieve(download_url, tmp_path)
+        except Exception as e:
+            logger.error(f"下载失败: {e}")
+            return
+
+        # 2. 校验文件完整性 & 版本比较
+        try:
+            with open(tmp_path, "r") as f:
+                content = f.read()
+            if 'VERSION = "' not in content:
+                logger.error("下载文件校验失败：非有效 agent 文件")
+                os.remove(tmp_path)
+                return
+
+            # 提取下载文件的版本号
+            import re as _re
+            m = _re.search(r'VERSION\s*=\s*"([^"]+)"', content)
+            downloaded_version = m.group(1) if m else ""
+
+            if downloaded_version == VERSION:
+                logger.info(f"下载版本 {downloaded_version} 与当前版本一致，无需更新")
+                os.remove(tmp_path)
+                return
+        except Exception as e:
+            logger.error(f"文件校验异常: {e}")
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+            return
+
+        # 3. 备份当前版本
+        backup_path = str(INSTALL_DIR / "agent.py.bak")
+        try:
+            shutil.copy2(str(INSTALL_DIR / "agent.py"), backup_path)
+        except Exception as e:
+            logger.warning(f"备份失败: {e}")
+
+        # 4. 替换当前文件
+        try:
+            os.replace(tmp_path, str(INSTALL_DIR / "agent.py"))
+            logger.info("文件替换完成")
+        except Exception as e:
+            logger.error(f"替换文件失败: {e}")
+            return
+
+        # 4.5 更新配置文件中的间隔参数
+        try:
+            self._update_config_intervals()
+        except Exception as e:
+            logger.warning(f"更新配置间隔失败: {e}")
+
+        # 5. 重启服务
+        logger.info("正在重启服务...")
+        self._running = False
+        try:
+            # 使用 Popen 创建独立子进程，避免 systemctl 与当前进程冲突
+            subprocess.Popen(
+                ["systemctl", "restart", "pcs-agent"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            logger.info("正在退出当前进程...")
+            os._exit(0)
+        except Exception as e:
+            logger.error(f"重启服务失败: {e}，请手动重启")
+            os._exit(1)
+
+    def _update_config_intervals(self):
+        """更新配置文件中的间隔参数为新版默认值"""
+        config_path = INSTALL_DIR / "config.env"
+        if not config_path.exists():
+            return
+
+        content = config_path.read_text()
+        lines = content.splitlines()
+        new_lines = []
+        found_heartbeat = False
+        found_scan = False
+
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith("heartbeat_interval="):
+                new_lines.append("heartbeat_interval=120")
+                found_heartbeat = True
+            elif stripped.startswith("scan_interval="):
+                new_lines.append("scan_interval=300")
+                found_scan = True
+            else:
+                new_lines.append(line)
+
+        if not found_heartbeat:
+            new_lines.append("heartbeat_interval=120")
+        if not found_scan:
+            new_lines.append("scan_interval=300")
+
+        config_path.write_text("\n".join(new_lines) + "\n")
+        config_path.chmod(0o600)
+        logger.info("配置间隔已更新: heartbeat=120s, scan=300s")
+
     def _heartbeat_loop(self):
         while self._running:
             try:
@@ -724,6 +845,10 @@ class Agent:
                 if isinstance(result, dict) and result.get("_deleted"):
                     self._stop_permanently("集群已被删除（心跳检测）")
                     return
+                # 检测更新指令
+                if isinstance(result, dict) and result.get("update", {}).get("available"):
+                    self._handle_update(result["update"])
+                    return  # 更新后重启，退出当前循环
             except Exception as e:
                 logger.warning(f"心跳失败: {e}")
             time.sleep(self.config.heartbeat_interval)

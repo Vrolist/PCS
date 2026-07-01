@@ -31,6 +31,7 @@ class AgentHeartbeatSerializer(serializers.Serializer):
     )
     current_task = serializers.CharField(required=False, default="", allow_blank=True, help_text="当前任务")
     error_message = serializers.CharField(required=False, default="", allow_blank=True, help_text="错误信息")
+    version = serializers.CharField(required=False, default="0.0.0", help_text="Agent 版本号")
 
 
 class ScanUploadSerializer(serializers.Serializer):

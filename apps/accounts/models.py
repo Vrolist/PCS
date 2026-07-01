@@ -59,7 +59,7 @@ class Plan(models.Model):
     # 功能限制
     max_clusters = models.IntegerField("最大集群数", default=1)
     max_nodes_per_cluster = models.IntegerField("每集群最大节点数", default=10)
-    scan_interval_minutes = models.IntegerField("Agent扫描间隔(分钟)", default=60)
+    scan_interval_minutes = models.IntegerField("Agent扫描间隔(分钟)", default=5)
     retention_days = models.IntegerField("数据保留天数", default=30)
     max_agents_per_cluster = models.IntegerField("每集群最大Agent数", default=1)
 

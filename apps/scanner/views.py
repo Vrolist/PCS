@@ -159,6 +159,9 @@ class NodeDetailView(APIView):
                     "name": ni.name, "type": ni.type, "active": ni.active,
                     "method": ni.method, "address": ni.address,
                     "gateway": ni.gateway, "speed_mbps": ni.speed_mbps,
+                    "bridge_ports": ni.bridge_ports,
+                    "bond_mode": ni.bond_mode, "bond_slaves": ni.bond_slaves,
+                    "vlan_id": ni.vlan_id, "mtu": ni.mtu,
                 })
         data["networks"] = networks
 
@@ -284,9 +287,15 @@ class NetworkInterfaceListView(APIView):
             "name": i.name,
             "type": i.type,
             "address": i.address,
+            "gateway": i.gateway,
             "mac_address": "",
             "speed": i.speed_mbps,
             "status": "up" if i.active else "down",
+            "bridge_ports": i.bridge_ports,
+            "bond_mode": i.bond_mode,
+            "bond_slaves": i.bond_slaves,
+            "vlan_id": i.vlan_id,
+            "mtu": i.mtu,
             "scanned_at": i.scanned_at,
         } for i in ifaces]
         return Response(data)

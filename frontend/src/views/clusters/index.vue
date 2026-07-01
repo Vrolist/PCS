@@ -199,13 +199,15 @@
           <el-collapse>
             <el-collapse-item>
               <template #title>
-                <h4 style="margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary, #303133);">一键安装命令</h4>
+                <div class="install-title-row">
+                  <h4>一键安装命令</h4>
+                  <el-button size="small" @click.stop="copyCommand(detail.install_command)">
+                    <el-icon><CopyDocument /></el-icon> 复制
+                  </el-button>
+                </div>
               </template>
               <div class="install-cmd-box">
                 <code>{{ detail.install_command }}</code>
-                <el-button class="copy-btn" size="small" @click="copyCommand(detail.install_command)">
-                  <el-icon><CopyDocument /></el-icon> 复制
-                </el-button>
               </div>
               <p class="install-hint">在 PVE 节点上以 root 执行此命令即可自动安装 Agent</p>
             </el-collapse-item>
@@ -530,7 +532,10 @@ onMounted(() => {
   font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px;
   color: #d4d4d4; white-space: pre-wrap; word-break: break-all;
 }
-.copy-btn { position: absolute; top: 8px; right: 8px; }
+.install-title-row { display: flex; align-items: center; justify-content: space-between; }
+.install-title-row h4 { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary, #303133); }
+.install-title-row .el-icon { margin-right: 4px; }
+.install-title-row .el-button { margin-right: 4px; }
 .install-hint { font-size: 12px; color: var(--text-secondary, #909399); margin-top: 8px; }
 .form-hint { font-size: 12px; color: var(--text-secondary, #909399); margin: -8px 0 0 120px; }
 

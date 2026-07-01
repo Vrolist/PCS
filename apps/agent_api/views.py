@@ -149,7 +149,23 @@ class AgentHeartbeatView(APIView):
             "version", "updated_at",
         ])
 
-        return Response({"ok": True})
+        # 构建响应
+        response = {"ok": True}
+
+        # 检测是否有新版本
+        agent_version = agent.version or "0.0.0"
+        if agent_version < AGENT_LATEST_VERSION:
+            request_host = request.get_host()
+            scheme = "https" if request.is_secure() else "http"
+            download_url = f"{scheme}://{request_host}{AGENT_DOWNLOAD_URL}?agent=1"
+            response["update"] = {
+                "available": True,
+                "latest_version": AGENT_LATEST_VERSION,
+                "download_url": download_url,
+                "changelog": AGENT_CHANGELOG,
+            }
+
+        return Response(response)
 
 
 class ScanUploadView(APIView):
@@ -447,6 +463,11 @@ class ScanUploadView(APIView):
                     address=net_data.get("address", ""),
                     gateway=net_data.get("gateway", ""),
                     speed_mbps=net_data.get("speed_mbps"),
+                    bridge_ports=net_data.get("bridge_ports", ""),
+                    bond_mode=net_data.get("bond_mode", ""),
+                    bond_slaves=net_data.get("bond_slaves", ""),
+                    vlan_id=net_data.get("vlan_id"),
+                    mtu=net_data.get("mtu"),
                     scanned_at=scanned_at,
                 )
 
@@ -557,9 +578,9 @@ class AgentTasksView(APIView):
 # Agent 版本常量（平台侧维护）
 # ============================================================
 
-AGENT_LATEST_VERSION = "0.3.0"
+AGENT_LATEST_VERSION = "0.5.7"
 AGENT_DOWNLOAD_URL = "/api/agent/install.sh"  # 从平台下载
-AGENT_CHANGELOG = "v0.3.0: 集群停用/删除感知，心跳上报版本号"
+AGENT_CHANGELOG = "v0.5.7: 验证完整自更新链路"
 
 
 class AgentUnregisterView(APIView):
@@ -660,10 +681,11 @@ TOKEN="{token}"
 PLATFORM_URL="{platform_url}"
 AGENT_NAME="pcs-agent"
 INSTALL_DIR="/opt/$AGENT_NAME"
+AGENT_VERSION="{AGENT_LATEST_VERSION}"
 
 echo "=============================="
 echo "  PVE Cluster Scan Agent"
-echo "  安装程序 v0.3.0"
+echo "  安装程序 v$AGENT_VERSION"
 echo "=============================="
 echo ""
 
@@ -744,7 +766,7 @@ REGISTER_RESULT=$(curl -s -X POST "$PLATFORM_URL/api/agent/register/" \\
         \\"pve_password\\": \\"$PVE_TOKEN\\",
         \\"hostname\\": \\"$HOSTNAME\\",
         \\"scan_interval\\": 300,
-        \\"version\\": \\"0.3.0\\"
+        \\"version\\": \\"$AGENT_VERSION\\"
     }}")
 
 AGENT_ID=$(echo "$REGISTER_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('agent_id',''))" 2>/dev/null || true)
