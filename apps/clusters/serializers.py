@@ -87,7 +87,7 @@ class ClusterDetailSerializer(serializers.ModelSerializer):
             scheme = "https" if request.is_secure() else "http"
             platform_url = f"{scheme}://{host}"
         else:
-            platform_url = "https://your-platform:8000"
+            platform_url = "https://your-platform:8066"
 
         return f"curl -fsSL '{platform_url}/api/agent/install.sh?token={obj.agent_token}' | bash"
 

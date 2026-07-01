@@ -46,7 +46,7 @@ cd frontend && npm install && cd ..
 # 5. 启动服务（前台：Django + 后台：Vite）
 echo "[5/5] 启动服务..."
 echo ""
-echo "   Django 后端:  http://<本机IP>:8000（前端资源自动适配）"
+echo "   Django 后端:  http://<本机IP>:8066（前端资源自动适配）"
 echo "========================================="
 
 # 后台启动 Vite 开发服务器
@@ -55,7 +55,7 @@ VITE_PID=$!
 cd "$PROJECT_DIR"
 
 # 前台启动 Django
-python manage.py runserver 0.0.0.0:8000
+python manage.py runserver 0.0.0.0:8066
 
 # 退出时关闭 Vite
 kill $VITE_PID 2>/dev/null

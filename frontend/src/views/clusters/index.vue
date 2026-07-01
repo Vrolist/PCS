@@ -172,6 +172,26 @@
               <span class="detail-label">最后扫描</span>
               <span>{{ detail.last_scanned_at ? formatTime(detail.last_scanned_at) : '未扫描' }}</span>
             </div>
+            <div class="detail-item">
+              <span class="detail-label">节点</span>
+              <span>{{ detail.total_nodes }} 台</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">虚拟机</span>
+              <span>{{ detail.total_vms }} 台</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">容器</span>
+              <span>{{ detail.total_lxc }} 台</span>
+            </div>
+            <div class="detail-item" v-if="detail.total_storage">
+              <span class="detail-label">存储</span>
+              <span>{{ detail.total_storage }} 个</span>
+            </div>
+            <div class="detail-item" v-if="detail.description">
+              <span class="detail-label">描述</span>
+              <span>{{ detail.description }}</span>
+            </div>
           </div>
         </div>
 
@@ -194,7 +214,7 @@
 
         <div class="detail-section">
           <h4>Agent 列表 ({{ detail.agents.length }})</h4>
-          <el-table v-if="detail.agents.length > 0" :data="detail.agents" size="small" stripe>
+          <el-table v-if="detail.agents.length > 0" :data="detail.agents" stripe>
             <el-table-column prop="hostname" label="主机名" width="120" />
             <el-table-column prop="agent_id" label="Agent ID" width="160">
               <template #default="{ row }">
@@ -206,17 +226,17 @@
                 <el-tag :type="agentStatusType(row.status)" size="small">{{ agentStatusLabel(row.status) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="版本" width="120">
+            <el-table-column label="版本" width="110">
               <template #default="{ row }">
                 <span style="margin-right: 4px">{{ row.version }}</span>
-                <el-tag
+                <span
                   v-if="latestAgentVersion && compareVersions(row.version, latestAgentVersion) < 0"
-                  type="warning" size="small" effect="dark"
-                >可更新</el-tag>
-                <el-tag
+                  class="version-tag version-outdated"
+                >可更新</span>
+                <el-icon
                   v-else-if="latestAgentVersion"
-                  type="success" size="small" effect="dark"
-                >最新</el-tag>
+                  class="version-check"
+                ><CircleCheckFilled /></el-icon>
               </template>
             </el-table-column>
             <el-table-column prop="total_scans" label="扫描次数" width="90" />
@@ -237,7 +257,7 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance } from 'element-plus'
-import { Loading, View, Delete, CopyDocument, VideoPause, CircleCheck } from '@element-plus/icons-vue'
+import { Loading, View, Delete, CopyDocument, VideoPause, CircleCheck, CircleCheckFilled } from '@element-plus/icons-vue'
 import { getClusters, getCluster, createCluster, updateCluster, deleteCluster, getLatestAgentVersion } from '@/api/clusters'
 import type { Cluster, ClusterDetail } from '@/api/clusters'
 
@@ -493,9 +513,14 @@ onMounted(() => {
 /* ── 详情弹窗 ── */
 .detail-section { margin-bottom: 24px; }
 .detail-section h4 { font-size: 15px; font-weight: 600; margin: 0 0 12px; color: var(--text-primary, #303133); }
-.detail-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.detail-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px 16px; }
 .detail-item { display: flex; flex-direction: column; gap: 4px; }
 .detail-label { font-size: 12px; color: var(--text-secondary, #909399); }
+
+/* Agent 版本标签 */
+.version-check { color: #67c23a; font-size: 16px; vertical-align: middle; }
+.version-tag { font-size: 12px; padding: 1px 6px; border-radius: 4px; vertical-align: middle; }
+.version-outdated { color: #e6a23c; background: #faecd8; }
 
 .install-cmd-box {
   position: relative; background: #1e1e1e; border-radius: 8px; padding: 14px 16px;

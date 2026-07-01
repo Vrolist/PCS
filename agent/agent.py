@@ -832,7 +832,7 @@ def cmd_install():
 
     # 交互式收集配置
     cfg = Config()
-    cfg.platform_url = input("平台地址 (如 http://192.168.1.100:8000): ").strip()
+    cfg.platform_url = input("平台地址 (如 http://192.168.1.100:8066): ").strip()
     cfg.agent_token = input("Agent Token: ").strip()
     cfg.pve_endpoint = input("PVE API 地址 (如 https://192.168.1.200:8006): ").strip()
     cfg.pve_username = input("PVE 用户名 [root@pam]: ").strip() or "root@pam"
