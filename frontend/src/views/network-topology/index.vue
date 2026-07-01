@@ -5,18 +5,22 @@
         <h2 class="page-title">网络拓扑</h2>
         <p class="page-desc">可视化展示 PVE 集群网络架构</p>
       </div>
-      <div class="header-actions">
-        <el-select v-model="selectedCluster" placeholder="选择集群" style="width: 200px">
-          <el-option v-for="c in clusterList" :key="c" :label="c" :value="c" />
-        </el-select>
-        <div class="zoom-controls">
-          <el-button-group>
-            <el-button @click="zoomOut" size="small">-</el-button>
-            <el-button size="small" disabled>{{ Math.round(scale * 100) }}%</el-button>
-            <el-button @click="zoomIn" size="small">+</el-button>
-          </el-button-group>
+      <div class="toolbar">
+        <div class="toolbar-group">
+          <el-select v-model="selectedCluster" placeholder="选择集群" size="small" style="width: 180px">
+            <el-option v-for="c in clusterList" :key="c" :label="c" :value="c" />
+          </el-select>
         </div>
-        <el-button @click="resetView" size="small">重置</el-button>
+        <span class="toolbar-divider"></span>
+        <div class="toolbar-group">
+          <button class="toolbar-btn" @click="zoomOut" title="缩小">−</button>
+          <span class="toolbar-zoom-val">{{ Math.round(scale * 100) }}%</span>
+          <button class="toolbar-btn" @click="zoomIn" title="放大">+</button>
+        </div>
+        <span class="toolbar-divider"></span>
+        <div class="toolbar-group">
+          <button class="toolbar-btn-text" @click="resetView">重置</button>
+        </div>
       </div>
     </div>
 
@@ -32,15 +36,14 @@
           @wheel.prevent="onWheel">
           <!-- 网络段色带 -->
           <g class="segment-bands">
-            <g v-for="seg in networkSegments" :key="'seg-' + seg.cidr">
+            <g v-for="seg in networkSegments" :key="'seg-' + seg.cidr"
+              :transform="`translate(0, ${segmentOffsets[seg.cidr] || 0})`"
+              style="cursor: grab"
+              @mousedown.prevent="onSegmentMouseDown($event, seg.cidr)">
               <rect :x="seg.bounds.x" :y="seg.bounds.y"
                 :width="seg.bounds.width" :height="seg.bounds.height"
                 :fill="seg.fillColor" :stroke="seg.strokeColor"
                 stroke-width="1" rx="10" stroke-dasharray="8,4" />
-              <text :x="seg.bounds.x + seg.bounds.width + 6" :y="seg.bounds.y + 14"
-                class="segment-label" :fill="seg.strokeColor">
-                {{ seg.label }}
-              </text>
             </g>
           </g>
           <!-- 连线 -->
@@ -57,36 +60,49 @@
             <rect x="0" y="0" :width="nodeWidth" :height="nodeHeight" rx="12"
               :fill="nodeFill" :stroke="nodeStroke" stroke-width="2" />
             <text :x="nodeWidth / 2" y="24" text-anchor="middle" class="node-label">{{ node.name }}</text>
-            <text :x="nodeWidth / 2" y="42" text-anchor="middle" class="node-sub">{{ node.ip || '--' }}</text>
+            <text :x="nodeWidth / 2" y="42" text-anchor="middle" class="node-sub">{{ node.ifaceCount }} 个接口</text>
           </g>
           <!-- 接口 -->
           <g v-for="iface in interfacePositions" :key="'iface-' + iface.id"
             class="iface-group" :class="{ dragging: dragType === 'iface' && draggingId === iface.id }"
-            :transform="`translate(${iface.x}, ${iface.y})`"
+            :transform="`translate(${iface.x}, ${iface.y + getIfaceSegOffset(iface)})`"
             @mousedown.prevent="onIfaceMouseDown($event, iface)">
             <rect x="0" y="0" :width="ifaceWidth" :height="ifaceHeight" rx="8"
               :fill="getIfaceFill(iface.type)" :stroke="getIfaceStroke(iface.type)" stroke-width="1.5" />
-            <text :x="ifaceWidth / 2" y="18" text-anchor="middle" class="iface-label">{{ iface.name }}</text>
-            <text :x="ifaceWidth / 2" y="34" text-anchor="middle" class="iface-type">
+            <text :x="ifaceWidth / 2" y="16" text-anchor="middle" class="iface-label">{{ iface.name }}</text>
+            <text :x="ifaceWidth / 2" y="29" text-anchor="middle" class="iface-type">
               <template v-if="iface.type === 'bridge' && iface.bridge_ports">bridge · {{ (iface.bridge_ports || '').split(/\s+/).length }} ports</template>
               <template v-else-if="iface.type === 'bond'">bond · {{ iface.bond_mode || 'balance-rr' }}<template v-if="iface.bond_slaves"> · {{ iface.bond_slaves.split(/\s+/).length }} nics</template></template>
               <template v-else-if="getIfaceBondOwner(iface)">{{ iface.type }} · {{ getIfaceBondOwner(iface) }} slave</template>
               <template v-else>{{ iface.type }}</template>
             </text>
+            <text v-if="iface.address" :x="ifaceWidth / 2" y="41" text-anchor="middle" class="iface-ip">{{ iface.address.split('/')[0] }}</text>
             <circle :cx="ifaceWidth - 8" cy="8" r="4" :fill="iface.status === 'up' ? '#67c23a' : '#f56c6c'" />
+          </g>
+          <!-- 段标签（在接口之后渲染，确保不被遮挡） -->
+          <g class="segment-labels">
+            <g v-for="seg in networkSegments" :key="'label-' + seg.cidr"
+              :transform="`translate(0, ${segmentOffsets[seg.cidr] || 0})`">
+              <text :x="seg.bounds.x + seg.bounds.width / 2" :y="seg.bounds.y + 16"
+                text-anchor="middle" class="segment-label" :fill="seg.labelColor">
+                {{ seg.label }}
+              </text>
+            </g>
           </g>
         </svg>
       </div>
     </div>
 
-    <!-- 图例 -->
+    <!-- 图例（可点击过滤） -->
     <div class="legend-bar">
-      <span class="legend-item"><span class="legend-dot" style="background: #409eff"></span>物理接口</span>
-      <span class="legend-item"><span class="legend-dot" style="background: #67c23a"></span>网桥 (Bridge)</span>
-      <span class="legend-item"><span class="legend-dot" style="background: #e6a23c"></span>Bond 聚合</span>
-      <span class="legend-item"><span class="legend-dot" style="background: #8b5cf6"></span>VLAN</span>
-      <span class="legend-item"><span class="legend-dot" style="background: #909399"></span>其他</span>
-      <span class="legend-item"><span class="legend-band"></span>网络段分组</span>
+      <span v-for="item in legendItems" :key="item.type"
+        class="legend-item"
+        :class="{ 'is-hidden': hiddenTypes.has(item.type), 'legend-static': item.type === 'node' }"
+        @click="item.type !== 'node' && toggleType(item.type)">
+        <span class="legend-dot" :style="{ background: item.color }"></span>{{ item.label }}
+      </span>
+      <span class="legend-item legend-sep"></span>
+      <span class="legend-item legend-static"><span class="legend-band"></span>网络段分组</span>
     </div>
   </div>
 </template>
@@ -98,17 +114,40 @@ import { getNetworkList, type NetworkInterface } from '@/api/networks'
 const loading = ref(true)
 const topologyData = ref<NetworkInterface[]>([])
 const selectedCluster = ref('')
+// 图例过滤：点击可隐藏/显示某类接口
+const hiddenTypes = ref(new Set<string>())
+const legendItems = [
+    { type: 'node', label: '节点', color: '#4f46e5' },
+    { type: 'eth', label: '物理网口', color: '#409eff' },
+    { type: 'bridge', label: '网桥 (Bridge)', color: '#67c23a' },
+    { type: 'bond', label: 'Bond 聚合', color: '#e6a23c' },
+    { type: 'vlan', label: 'VLAN', color: '#8b5cf6' },
+    { type: 'other', label: '其他', color: '#909399' },
+  ]
+function toggleType(type: string) {
+  const s = new Set(hiddenTypes.value)
+  if (s.has(type)) s.delete(type); else s.add(type)
+  hiddenTypes.value = s
+}
+function isTypeHidden(type: string): boolean {
+  const known = ['eth', 'bridge', 'bond', 'vlan']
+  return hiddenTypes.value.has(known.includes(type) ? type : 'other')
+}
 
 const nodeWidth = 140
 const nodeHeight = 56
 const ifaceWidth = 120
-const ifaceHeight = 44
+const ifaceHeight = 52
 const ifaceGapY = 56
 
 // 拖动状态
-const dragType = ref<'node' | 'iface' | 'canvas' | ''>('')
+const dragType = ref<'node' | 'iface' | 'canvas' | 'segment' | ''>('')
 const draggingId = ref<string | number>('')
 const dragOffset = { x: 0, y: 0 }
+// 段拖动：记录每段的 Y 偏移
+const segmentOffsets = ref<Record<string, number>>({})
+const segmentDragStartY = ref(0)
+const segmentDragBaseOffset = ref(0)
 
 // 缩放状态
 const scale = ref(1)
@@ -129,13 +168,14 @@ const filteredData = computed(() => {
   return topologyData.value.filter(n => n.cluster_name === selectedCluster.value)
 })
 
-// 集群切换时重新布局
-watch(filteredData, () => { initPositions() })
+// 集群切换或图例过滤时重新布局
+watch(filteredData, () => { segmentOffsets.value = {}; initPositions() })
+watch(hiddenTypes, () => { initPositions() }, { deep: true })
 
 const nodeFill = 'var(--bg-card, #fff)'
-const nodeStroke = '#409eff'
+const nodeStroke = '#4f46e5'
 
-interface NodePos { name: string; x: number; y: number; ip: string }
+interface NodePos { name: string; x: number; y: number; ifaceCount: number }
 interface IfacePos extends NetworkInterface { x: number; y: number; nodeName: string }
 
 const nodePositions = ref<NodePos[]>([])
@@ -162,6 +202,9 @@ function layoutChildren(
   children
     .sort((a, b) => ifaceSortOrder(a) - ifaceSortOrder(b) || a.name.localeCompare(b.name))
     .forEach(child => {
+      // 图例过滤：跳过
+      if (isTypeHidden(child.type)) return
+
       const childX = parentX + indent * depth
       result.push({ ...child, x: childX, y: curY, nodeName })
       curY += ifaceGapY
@@ -199,9 +242,7 @@ function initPositions() {
 
   nodeEntries.forEach(([nodeName, allIfaces], idx) => {
     const x = 60 + idx * nodeSpacing
-    // 节点 IP 取自 bridge 的 address
-    const bridgeIface = allIfaces.find(i => i.type === 'bridge' && i.name === 'vmbr0') || allIfaces.find(i => i.type === 'bridge')
-    nodes.push({ name: nodeName, x, y: 40, ip: bridgeIface?.address || '' })
+    nodes.push({ name: nodeName, x, y: 40, ifaceCount: allIfaces.length })
 
     // ── 构建层级映射 ──
     // bridge → ports（bridge_ports 中可能包含 bond 名称，形成嵌套）
@@ -230,6 +271,8 @@ function initPositions() {
 
     // 顶层接口：排除已被 bridge 或 bond 收纳的接口
     const topLevel = allIfaces.filter(i => {
+      // 图例过滤：跳过被隐藏的类型
+      if (isTypeHidden(i.type)) return false
       if (i.type === 'bridge') return true
       // bond：如果已被某个 bridge 的 bridge_ports 包含，不算顶层
       if (i.type === 'bond' && !bridgePortNames.has(i.name)) return true
@@ -270,6 +313,32 @@ function initPositions() {
     })
   })
 
+  // ── 按网段重新排列接口卡片（避免段色带重叠） ──
+  const segPad = 12
+  const segGap = 16
+  const segMinH = ifaceHeight + 32
+  const cidrMap = new Map<string, IfacePos[]>()
+  ifaces.forEach(iface => {
+    if (!iface.address) return
+    const cidr = toNetworkCidr(iface.address)
+    if (!cidr) return
+    if (!cidrMap.has(cidr)) cidrMap.set(cidr, [])
+    cidrMap.get(cidr)!.push(iface)
+  })
+  const sortedCidrs = Array.from(cidrMap.entries())
+    .filter(([, g]) => new Set(g.map(i => i.node_name)).size >= 2)
+    .sort((a, b) => Math.max(...a[1].map(i => i.y)) - Math.max(...b[1].map(i => i.y)))
+  let segY = 100
+  sortedCidrs.forEach(([, group]) => {
+    const minY = Math.min(...group.map(i => i.y))
+    const maxY = Math.max(...group.map(i => i.y))
+    const contentH = maxY - minY + ifaceHeight + segPad
+    const segH = Math.max(contentH, segMinH)
+    const dy = segY - minY + segPad
+    group.forEach(i => { i.y += dy })
+    segY += segH + segGap
+  })
+
   nodePositions.value = nodes
   interfacePositions.value = ifaces
 
@@ -296,14 +365,16 @@ const connections = computed<Connection[]>(() => {
   nodePositions.value.forEach(np => {
     const ifaces = interfacePositions.value.filter(i => i.node_name === np.name)
     ifaces.forEach(iface => {
+      const so = getIfaceSegOffset(iface)
       // 优先查找 bond 父级（bond_slaves 包含该接口名）
       const parentBond = ifaces.find(
         i => i.type === 'bond' && (i.bond_slaves || '').split(/\s+/).includes(iface.name)
       )
       if (parentBond) {
+        const pso = getIfaceSegOffset(parentBond)
         conns.push({
-          x1: parentBond.x + ifaceWidth / 2, y1: parentBond.y + ifaceHeight,
-          x2: iface.x + ifaceWidth / 2, y2: iface.y,
+          x1: parentBond.x + ifaceWidth / 2, y1: parentBond.y + pso + ifaceHeight,
+          x2: iface.x + ifaceWidth / 2, y2: iface.y + so,
           color: getIfaceColor('bond')
         })
         return
@@ -314,9 +385,10 @@ const connections = computed<Connection[]>(() => {
         i => i.type === 'bridge' && (i.bridge_ports || '').split(/\s+/).includes(iface.name)
       )
       if (parentBridge) {
+        const pso = getIfaceSegOffset(parentBridge)
         conns.push({
-          x1: parentBridge.x + ifaceWidth / 2, y1: parentBridge.y + ifaceHeight,
-          x2: iface.x + ifaceWidth / 2, y2: iface.y,
+          x1: parentBridge.x + ifaceWidth / 2, y1: parentBridge.y + pso + ifaceHeight,
+          x2: iface.x + ifaceWidth / 2, y2: iface.y + so,
           color: getIfaceColor('bridge')
         })
         return
@@ -325,7 +397,7 @@ const connections = computed<Connection[]>(() => {
       // 顶层接口：连到节点
       conns.push({
         x1: np.x + nodeWidth / 2, y1: np.y + nodeHeight,
-        x2: iface.x + ifaceWidth / 2, y2: iface.y,
+        x2: iface.x + ifaceWidth / 2, y2: iface.y + so,
         color: getIfaceColor(iface.type)
       })
     })
@@ -340,6 +412,7 @@ interface NetworkSegment {
   label: string
   fillColor: string
   strokeColor: string
+  labelColor: string
   bounds: SegmentBounds
   ifaces: IfacePos[]
 }
@@ -362,12 +435,18 @@ function toNetworkCidr(address: string): string | null {
   return null
 }
 
+// 获取接口所属段的 Y 偏移（用于段拖动）
+function getIfaceSegOffset(iface: IfacePos): number {
+  const cidr = iface.address ? toNetworkCidr(iface.address) : null
+  return cidr ? (segmentOffsets.value[cidr] || 0) : 0
+}
+
 const segmentColors = [
-  { fill: 'rgba(103, 194, 58, 0.08)',  stroke: 'rgba(103, 194, 58, 0.35)' },  // 绿
-  { fill: 'rgba(230, 162, 60, 0.08)',  stroke: 'rgba(230, 162, 60, 0.35)' },  // 橙
-  { fill: 'rgba(64, 158, 255, 0.08)',  stroke: 'rgba(64, 158, 255, 0.35)' },  // 蓝
-  { fill: 'rgba(139, 92, 246, 0.08)',  stroke: 'rgba(139, 92, 246, 0.35)' },  // 紫
-  { fill: 'rgba(245, 108, 108, 0.08)', stroke: 'rgba(245, 108, 108, 0.35)' },  // 红
+  { fill: 'rgba(103, 194, 58, 0.08)',  stroke: 'rgba(103, 194, 58, 0.35)',  label: 'rgba(103, 194, 58, 0.8)' },  // 绿
+  { fill: 'rgba(230, 162, 60, 0.08)',  stroke: 'rgba(230, 162, 60, 0.35)',  label: 'rgba(230, 162, 60, 0.8)' },  // 橙
+  { fill: 'rgba(64, 158, 255, 0.08)',  stroke: 'rgba(64, 158, 255, 0.35)',  label: 'rgba(64, 158, 255, 0.8)' },  // 蓝
+  { fill: 'rgba(139, 92, 246, 0.08)',  stroke: 'rgba(139, 92, 246, 0.35)',  label: 'rgba(139, 92, 246, 0.8)' },  // 紫
+  { fill: 'rgba(245, 108, 108, 0.08)', stroke: 'rgba(245, 108, 108, 0.35)', label: 'rgba(245, 108, 108, 0.8)' },  // 红
 ]
 
 /** 按接口类型猜测网段名称 */
@@ -402,16 +481,30 @@ const networkSegments = computed<NetworkSegment[]>(() => {
   })
 
   const padding = 12
-  const segmentGap = 8
+  const segmentGap = 16
+  const segMinHeight = ifaceHeight + 32 // 色带最小高度：接口卡片 + 上下留白
   const segments: NetworkSegment[] = []
 
   multiNodeSegments.sort((a, b) => b[1].length - a[1].length) // 接口多的在前
 
+  // 按段内最高接口的 Y 坐标排序，确保从上到下排列
+  multiNodeSegments.sort((a, b) => {
+    const maxYa = Math.max(...a[1].map(i => i.y))
+    const maxYb = Math.max(...b[1].map(i => i.y))
+    return maxYa - maxYb
+  })
+
+  let curY = 100 // 起始 Y（节点卡片下方）
+
   multiNodeSegments.forEach(([cidr, group], idx) => {
     const minX = Math.min(...group.map(i => i.x)) - padding
-    const minY = Math.min(...group.map(i => i.y)) - padding
     const maxX = Math.max(...group.map(i => i.x)) + ifaceWidth + padding
-    const maxY = Math.max(...group.map(i => i.y)) + ifaceHeight + padding
+    const width = maxX - minX
+
+    // 段高度取：接口实际跨度 vs 最小高度，取较大值
+    const contentHeight = Math.max(...group.map(i => i.y)) - Math.min(...group.map(i => i.y)) + ifaceHeight + padding
+    const height = Math.max(contentHeight, segMinHeight)
+
     const colors = segmentColors[idx % segmentColors.length]
 
     const hasBridge = group.some(i => i.type === 'bridge')
@@ -426,9 +519,12 @@ const networkSegments = computed<NetworkSegment[]>(() => {
       label: `${label} (${cidr})`,
       fillColor: colors.fill,
       strokeColor: colors.stroke,
-      bounds: { x: minX, y: minY, width: maxX - minX, height: maxY - minY + segmentGap },
+      labelColor: colors.label,
+      bounds: { x: minX, y: curY, width, height },
       ifaces: group,
     })
+
+    curY += height + segmentGap
   })
 
   return segments
@@ -469,6 +565,14 @@ function onCanvasMouseDown(e: MouseEvent) {
   dragOffset.y = e.clientY
 }
 
+// 段色带拖动
+function onSegmentMouseDown(e: MouseEvent, segCidr: string) {
+  dragType.value = 'segment'
+  draggingId.value = segCidr
+  segmentDragStartY.value = e.clientY
+  segmentDragBaseOffset.value = segmentOffsets.value[segCidr] || 0
+}
+
 function onMouseMove(e: MouseEvent) {
   if (dragType.value === 'canvas') {
     const dx = e.clientX - dragOffset.x
@@ -488,6 +592,9 @@ function onMouseMove(e: MouseEvent) {
     if (!iface) return
     iface.x = e.clientX - dragOffset.x
     iface.y = e.clientY - dragOffset.y
+  } else if (dragType.value === 'segment') {
+    const dy = e.clientY - segmentDragStartY.value
+    segmentOffsets.value = { ...segmentOffsets.value, [draggingId.value as string]: segmentDragBaseOffset.value + dy }
   }
 }
 
@@ -513,6 +620,7 @@ function zoomOut() {
 function resetView() {
   selectedCluster.value = clusterList.value[0] || ''
   scale.value = 1
+  segmentOffsets.value = {}
   initPositions()
 }
 
@@ -566,8 +674,35 @@ onMounted(async () => {
 .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
 .page-title { font-size: 24px; font-weight: 700; color: var(--text-heading); margin: 0; }
 .page-desc { font-size: 14px; color: var(--text-muted); margin: 4px 0 0; }
-.header-actions { display: flex; gap: 8px; align-items: center; }
-.zoom-controls { display: flex; align-items: center; }
+/* ── 工具栏 ── */
+.toolbar {
+  display: flex; align-items: center; gap: 0;
+  background: var(--bg-secondary, #f5f7fa);
+  border: 1px solid var(--border-color, #e4e7ed);
+  border-radius: 8px; padding: 4px 8px; height: 36px;
+}
+.toolbar-group { display: flex; align-items: center; gap: 4px; padding: 0 6px; }
+.toolbar-divider { width: 1px; height: 18px; background: var(--border-color, #dcdfe6); flex-shrink: 0; }
+.toolbar-btn {
+  width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border-color, #dcdfe6); border-radius: 6px;
+  background: var(--bg-card, #fff); color: var(--text-primary, #303133);
+  font-size: 14px; cursor: pointer; transition: all .15s; line-height: 1;
+}
+.toolbar-btn:hover { border-color: #409eff; color: #409eff; background: rgba(64,158,255,.06); }
+.toolbar-btn:active { transform: scale(.92); }
+.toolbar-zoom-val {
+  font-size: 12px; color: var(--text-muted, #909399); min-width: 36px; text-align: center;
+  font-variant-numeric: tabular-nums; user-select: none;
+}
+.toolbar-btn-text {
+  height: 26px; padding: 0 10px; display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border-color, #dcdfe6); border-radius: 6px;
+  background: var(--bg-card, #fff); color: var(--text-secondary, #606266);
+  font-size: 12px; cursor: pointer; transition: all .15s; white-space: nowrap;
+}
+.toolbar-btn-text:hover { border-color: #409eff; color: #409eff; background: rgba(64,158,255,.06); }
+.toolbar-btn-text:active { transform: scale(.92); }
 
 .topology-container {
   background: var(--bg-card);
@@ -593,6 +728,7 @@ onMounted(async () => {
 .node-sub { font-size: 11px; fill: var(--text-muted); }
 .iface-label { font-size: 12px; font-weight: 500; fill: var(--text-primary); }
 .iface-type { font-size: 10px; fill: var(--text-muted); }
+.iface-ip { font-size: 9px; fill: var(--text-muted); opacity: .75; }
 
 .node-group { cursor: grab; }
 .node-group:active { cursor: grabbing; }
@@ -607,14 +743,27 @@ onMounted(async () => {
 .iface-group:hover rect { filter: brightness(1.1); stroke-width: 2; }
 
 .legend-bar {
-  display: flex; gap: 20px; margin-top: 16px; padding: 12px 16px;
-  background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px;
+  display: flex; align-items: center; gap: 6px; margin-top: 16px; padding: 8px 14px;
+  background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px;
   flex-wrap: wrap;
 }
-.legend-item { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-secondary); }
-.legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-.legend-band { width: 20px; height: 10px; border-radius: 4px; display: inline-block;
-  background: repeating-linear-gradient(45deg, rgba(103,194,58,0.15), rgba(103,194,58,0.15) 3px, rgba(103,194,58,0.3) 3px, rgba(103,194,58,0.3) 6px);
+.legend-item {
+  display: flex; align-items: center; gap: 5px; font-size: 12px;
+  color: var(--text-secondary); padding: 4px 10px; border-radius: 6px;
+  cursor: pointer; transition: all .2s; user-select: none;
+  border: 1px solid transparent;
+}
+.legend-item:hover { background: rgba(64,158,255,.06); }
+.legend-item.is-hidden { opacity: .4; }
+.legend-item.is-hidden .legend-dot { background: #c0c4cc !important; }
+.legend-item.is-hidden .legend-dot::after { content: ''; position: absolute; width: 12px; height: 1.5px; background: #c0c4cc; transform: rotate(-45deg); top: 4.25px; left: -1px; }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; position: relative; transition: all .2s; }
+.legend-sep { width: 1px; height: 16px; background: var(--border-color); padding: 0; cursor: default; }
+.legend-sep:hover { background: var(--border-color); }
+.legend-static { cursor: default; }
+.legend-static:hover { background: transparent; }
+.legend-band { width: 16px; height: 8px; border-radius: 3px; display: inline-block;
+  background: repeating-linear-gradient(45deg, rgba(103,194,58,0.15), rgba(103,194,58,0.15) 2px, rgba(103,194,58,0.3) 2px, rgba(103,194,58,0.3) 4px);
   border: 1px dashed rgba(103,194,58,0.5); }
 .segment-label { font-size: 10px; font-weight: 600; }
 </style>
