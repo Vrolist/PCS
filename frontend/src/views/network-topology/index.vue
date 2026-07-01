@@ -302,7 +302,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.page-container { max-width: 1400px; margin: 0 auto; }
+.page-container { width: 100%; height: 100%; display: flex; flex-direction: column; }
 .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
 .page-title { font-size: 24px; font-weight: 700; color: var(--text-heading); margin: 0; }
 .page-desc { font-size: 14px; color: var(--text-muted); margin: 4px 0 0; }
@@ -314,16 +314,18 @@ onMounted(async () => {
   border: 1px solid var(--border-color);
   border-radius: 16px;
   padding: 24px;
-  min-height: 500px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
-.empty-state { display: flex; align-items: center; justify-content: center; min-height: 300px; }
+.empty-state { display: flex; align-items: center; justify-content: center; flex: 1; }
 
-.topology-canvas { width: 100%; min-height: 450px; }
+.topology-canvas { width: 100%; flex: 1; min-height: 0; }
 .topology-svg {
   display: block;
   width: 100%;
   height: 100%;
-  min-height: 450px;
   user-select: none;
 }
 
