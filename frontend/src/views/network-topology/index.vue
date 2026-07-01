@@ -37,7 +37,7 @@
           <!-- 网络段色带 -->
           <g class="segment-bands">
             <g v-for="seg in networkSegments" :key="'seg-' + seg.cidr"
-              :transform="`translate(0, ${segmentOffsets[seg.cidr] || 0})`"
+              :transform="`translate(${segmentOffsetsX[seg.cidr] || 0}, ${segmentOffsets[seg.cidr] || 0})`"
               style="cursor: grab"
               @mousedown.prevent="onSegmentMouseDown($event, seg.cidr)">
               <rect :x="seg.bounds.x" :y="seg.bounds.y"
@@ -82,7 +82,7 @@
           <!-- 段标签（在接口之后渲染，确保不被遮挡） -->
           <g class="segment-labels">
             <g v-for="seg in networkSegments" :key="'label-' + seg.cidr"
-              :transform="`translate(0, ${segmentOffsets[seg.cidr] || 0})`">
+              :transform="`translate(${segmentOffsetsX[seg.cidr] || 0}, ${segmentOffsets[seg.cidr] || 0})`">
               <text :x="seg.bounds.x + seg.bounds.width / 2" :y="seg.bounds.y + 16"
                 text-anchor="middle" class="segment-label" :fill="seg.labelColor">
                 {{ seg.label }}
@@ -93,16 +93,28 @@
       </div>
     </div>
 
-    <!-- 图例（可点击过滤） -->
+    <!-- 图例（左静态 / 中可过滤 / 右不存在） -->
     <div class="legend-bar">
-      <span v-for="item in legendItems" :key="item.type"
-        class="legend-item"
-        :class="{ 'is-hidden': hiddenTypes.has(item.type), 'legend-static': item.type === 'node' }"
-        @click="item.type !== 'node' && toggleType(item.type)">
-        <span class="legend-dot" :style="{ background: item.color }"></span>{{ item.label }}
-      </span>
-      <span class="legend-item legend-sep"></span>
+      <!-- 左侧：不可隐藏的静态项 -->
+      <span class="legend-item legend-static"><span class="legend-dot" style="background:#4f46e5"></span>节点</span>
       <span class="legend-item legend-static"><span class="legend-band"></span>网络段分组</span>
+      <span class="legend-item legend-sep"></span>
+      <!-- 中间：当前集群存在、可点击过滤 -->
+      <template v-for="item in legendItems" :key="item.type">
+        <span v-if="item.type !== 'node' && existingTypes.has(item.type)"
+          class="legend-item"
+          :class="{ 'is-hidden': hiddenTypes.has(item.type) }"
+          @click="toggleType(item.type)">
+          <span class="legend-dot" :style="{ background: item.color }"></span>{{ item.label }}
+        </span>
+      </template>
+      <!-- 右侧：当前集群不存在的类型（灰色禁用） -->
+      <template v-for="item in legendItems" :key="'abs-'+item.type">
+        <span v-if="item.type !== 'node' && !existingTypes.has(item.type)"
+          class="legend-item legend-absent">
+          <span class="legend-dot"></span>{{ item.label }}
+        </span>
+      </template>
     </div>
   </div>
 </template>
@@ -124,6 +136,12 @@ const legendItems = [
     { type: 'vlan', label: 'VLAN', color: '#8b5cf6' },
     { type: 'other', label: '其他', color: '#909399' },
   ]
+// 当前集群中存在的接口类型集合
+const existingTypes = computed(() => {
+  const types = new Set<string>()
+  topologyData.value.forEach(i => types.add(i.type))
+  return types
+})
 function toggleType(type: string) {
   const s = new Set(hiddenTypes.value)
   if (s.has(type)) s.delete(type); else s.add(type)
@@ -144,9 +162,12 @@ const ifaceGapY = 56
 const dragType = ref<'node' | 'iface' | 'canvas' | 'segment' | ''>('')
 const draggingId = ref<string | number>('')
 const dragOffset = { x: 0, y: 0 }
-// 段拖动：记录每段的 Y 偏移
+// 段拖动：记录每段的 X/Y 偏移
 const segmentOffsets = ref<Record<string, number>>({})
+const segmentOffsetsX = ref<Record<string, number>>({})
+const segmentDragStartX = ref(0)
 const segmentDragStartY = ref(0)
+const segmentDragBaseOffsetX = ref(0)
 const segmentDragBaseOffset = ref(0)
 
 // 缩放状态
@@ -169,7 +190,7 @@ const filteredData = computed(() => {
 })
 
 // 集群切换或图例过滤时重新布局
-watch(filteredData, () => { segmentOffsets.value = {}; initPositions() })
+watch(filteredData, () => { segmentOffsets.value = {}; segmentOffsetsX.value = {}; initPositions() })
 watch(hiddenTypes, () => { initPositions() }, { deep: true })
 
 const nodeFill = 'var(--bg-card, #fff)'
@@ -481,7 +502,6 @@ const networkSegments = computed<NetworkSegment[]>(() => {
   })
 
   const padding = 12
-  const segmentGap = 16
   const segMinHeight = ifaceHeight + 32 // 色带最小高度：接口卡片 + 上下留白
   const segments: NetworkSegment[] = []
 
@@ -494,12 +514,11 @@ const networkSegments = computed<NetworkSegment[]>(() => {
     return maxYa - maxYb
   })
 
-  let curY = 100 // 起始 Y（节点卡片下方）
-
   multiNodeSegments.forEach(([cidr, group], idx) => {
     const minX = Math.min(...group.map(i => i.x)) - padding
     const maxX = Math.max(...group.map(i => i.x)) + ifaceWidth + padding
     const width = maxX - minX
+    const minY = Math.min(...group.map(i => i.y)) - padding
 
     // 段高度取：接口实际跨度 vs 最小高度，取较大值
     const contentHeight = Math.max(...group.map(i => i.y)) - Math.min(...group.map(i => i.y)) + ifaceHeight + padding
@@ -520,11 +539,9 @@ const networkSegments = computed<NetworkSegment[]>(() => {
       fillColor: colors.fill,
       strokeColor: colors.stroke,
       labelColor: colors.label,
-      bounds: { x: minX, y: curY, width, height },
+      bounds: { x: minX, y: minY, width, height },
       ifaces: group,
     })
-
-    curY += height + segmentGap
   })
 
   return segments
@@ -569,7 +586,9 @@ function onCanvasMouseDown(e: MouseEvent) {
 function onSegmentMouseDown(e: MouseEvent, segCidr: string) {
   dragType.value = 'segment'
   draggingId.value = segCidr
+  segmentDragStartX.value = e.clientX
   segmentDragStartY.value = e.clientY
+  segmentDragBaseOffsetX.value = segmentOffsetsX.value[segCidr] || 0
   segmentDragBaseOffset.value = segmentOffsets.value[segCidr] || 0
 }
 
@@ -577,9 +596,9 @@ function onMouseMove(e: MouseEvent) {
   if (dragType.value === 'canvas') {
     const dx = e.clientX - dragOffset.x
     const dy = e.clientY - dragOffset.y
-    // 移动所有节点和接口
-    nodePositions.value.forEach(n => { n.x += dx; n.y += dy })
-    interfacePositions.value.forEach(i => { i.x += dx; i.y += dy })
+    // 移动所有节点和接口（替换数组触发响应式）
+    nodePositions.value = nodePositions.value.map(n => ({ ...n, x: n.x + dx, y: n.y + dy }))
+    interfacePositions.value = interfacePositions.value.map(i => ({ ...i, x: i.x + dx, y: i.y + dy }))
     dragOffset.x = e.clientX
     dragOffset.y = e.clientY
   } else if (dragType.value === 'node') {
@@ -588,13 +607,15 @@ function onMouseMove(e: MouseEvent) {
     node.x = e.clientX - dragOffset.x
     node.y = e.clientY - dragOffset.y
   } else if (dragType.value === 'iface') {
-    const iface = interfacePositions.value.find(i => i.id === draggingId.value)
-    if (!iface) return
-    iface.x = e.clientX - dragOffset.x
-    iface.y = e.clientY - dragOffset.y
+    interfacePositions.value = interfacePositions.value.map(i =>
+      i.id === draggingId.value ? { ...i, x: e.clientX - dragOffset.x, y: e.clientY - dragOffset.y } : i
+    )
   } else if (dragType.value === 'segment') {
+    const dx = e.clientX - segmentDragStartX.value
     const dy = e.clientY - segmentDragStartY.value
-    segmentOffsets.value = { ...segmentOffsets.value, [draggingId.value as string]: segmentDragBaseOffset.value + dy }
+    const cidr = draggingId.value as string
+    segmentOffsetsX.value = { ...segmentOffsetsX.value, [cidr]: segmentDragBaseOffsetX.value + dx }
+    segmentOffsets.value = { ...segmentOffsets.value, [cidr]: segmentDragBaseOffset.value + dy }
   }
 }
 
@@ -762,6 +783,8 @@ onMounted(async () => {
 .legend-sep:hover { background: var(--border-color); }
 .legend-static { cursor: default; }
 .legend-static:hover { background: transparent; }
+.legend-absent { opacity: .35; cursor: not-allowed; pointer-events: none; }
+.legend-absent .legend-dot { background: #c0c4cc !important; }
 .legend-band { width: 16px; height: 8px; border-radius: 3px; display: inline-block;
   background: repeating-linear-gradient(45deg, rgba(103,194,58,0.15), rgba(103,194,58,0.15) 2px, rgba(103,194,58,0.3) 2px, rgba(103,194,58,0.3) 4px);
   border: 1px dashed rgba(103,194,58,0.5); }
