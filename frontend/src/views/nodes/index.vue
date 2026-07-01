@@ -141,40 +141,52 @@
         </div>
         <!-- 虚拟机 -->
         <div class="detail-section" v-if="detailData.vms?.length">
-          <h4>虚拟机 ({{ detailData.vms.length }})</h4>
-          <div class="resource-list">
-            <div v-for="vm in detailData.vms" :key="vm.vmid" class="resource-item">
-              <div class="resource-header">
-                <code class="mono">{{ vm.vmid }}</code>
-                <span class="resource-name">{{ vm.name }}</span>
-                <el-tag :type="vm.status === 'running' ? 'success' : 'danger'" size="small">{{ vm.status === 'running' ? '运行' : '停止' }}</el-tag>
+          <el-collapse v-model="vmCollapse">
+            <el-collapse-item title="" name="vm">
+              <template #title>
+                <h4 class="collapse-title">虚拟机 ({{ detailData.vms.length }})</h4>
+              </template>
+              <div class="resource-list">
+                <div v-for="vm in detailData.vms" :key="vm.vmid" class="resource-item">
+                  <div class="resource-header">
+                    <code class="mono">{{ vm.vmid }}</code>
+                    <span class="resource-name">{{ vm.name }}</span>
+                    <el-tag :type="vm.status === 'running' ? 'success' : 'danger'" size="small">{{ vm.status === 'running' ? '运行' : '停止' }}</el-tag>
+                  </div>
+                  <div class="resource-detail">
+                    <span>CPU {{ vm.cpu_usage?.toFixed(1) || 0 }}% · {{ vm.cpu_cores }}核</span>
+                    <span>{{ fmtMB(vm.memory_used_mb) }} / {{ fmtMB(vm.memory_mb) }}</span>
+                    <span>{{ vm.disk_gb }}GB</span>
+                  </div>
+                </div>
               </div>
-              <div class="resource-detail">
-                <span>CPU {{ vm.cpu_usage?.toFixed(1) || 0 }}% · {{ vm.cpu_cores }}核</span>
-                <span>{{ fmtMB(vm.memory_used_mb) }} / {{ fmtMB(vm.memory_mb) }}</span>
-                <span>{{ vm.disk_gb }}GB</span>
-              </div>
-            </div>
-          </div>
+            </el-collapse-item>
+          </el-collapse>
         </div>
         <!-- 容器 -->
         <div class="detail-section" v-if="detailData.containers?.length">
-          <h4>容器 ({{ detailData.containers.length }})</h4>
-          <div class="resource-list">
-            <div v-for="ct in detailData.containers" :key="ct.vmid" class="resource-item">
-              <div class="resource-header">
-                <code class="mono">{{ ct.vmid }}</code>
-                <span class="resource-name">{{ ct.name }}</span>
-                <el-tag v-if="ct.has_template" type="warning" size="small" effect="plain">模板</el-tag>
-                <el-tag v-else :type="ct.status === 'running' ? 'success' : 'danger'" size="small">{{ ct.status === 'running' ? '运行' : '停止' }}</el-tag>
+          <el-collapse v-model="ctCollapse">
+            <el-collapse-item title="" name="ct">
+              <template #title>
+                <h4 class="collapse-title">容器 ({{ detailData.containers.length }})</h4>
+              </template>
+              <div class="resource-list">
+                <div v-for="ct in detailData.containers" :key="ct.vmid" class="resource-item">
+                  <div class="resource-header">
+                    <code class="mono">{{ ct.vmid }}</code>
+                    <span class="resource-name">{{ ct.name }}</span>
+                    <el-tag v-if="ct.has_template" type="warning" size="small" effect="plain">模板</el-tag>
+                    <el-tag v-else :type="ct.status === 'running' ? 'success' : 'danger'" size="small">{{ ct.status === 'running' ? '运行' : '停止' }}</el-tag>
+                  </div>
+                  <div class="resource-detail">
+                    <span>CPU {{ ct.cpu_usage?.toFixed(1) || 0 }}% · {{ ct.cpu_cores }}核</span>
+                    <span>{{ fmtMB(ct.memory_used_mb) }} / {{ fmtMB(ct.memory_mb) }}</span>
+                    <span>{{ ct.disk_gb }}GB</span>
+                  </div>
+                </div>
               </div>
-              <div class="resource-detail">
-                <span>CPU {{ ct.cpu_usage?.toFixed(1) || 0 }}% · {{ ct.cpu_cores }}核</span>
-                <span>{{ fmtMB(ct.memory_used_mb) }} / {{ fmtMB(ct.memory_mb) }}</span>
-                <span>{{ ct.disk_gb }}GB</span>
-              </div>
-            </div>
-          </div>
+            </el-collapse-item>
+          </el-collapse>
         </div>
       </div>
       <template #footer>
@@ -197,6 +209,8 @@ const onlineCount = computed(() => nodes.value.filter(n => n.status === 'online'
 const detailVisible = ref(false)
 const detailLoading = ref(false)
 const detailData = ref<NodeDetail | null>(null)
+const vmCollapse = ref<string[]>([])
+const ctCollapse = ref<string[]>([])
 
 onMounted(async () => {
   try { nodes.value = await getNodes() } catch {} finally { loading.value = false }
@@ -257,6 +271,13 @@ function fmtUptime(s: number) {
 .resource-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .resource-name { font-weight: 600; font-size: 13px; color: var(--text-primary); }
 .resource-detail { display: flex; gap: 16px; font-size: 12px; color: var(--text-muted); }
+/* 折叠面板样式 */
+.collapse-title { margin: 0; font-size: 13px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+:deep(.el-collapse) { border: none; }
+:deep(.el-collapse-item__header) { background: transparent; border: none; height: 32px; line-height: 32px; margin-bottom: 8px; }
+:deep(.el-collapse-item__wrap) { background: transparent; border: none; }
+:deep(.el-collapse-item__content) { padding-bottom: 0; }
+:deep(.el-collapse-item__arrow) { margin-right: 8px; }
 
 :deep(.el-table) { background: var(--el-card-bg-color); --el-table-bg-color: var(--el-card-bg-color); --el-table-tr-bg-color: var(--el-card-bg-color); --el-table-header-bg-color: var(--el-card-bg-color); --el-table-border-color: var(--border-color); --el-table-text-color: var(--text-primary); --el-table-header-text-color: var(--text-secondary); }
 :deep(.el-table::before) { display: none; }

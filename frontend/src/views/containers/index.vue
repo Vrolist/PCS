@@ -6,7 +6,9 @@
         <p class="page-desc">查看和管理所有 PVE LXC 容器</p>
       </div>
       <div class="header-actions">
-        <el-input v-model="search" placeholder="搜索名称 / ID" clearable prefix-icon="Search" style="width: 220px" @input="debounceLoad" />
+        <el-select v-model="nodeFilter" placeholder="节点" clearable style="width: 160px" @change="loadData">
+          <el-option v-for="n in nodes" :key="n.id" :label="n.node_name" :value="n.id" />
+        </el-select>
         <el-select v-model="statusFilter" placeholder="状态" clearable style="width: 110px" @change="loadData">
           <el-option label="运行中" value="running" />
           <el-option label="已停止" value="stopped" />
@@ -15,6 +17,7 @@
           <el-option label="容器" value="container" />
           <el-option label="模板" value="template" />
         </el-select>
+        <el-input v-model="search" placeholder="搜索名称 / ID" clearable prefix-icon="Search" style="width: 220px" @input="debounceLoad" />
       </div>
     </div>
     <el-card shadow="hover" class="table-card">
@@ -168,26 +171,34 @@ import { ref, onMounted } from 'vue'
 import { Loading } from '@element-plus/icons-vue'
 import { getContainers, getContainerDetail } from '@/api/containers'
 import type { ContainerInfo, ContainerDetail } from '@/api/containers'
+import { getNodes } from '@/api/nodes'
+import type { NodeInfo } from '@/api/nodes'
 
 const loading = ref(true)
 const containers = ref<ContainerInfo[]>([])
 const search = ref('')
 const statusFilter = ref('')
 const typeFilter = ref('')
+const nodeFilter = ref<number | ''>('')
+const nodes = ref<NodeInfo[]>([])
 let timer: ReturnType<typeof setTimeout> | null = null
 
 const detailVisible = ref(false)
 const detailLoading = ref(false)
 const detailData = ref<ContainerDetail | null>(null)
 
-onMounted(() => loadData())
+onMounted(async () => {
+  try { nodes.value = await getNodes() } catch {}
+  loadData()
+})
 
 async function loadData() {
   loading.value = true
   try {
-    const params: Record<string, string> = {}
+    const params: Record<string, any> = {}
     if (statusFilter.value) params.status = statusFilter.value
     if (search.value) params.search = search.value
+    if (nodeFilter.value !== '') params.node_id = nodeFilter.value
     let data = await getContainers(params)
     if (typeFilter.value === 'template') data = data.filter(c => c.has_template)
     else if (typeFilter.value === 'container') data = data.filter(c => !c.has_template)

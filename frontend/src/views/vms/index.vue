@@ -6,12 +6,15 @@
         <p class="page-desc">查看和管理所有 PVE 虚拟机实例</p>
       </div>
       <div class="header-actions">
-        <el-input v-model="search" placeholder="搜索名称 / VMID" clearable prefix-icon="Search" style="width: 220px" @input="debounceLoad" />
+        <el-select v-model="nodeFilter" placeholder="节点" clearable style="width: 160px" @change="loadData">
+          <el-option v-for="n in nodes" :key="n.id" :label="n.node_name" :value="n.id" />
+        </el-select>
         <el-select v-model="statusFilter" placeholder="状态" clearable style="width: 110px" @change="loadData">
           <el-option label="运行中" value="running" />
           <el-option label="已停止" value="stopped" />
           <el-option label="暂停" value="paused" />
         </el-select>
+        <el-input v-model="search" placeholder="搜索名称 / VMID" clearable prefix-icon="Search" style="width: 220px" @input="debounceLoad" />
       </div>
     </div>
     <el-card shadow="hover" class="table-card">
@@ -161,28 +164,36 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { Loading } from '@element-plus/icons-vue'
 import { getVMs, getVMDetail } from '@/api/vms'
 import type { VMInfo, VMDetail } from '@/api/vms'
+import { getNodes } from '@/api/nodes'
+import type { NodeInfo } from '@/api/nodes'
 
 const loading = ref(true)
 const vms = ref<VMInfo[]>([])
 const search = ref('')
 const statusFilter = ref('')
+const nodeFilter = ref<number | ''>('')
+const nodes = ref<NodeInfo[]>([])
 const detailVisible = ref(false)
 const detailLoading = ref(false)
 const detailData = ref<VMDetail | null>(null)
 let timer: ReturnType<typeof setTimeout> | null = null
 
-onMounted(() => loadData())
+onMounted(async () => {
+  try { nodes.value = await getNodes() } catch {}
+  loadData()
+})
 
 async function loadData() {
   loading.value = true
   try {
-    const params: Record<string, string> = {}
+    const params: Record<string, any> = {}
     if (statusFilter.value) params.status = statusFilter.value
     if (search.value) params.search = search.value
+    if (nodeFilter.value !== '') params.node_id = nodeFilter.value
     vms.value = await getVMs(params)
   } catch {} finally { loading.value = false }
 }
