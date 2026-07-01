@@ -37,7 +37,7 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-VERSION = "0.5.8"
+VERSION = "0.5.11"
 
 # 路径常量
 INSTALL_DIR = Path("/opt/pcs-agent")
@@ -531,7 +531,8 @@ def _scan_storages(pve, node):
 def _scan_networks(pve, node):
     try:
         net_list = pve.get_node_network(node)
-    except Exception:
+    except Exception as e:
+        logger.error(f"扫描网络失败 {node}: {e}")
         return []
 
     return [{

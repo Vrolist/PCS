@@ -1,3 +1,4 @@
+import json
 import logging
 import platform
 import time
@@ -578,9 +579,9 @@ class AgentTasksView(APIView):
 # Agent 版本常量（平台侧维护）
 # ============================================================
 
-AGENT_LATEST_VERSION = "0.5.8"
+AGENT_LATEST_VERSION = "0.5.11"
 AGENT_DOWNLOAD_URL = "/api/agent/install.sh"  # 从平台下载
-AGENT_CHANGELOG = "v0.5.8: 修复网络接口采集遗漏 bridge 类型, 补充 bridge_ports/bond 等字段"
+AGENT_CHANGELOG = "v0.5.11: 测试自动更新流程"
 
 
 class AgentUnregisterView(APIView):
