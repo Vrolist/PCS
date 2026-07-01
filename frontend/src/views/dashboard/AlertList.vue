@@ -19,7 +19,10 @@
       >
         <div class="alert-dot" />
         <div class="alert-content">
-          <span class="alert-title">{{ alert.title }}</span>
+          <div class="alert-text">
+            <span class="alert-title">{{ alert.title }}</span>
+            <span v-if="alert.cluster_name" class="alert-cluster">{{ alert.cluster_name }}</span>
+          </div>
           <span class="alert-time">{{ formatTime(alert.created_at) }}</span>
         </div>
         <el-tag :type="tagType(alert.severity)" size="small" effect="dark">

@@ -6,6 +6,11 @@
         <p class="page-desc">HA 高可用资源监控</p>
       </div>
     </div>
+    <div class="filter-bar">
+      <el-select v-model="clusterFilter" placeholder="选择集群" clearable style="width: 180px" @change="fetchData">
+        <el-option v-for="c in clusterList" :key="c.id" :label="c.name" :value="c.id" />
+      </el-select>
+    </div>
     <el-card shadow="hover" class="table-card">
       <div v-if="loading" class="loading-box">
         <el-icon class="is-loading" :size="20"><Loading /></el-icon>
@@ -53,12 +58,30 @@ import { ref, onMounted } from 'vue'
 import { Loading } from '@element-plus/icons-vue'
 import { getHAResources } from '@/api/ha'
 import type { HAResource } from '@/api/ha'
+import { getClusters, type Cluster } from '@/api/clusters'
 
 const loading = ref(true)
 const resources = ref<HAResource[]>([])
+const clusterFilter = ref<number | ''>('')
+const clusterList = ref<Cluster[]>([])
+
+async function fetchData() {
+  loading.value = true
+  try {
+    const params: Record<string, any> = {}
+    if (clusterFilter.value !== '') params.cluster_id = clusterFilter.value
+    resources.value = await getHAResources(params)
+  } catch {} finally { loading.value = false }
+}
 
 onMounted(async () => {
-  try { resources.value = await getHAResources() } catch {} finally { loading.value = false }
+  try {
+    const res = await getClusters()
+    clusterList.value = res.results
+    if (clusterList.value.length) clusterFilter.value = clusterList.value[0].id
+  } catch {} finally {
+    fetchData()
+  }
 })
 
 function formatTime(t: string) {
@@ -72,6 +95,7 @@ function formatTime(t: string) {
 .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
 .page-title { font-size: 24px; font-weight: 700; color: var(--text-heading); margin: 0; }
 .page-desc { font-size: 14px; color: var(--text-muted); margin: 4px 0 0; }
+.filter-bar { margin-bottom: 16px; display: flex; gap: 12px; }
 .table-card { border-radius: 16px; }
 .loading-box { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 40px; color: var(--text-secondary); }
 .sid { font-size: 12px; background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px; }

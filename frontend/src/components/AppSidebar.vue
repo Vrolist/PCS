@@ -24,6 +24,7 @@
       </transition>
     </div>
 
+    <!-- 集群 -->
     <div class="menu-section">
       <span v-if="!appStore.sidebarCollapsed" class="menu-label">集群</span>
     </div>
@@ -41,6 +42,11 @@
       </div>
       <template #title><span>集群管理</span></template>
     </el-menu-item>
+
+    <!-- 基本信息 -->
+    <div class="menu-section">
+      <span v-if="!appStore.sidebarCollapsed" class="menu-label">基本信息</span>
+    </div>
 
     <el-menu-item index="/dashboard/nodes" class="sidebar-item">
       <div class="item-icon-wrap">
@@ -77,6 +83,11 @@
       <template #title><span>网络接口</span></template>
     </el-menu-item>
 
+    <!-- 进阶信息 -->
+    <div class="menu-section">
+      <span v-if="!appStore.sidebarCollapsed" class="menu-label">进阶信息</span>
+    </div>
+
     <el-menu-item index="/dashboard/network-topology" class="sidebar-item">
       <div class="item-icon-wrap">
         <el-icon><Share /></el-icon>
@@ -91,8 +102,9 @@
       <template #title><span>Ceph 存储</span></template>
     </el-menu-item>
 
+    <!-- 运维检测 -->
     <div class="menu-section">
-      <span v-if="!appStore.sidebarCollapsed" class="menu-label">运维</span>
+      <span v-if="!appStore.sidebarCollapsed" class="menu-label">运维检测</span>
     </div>
 
     <el-menu-item index="/dashboard/alerts" class="sidebar-item">
@@ -109,8 +121,9 @@
       <template #title><span>运维服务</span></template>
     </el-menu-item>
 
+    <!-- 用户信息 -->
     <div class="menu-section">
-      <span v-if="!appStore.sidebarCollapsed" class="menu-label">用户</span>
+      <span v-if="!appStore.sidebarCollapsed" class="menu-label">用户信息</span>
     </div>
 
     <el-menu-item index="/dashboard/settings" class="sidebar-item">

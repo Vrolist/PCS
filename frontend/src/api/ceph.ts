@@ -15,6 +15,6 @@ export interface CephStatus {
   scanned_at: string
 }
 
-export function getCephStatus() {
-  return request.get<any, CephStatus>('/scanner/ceph/')
+export function getCephStatus(params?: { cluster_id?: number }) {
+  return request.get<any, CephStatus>('/scanner/ceph/', { params })
 }

@@ -52,15 +52,15 @@ class AlertsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        cluster_filter = request.query_params.get("cluster_id")
         cluster_ids = _user_cluster_ids(request.user)
         limit = int(request.query_params.get("limit", 10))
 
-        results = (
-            DetectionResult.objects
-            .filter(cluster_id__in=cluster_ids, is_resolved=False)
-            .select_related("cluster")
-            .order_by("-created_at")[:limit]
-        )
+        qs = DetectionResult.objects.filter(cluster_id__in=cluster_ids, is_resolved=False)
+        if cluster_filter:
+            qs = qs.filter(cluster_id=cluster_filter)
+
+        results = qs.select_related("cluster").order_by("-created_at")[:limit]
 
         data = [
             {

@@ -16,6 +16,6 @@ export interface HAResource {
   scanned_at: string
 }
 
-export function getHAResources() {
-  return request.get<any, HAResource[]>('/scanner/ha/')
+export function getHAResources(params?: { cluster_id?: number }) {
+  return request.get<any, HAResource[]>('/scanner/ha/', { params })
 }

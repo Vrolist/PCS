@@ -46,8 +46,10 @@ export function getDashboardStats() {
   return request.get<any, DashboardStats>('/dashboard/stats/')
 }
 
-export function getDashboardAlerts(limit = 10) {
-  return request.get<any, DashboardAlert[]>('/dashboard/alerts/', { params: { limit } })
+export function getDashboardAlerts(limit = 10, clusterId?: number) {
+  const params: Record<string, any> = { limit }
+  if (clusterId) params.cluster_id = clusterId
+  return request.get<any, DashboardAlert[]>('/dashboard/alerts/', { params })
 }
 
 export function getDashboardTrends(days = 7) {

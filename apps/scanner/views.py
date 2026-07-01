@@ -315,6 +315,7 @@ class CephStatusView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        cluster_filter = request.query_params.get("cluster_id")
         cluster_ids = _user_cluster_ids(request.user)
         latest = (
             CephStatus.objects.filter(cluster_id__in=cluster_ids)
@@ -329,6 +330,9 @@ class CephStatusView(APIView):
             ceph_statuses = CephStatus.objects.filter(q).order_by("-scanned_at")
         else:
             ceph_statuses = CephStatus.objects.none()
+
+        if cluster_filter:
+            ceph_statuses = ceph_statuses.filter(cluster_id=cluster_filter)
 
         if not ceph_statuses:
             return Response(None)
@@ -660,16 +664,15 @@ class HAListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        cluster_filter = request.query_params.get("cluster_id")
         cluster_ids = _user_cluster_ids(request.user)
-        resources = HAResource.objects.filter(
-            cluster_id__in=cluster_ids,
-            scanned_at__gte=Max("scanned_at"),
-        ).select_related("cluster")
 
         # 只取每个 sid 的最新记录
+        base_qs = HAResource.objects.filter(cluster_id__in=cluster_ids)
+        if cluster_filter:
+            base_qs = base_qs.filter(cluster_id=cluster_filter)
         latest = (
-            HAResource.objects
-            .filter(cluster_id__in=cluster_ids)
+            base_qs
             .values("sid")
             .annotate(last_scan=Max("scanned_at"))
         )
