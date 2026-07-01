@@ -578,9 +578,9 @@ class AgentTasksView(APIView):
 # Agent 版本常量（平台侧维护）
 # ============================================================
 
-AGENT_LATEST_VERSION = "0.5.7"
+AGENT_LATEST_VERSION = "0.5.8"
 AGENT_DOWNLOAD_URL = "/api/agent/install.sh"  # 从平台下载
-AGENT_CHANGELOG = "v0.5.7: 验证完整自更新链路"
+AGENT_CHANGELOG = "v0.5.8: 修复网络接口采集遗漏 bridge 类型, 补充 bridge_ports/bond 等字段"
 
 
 class AgentUnregisterView(APIView):

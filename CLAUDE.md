@@ -195,15 +195,27 @@ curl 安装脚本
 
 Agent 运行中:
   → PVE API 认证 (POST /access/ticket)
-  → 心跳循环 (每 60s POST /api/agent/heartbeat/, 含 version)
+  → 心跳循环 (每 120s POST /api/agent/heartbeat/, 含 version)
     → 收到 410 → _stop_permanently() (systemctl disable + exit)
-  → 扫描循环 (每 3600s)
+    → 收到 update.available → _handle_update() (自动更新，见下方)
+  → 扫描循环 (每 300s)
     → 调用 PVE API 采集所有节点
     → 数据清洗 (bytes→MB/GB, CPU→%)
     → POST /api/agent/scan/upload/
     → 收到 423 → 暂停上传，心跳保持 (deactivated)
     → 收到 410 → _stop_permanently() (集群已删除)
     → 检查下发任务 GET /api/agent/tasks/
+
+Agent 自动更新 (v0.5.0+):
+  平台侧: views.py 维护 AGENT_LATEST_VERSION 常量
+  心跳响应: agent.version < AGENT_LATEST_VERSION → 返回 update.available + download_url
+  Agent 侧:
+    → _handle_update() 接收 update 指令
+    → GET /api/agent/install.sh?agent=1 下载新版 agent.py 源码
+    → 校验 VERSION 字段 → 备份旧版 → 替换 → 重启 systemd
+  安装脚本:
+    → install.sh?token=X&platform=Y → 返回 bash 安装脚本（首次安装用）
+    → install.sh?agent=1 → 返回 agent.py 源码（自动更新用）
 
 Agent 版本提示:
   Web 前端 Agent 表格显示 version 列
@@ -273,15 +285,26 @@ GET /api/auth/logs/?page=1&page_size=20&action=login
 **Agent 注册：**
 ```json
 POST /api/agent/register/
-{"agent_token": "...", "pve_api_endpoint": "https://...", "pve_username": "root@pam", "pve_password": "...", "hostname": "pve-1", "scan_interval": 3600}
-→ {"agent_id": "hex-uuid", "scan_interval": 3600, "status": "online"}
+{"agent_token": "...", "pve_api_endpoint": "https://...", "pve_username": "root@pam", "pve_password": "...", "hostname": "pve-1", "scan_interval": 300}
+→ {"agent_id": "hex-uuid", "scan_interval": 300, "status": "online"}
 ```
 
 **心跳上报（包含版本号）：**
 ```json
 POST /api/agent/heartbeat/
-{"agent_id": "hex-uuid", "status": "online", "current_task": "", "version": "0.3.0"}
+{"agent_id": "hex-uuid", "status": "online", "current_task": "", "version": "0.5.8"}
 → {"ok": true}
+
+// 有新版本时，响应自动附带 update 字段：
+→ {
+    "ok": true,
+    "update": {
+      "available": true,
+      "latest_version": "0.5.8",
+      "download_url": "http://platform:8066/api/agent/install.sh?agent=1",
+      "changelog": "v0.5.8: ..."
+    }
+  }
 ```
 
 **集群停用/删除特殊响应：**
@@ -317,13 +340,16 @@ POST /api/agent/unregister/
 **版本查询：**
 ```
 GET /api/agent/version/
-→ {"latest_version": "0.3.0", "download_url": "/api/agent/install.sh", "changelog": "v0.3.0: 集群停用/删除感知，心跳上报版本号"}
+→ {"latest_version": "0.5.8", "download_url": "/api/agent/install.sh", "changelog": "v0.5.8: ..."}
 ```
 
 **安装脚本获取：**
 ```
 GET /api/agent/install.sh?token=<agent_token>&platform=<platform_url>
-→ (返回 bash 安装脚本内容)
+→ 返回 bash 安装脚本（首次安装用，交互式配置 + 注册 + systemd 安装）
+
+GET /api/agent/install.sh?agent=1
+→ 返回 agent.py 源码（自动更新用，Agent _handle_update() 调用此端点下载新版）
 ```
 
 ### Dashboard `/api/dashboard/`
