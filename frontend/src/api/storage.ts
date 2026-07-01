@@ -14,6 +14,6 @@ export interface Storage {
   scanned_at: string
 }
 
-export function getStorageList(params?: { node?: string }) {
+export function getStorageList(params?: { node?: string; cluster_id?: number }) {
   return request.get<any, Storage[]>('/scanner/storage/', { params })
 }

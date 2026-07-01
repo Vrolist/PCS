@@ -5,9 +5,14 @@
         <h2 class="page-title">节点管理</h2>
         <p class="page-desc">管理和监控 PVE 集群节点状态</p>
       </div>
-      <div class="header-stats" v-if="nodes.length">
-        <el-tag type="success" effect="plain">在线 {{ onlineCount }}</el-tag>
-        <el-tag type="info" effect="plain">总计 {{ nodes.length }}</el-tag>
+      <div class="header-actions">
+        <el-select v-model="clusterFilter" placeholder="选择集群" clearable style="width: 180px" @change="loadData">
+          <el-option v-for="c in clusterList" :key="c.id" :label="c.name" :value="c.id" />
+        </el-select>
+        <div class="header-stats" v-if="nodes.length">
+          <el-tag type="success" effect="plain">在线 {{ onlineCount }}</el-tag>
+          <el-tag type="info" effect="plain">总计 {{ nodes.length }}</el-tag>
+        </div>
       </div>
     </div>
     <el-card shadow="hover" class="table-card">
@@ -201,10 +206,13 @@ import { ref, computed, onMounted } from 'vue'
 import { Loading } from '@element-plus/icons-vue'
 import { getNodes, getNodeDetail } from '@/api/nodes'
 import type { NodeInfo, NodeDetail } from '@/api/nodes'
+import { getClusters, type Cluster } from '@/api/clusters'
 
 const loading = ref(true)
 const nodes = ref<NodeInfo[]>([])
 const onlineCount = computed(() => nodes.value.filter(n => n.status === 'online').length)
+const clusterFilter = ref<number | ''>('')
+const clusterList = ref<Cluster[]>([])
 
 const detailVisible = ref(false)
 const detailLoading = ref(false)
@@ -212,8 +220,25 @@ const detailData = ref<NodeDetail | null>(null)
 const vmCollapse = ref<string[]>([])
 const ctCollapse = ref<string[]>([])
 
+async function loadData() {
+  loading.value = true
+  try {
+    const params: Record<string, any> = {}
+    if (clusterFilter.value !== '') params.cluster_id = clusterFilter.value
+    nodes.value = await getNodes(params)
+  } catch {} finally { loading.value = false }
+}
+
 onMounted(async () => {
-  try { nodes.value = await getNodes() } catch {} finally { loading.value = false }
+  try {
+    const res = await getClusters()
+    clusterList.value = res.results
+    if (clusterList.value.length) {
+      clusterFilter.value = clusterList.value[0].id
+    }
+  } catch {} finally {
+    loadData()
+  }
 })
 
 async function showDetail(row: NodeInfo) {
@@ -242,6 +267,7 @@ function fmtUptime(s: number) {
 .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
 .page-title { font-size: 24px; font-weight: 700; color: var(--text-heading); margin: 0; }
 .page-desc { font-size: 14px; color: var(--text-muted); margin: 4px 0 0; }
+.header-actions { display: flex; gap: 8px; align-items: center; }
 .header-stats { display: flex; gap: 8px; }
 .table-card { border-radius: 16px; }
 .loading-box { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 40px; color: var(--text-secondary); }

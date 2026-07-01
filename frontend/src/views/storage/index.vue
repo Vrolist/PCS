@@ -5,6 +5,9 @@
     </div>
 
     <div class="filter-bar">
+      <el-select v-model="clusterFilter" placeholder="选择集群" clearable style="width: 180px" @change="fetchData">
+        <el-option v-for="c in clusterList" :key="c.id" :label="c.name" :value="c.id" />
+      </el-select>
       <el-select v-model="filterNode" placeholder="全部节点" clearable style="width: 160px">
         <el-option v-for="n in nodes" :key="n" :label="n" :value="n" />
       </el-select>
@@ -54,10 +57,13 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { getStorageList, type Storage } from '@/api/storage'
+import { getClusters, type Cluster } from '@/api/clusters'
 
 const loading = ref(false)
 const storageList = ref<Storage[]>([])
 const filterNode = ref('')
+const clusterFilter = ref<number | ''>('')
+const clusterList = ref<Cluster[]>([])
 
 const nodes = computed(() => {
   const set = new Set(storageList.value.map(s => s.node_name))
@@ -72,7 +78,9 @@ const filteredList = computed(() => {
 async function fetchData() {
   loading.value = true
   try {
-    storageList.value = await getStorageList()
+    const params: Record<string, any> = {}
+    if (clusterFilter.value !== '') params.cluster_id = clusterFilter.value
+    storageList.value = await getStorageList(params)
   } finally {
     loading.value = false
   }
@@ -93,12 +101,22 @@ function getProgressColor(percent: number): string {
   return '#67c23a'
 }
 
-onMounted(fetchData)
+onMounted(async () => {
+  try {
+    const res = await getClusters()
+    clusterList.value = res.results
+    if (clusterList.value.length) {
+      clusterFilter.value = clusterList.value[0].id
+    }
+  } catch {} finally {
+    fetchData()
+  }
+})
 </script>
 
 <style scoped>
 .page-container { padding: 20px; }
-.page-header { margin-bottom: 16px; }
+.page-header { margin-bottom: 8px; }
 .page-header h2 { margin: 0; font-size: 20px; font-weight: 600; }
 .filter-bar { margin-bottom: 16px; display: flex; gap: 12px; }
 </style>

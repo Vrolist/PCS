@@ -42,8 +42,11 @@ class NodeListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        cluster_filter = request.query_params.get("cluster_id")
         node_ids = _latest_node_ids(request.user)
         nodes = ClusterNode.objects.filter(pk__in=node_ids).select_related("cluster")
+        if cluster_filter:
+            nodes = nodes.filter(cluster_id=cluster_filter)
         data = [{
             "id": n.id,
             "cluster_id": n.cluster_id,
@@ -219,8 +222,11 @@ class StorageListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        cluster_filter = request.query_params.get("cluster_id")
         cluster_ids = _user_cluster_ids(request.user)
         nodes = ClusterNode.objects.filter(cluster_id__in=cluster_ids)
+        if cluster_filter:
+            nodes = nodes.filter(cluster_id=cluster_filter)
         storages = Storage.objects.filter(node__in=nodes).select_related("node__cluster")
 
         # 只取每个存储的最新记录
@@ -261,8 +267,11 @@ class NetworkInterfaceListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        cluster_filter = request.query_params.get("cluster_id")
         cluster_ids = _user_cluster_ids(request.user)
         nodes = ClusterNode.objects.filter(cluster_id__in=cluster_ids)
+        if cluster_filter:
+            nodes = nodes.filter(cluster_id=cluster_filter)
         ifaces = NetworkInterface.objects.filter(node__in=nodes).select_related("node__cluster")
 
         latest = (

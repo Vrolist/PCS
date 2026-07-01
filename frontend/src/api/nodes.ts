@@ -91,8 +91,8 @@ export interface NodeDetail {
   containers: NodeContainer[]
 }
 
-export function getNodes() {
-  return request.get<any, NodeInfo[]>('/scanner/nodes/')
+export function getNodes(params?: { cluster_id?: number }) {
+  return request.get<any, NodeInfo[]>('/scanner/nodes/', { params })
 }
 
 export function getNodeDetail(id: number) {

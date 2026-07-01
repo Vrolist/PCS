@@ -19,6 +19,6 @@ export interface NetworkInterface {
   scanned_at: string
 }
 
-export function getNetworkList(params?: { node?: string; type?: string }) {
+export function getNetworkList(params?: { node?: string; type?: string; cluster_id?: number }) {
   return request.get<any, NetworkInterface[]>('/scanner/networks/', { params })
 }
