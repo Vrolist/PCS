@@ -313,11 +313,11 @@ onMounted(async () => {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 16px;
-  padding: 24px;
   flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow: hidden;
 }
 .empty-state { display: flex; align-items: center; justify-content: center; flex: 1; }
 

@@ -59,4 +59,7 @@ onMounted(() => {
   overflow-y: auto;
   transition: background 0.3s;
 }
+.main-content > :first-child {
+  min-height: 100%;
+}
 </style>
