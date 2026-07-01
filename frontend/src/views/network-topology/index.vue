@@ -83,7 +83,7 @@
           <g class="segment-labels">
             <g v-for="seg in networkSegments" :key="'label-' + seg.cidr"
               :transform="`translate(${segmentOffsetsX[seg.cidr] || 0}, ${segmentOffsets[seg.cidr] || 0})`">
-              <text :x="seg.bounds.x + seg.bounds.width / 2" :y="seg.bounds.y + 16"
+              <text :x="seg.bounds.x + seg.bounds.width / 2" :y="seg.bounds.y + 10"
                 text-anchor="middle" class="segment-label" :fill="seg.labelColor">
                 {{ seg.label }}
               </text>
