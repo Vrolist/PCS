@@ -125,7 +125,7 @@ function getCpuColor(percent: number): string {
   --el-table-header-text-color: var(--text-secondary);
 }
 :deep(.el-table::before), :deep(.el-table--border::after) { display: none; }
-:deep(.el-table th.el-table__cell) { background: transparent; border-bottom: 1px solid var(--border-color); }
+:deep(.el-table th.el-table__cell) { background-color: var(--bg-card); border-bottom: 1px solid var(--border-color); }
 :deep(.el-table td.el-table__cell) { border-bottom: 1px solid var(--border-color); }
 /* 固定列容器中的 td 强制使用卡片背景色 */
 :deep(.el-table__fixed td),
