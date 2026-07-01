@@ -65,7 +65,7 @@
           <!-- 接口 -->
           <g v-for="iface in interfacePositions" :key="'iface-' + iface.id"
             class="iface-group" :class="{ dragging: dragType === 'iface' && draggingId === iface.id }"
-            :transform="`translate(${iface.x}, ${iface.y + getIfaceSegOffset(iface)})`"
+            :transform="`translate(${iface.x + getIfaceSegOffsetX(iface)}, ${iface.y + getIfaceSegOffset(iface)})`"
             @mousedown.prevent="onIfaceMouseDown($event, iface)">
             <rect x="0" y="0" :width="ifaceWidth" :height="ifaceHeight" rx="8"
               :fill="getIfaceFill(iface.type)" :stroke="getIfaceStroke(iface.type)" stroke-width="1.5" />
@@ -393,9 +393,10 @@ const connections = computed<Connection[]>(() => {
       )
       if (parentBond) {
         const pso = getIfaceSegOffset(parentBond)
+        const psoX = getIfaceSegOffsetX(parentBond)
         conns.push({
-          x1: parentBond.x + ifaceWidth / 2, y1: parentBond.y + pso + ifaceHeight,
-          x2: iface.x + ifaceWidth / 2, y2: iface.y + so,
+          x1: parentBond.x + psoX + ifaceWidth / 2, y1: parentBond.y + pso + ifaceHeight,
+          x2: iface.x + getIfaceSegOffsetX(iface) + ifaceWidth / 2, y2: iface.y + so,
           color: getIfaceColor('bond')
         })
         return
@@ -407,9 +408,10 @@ const connections = computed<Connection[]>(() => {
       )
       if (parentBridge) {
         const pso = getIfaceSegOffset(parentBridge)
+        const psoX = getIfaceSegOffsetX(parentBridge)
         conns.push({
-          x1: parentBridge.x + ifaceWidth / 2, y1: parentBridge.y + pso + ifaceHeight,
-          x2: iface.x + ifaceWidth / 2, y2: iface.y + so,
+          x1: parentBridge.x + psoX + ifaceWidth / 2, y1: parentBridge.y + pso + ifaceHeight,
+          x2: iface.x + getIfaceSegOffsetX(iface) + ifaceWidth / 2, y2: iface.y + so,
           color: getIfaceColor('bridge')
         })
         return
@@ -418,7 +420,7 @@ const connections = computed<Connection[]>(() => {
       // 顶层接口：连到节点
       conns.push({
         x1: np.x + nodeWidth / 2, y1: np.y + nodeHeight,
-        x2: iface.x + ifaceWidth / 2, y2: iface.y + so,
+        x2: iface.x + getIfaceSegOffsetX(iface) + ifaceWidth / 2, y2: iface.y + so,
         color: getIfaceColor(iface.type)
       })
     })
@@ -460,6 +462,12 @@ function toNetworkCidr(address: string): string | null {
 function getIfaceSegOffset(iface: IfacePos): number {
   const cidr = iface.address ? toNetworkCidr(iface.address) : null
   return cidr ? (segmentOffsets.value[cidr] || 0) : 0
+}
+
+// 获取接口所属段的 X 偏移（用于段拖动）
+function getIfaceSegOffsetX(iface: IfacePos): number {
+  const cidr = iface.address ? toNetworkCidr(iface.address) : null
+  return cidr ? (segmentOffsetsX.value[cidr] || 0) : 0
 }
 
 const segmentColors = [
