@@ -2,7 +2,12 @@
   <div class="node-table-card">
     <div class="card-header">
       <span class="card-title">节点详情</span>
-      <router-link to="/dashboard/clusters" class="view-all">查看全部</router-link>
+      <div class="header-right">
+        <el-select v-model="clusterFilter" size="small" placeholder="全部集群" clearable style="width: 140px" @change="fetchNodes">
+          <el-option v-for="c in clusterList" :key="c.id" :label="c.name" :value="c.id" />
+        </el-select>
+        <router-link to="/dashboard/clusters" class="view-all">查看全部</router-link>
+      </div>
     </div>
     <div v-if="loading" class="node-loading">
       <el-icon class="is-loading" :size="20"><Loading /></el-icon>
@@ -50,6 +55,7 @@
           {{ row.ip_address || '未知' }}
         </template>
       </el-table-column>
+      <el-table-column prop="cluster_name" label="集群" min-width="140" />
       <el-table-column prop="pve_version" label="PVE版本" min-width="160" />
       <el-table-column prop="status" label="状态" width="100" align="center" fixed="right">
         <template #default="{ row }">
@@ -67,17 +73,28 @@ import { ref, onMounted } from 'vue'
 import { Loading } from '@element-plus/icons-vue'
 import { getDashboardNodes } from '@/api/dashboard'
 import type { DashboardNode } from '@/api/dashboard'
+import { getClusters, type Cluster } from '@/api/clusters'
 
 const loading = ref(true)
 const nodes = ref<DashboardNode[]>([])
+const clusterFilter = ref<number | ''>('')
+const clusterList = ref<Cluster[]>([])
+
+async function fetchNodes() {
+  loading.value = true
+  try {
+    nodes.value = await getDashboardNodes(clusterFilter.value || undefined)
+  } catch {} finally {
+    loading.value = false
+  }
+}
 
 onMounted(async () => {
   try {
-    nodes.value = await getDashboardNodes()
-  } catch {
-    // error handled by interceptor
-  } finally {
-    loading.value = false
+    const res = await getClusters()
+    clusterList.value = res.results
+  } catch {} finally {
+    fetchNodes()
   }
 })
 
@@ -108,6 +125,7 @@ function getCpuColor(percent: number): string {
   padding: 20px 24px 16px;
 }
 .card-title { font-size: 16px; font-weight: 600; color: var(--text-heading); }
+.header-right { display: flex; align-items: center; gap: 12px; }
 .view-all { font-size: 13px; color: var(--primary-color); text-decoration: none; transition: opacity 0.2s; }
 .view-all:hover { opacity: 0.8; }
 .node-loading {

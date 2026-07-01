@@ -107,9 +107,11 @@ function tagLabel(severity: string) {
   flex: 1; display: flex; align-items: center; justify-content: space-between;
   gap: 12px; min-width: 0;
 }
+.alert-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
 .alert-title {
   font-size: 14px; color: var(--text-primary);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.alert-cluster { font-size: 12px; color: var(--text-muted); }
 .alert-time { font-size: 13px; color: var(--text-muted); white-space: nowrap; flex-shrink: 0; }
 </style>

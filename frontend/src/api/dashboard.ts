@@ -52,10 +52,14 @@ export function getDashboardAlerts(limit = 10, clusterId?: number) {
   return request.get<any, DashboardAlert[]>('/dashboard/alerts/', { params })
 }
 
-export function getDashboardTrends(days = 7) {
-  return request.get<any, DashboardTrends>('/dashboard/trends/', { params: { days } })
+export function getDashboardTrends(days = 7, clusterId?: number) {
+  const params: Record<string, any> = { days }
+  if (clusterId) params.cluster_id = clusterId
+  return request.get<any, DashboardTrends>('/dashboard/trends/', { params })
 }
 
-export function getDashboardNodes() {
-  return request.get<any, DashboardNode[]>('/dashboard/nodes/')
+export function getDashboardNodes(clusterId?: number) {
+  const params: Record<string, any> = {}
+  if (clusterId) params.cluster_id = clusterId
+  return request.get<any, DashboardNode[]>('/dashboard/nodes/', { params })
 }

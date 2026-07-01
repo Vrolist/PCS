@@ -85,14 +85,14 @@ class TrendsView(APIView):
 
     def get(self, request):
         days = int(request.query_params.get("days", 7))
+        cluster_filter = request.query_params.get("cluster_id")
         since = timezone.now() - timezone.timedelta(days=days)
         cluster_ids = _user_cluster_ids(request.user)
 
-        histories = (
-            ScanHistory.objects
-            .filter(cluster_id__in=cluster_ids, scanned_at__gte=since)
-            .order_by("scanned_at")
-        )
+        qs = ScanHistory.objects.filter(cluster_id__in=cluster_ids, scanned_at__gte=since)
+        if cluster_filter:
+            qs = qs.filter(cluster_id=cluster_filter)
+        histories = qs.order_by("scanned_at")
 
         # 按日期分组，计算每日平均值
         daily = defaultdict(lambda: {"cpu_sum": 0.0, "mem_sum": 0.0, "count": 0})
@@ -128,15 +128,18 @@ class NodesView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        cluster_filter = request.query_params.get("cluster_id")
         cluster_ids = _user_cluster_ids(request.user)
 
         # 获取用户每个集群下每个节点的最新扫描记录
-        # 使用子查询找到每个 (cluster, node_name) 的最新 scanned_at
         from django.db.models import Max
 
+        base_qs = ClusterNode.objects.filter(cluster_id__in=cluster_ids)
+        if cluster_filter:
+            base_qs = base_qs.filter(cluster_id=cluster_filter)
+
         latest = (
-            ClusterNode.objects
-            .filter(cluster_id__in=cluster_ids)
+            base_qs
             .values("cluster_id", "node_name")
             .annotate(last_scan=Max("scanned_at"))
         )
@@ -150,9 +153,7 @@ class NodesView(APIView):
             return Response([])
 
         # 批量获取最新的节点记录
-        nodes = ClusterNode.objects.filter(
-            cluster_id__in=cluster_ids,
-        ).select_related("cluster")
+        nodes = base_qs.select_related("cluster")
 
         # 按 (cluster_id, node_name, scanned_at) 匹配
         result_map = {}

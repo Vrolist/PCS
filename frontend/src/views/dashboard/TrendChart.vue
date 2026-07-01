@@ -2,10 +2,15 @@
   <div class="trend-chart-card">
     <div class="trend-chart-header">
       <h3 class="trend-chart-title">资源趋势</h3>
-      <el-select v-model="timeRange" size="small" class="time-range-select" @change="loadTrends">
-        <el-option label="近 7 天" value="7" />
-        <el-option label="近 15 天" value="15" />
-      </el-select>
+      <div class="trend-chart-filters">
+        <el-select v-model="clusterFilter" size="small" placeholder="全部集群" clearable style="width: 140px" @change="loadTrends">
+          <el-option v-for="c in clusterList" :key="c.id" :label="c.name" :value="c.id" />
+        </el-select>
+        <el-select v-model="timeRange" size="small" class="time-range-select" @change="loadTrends">
+          <el-option label="近 7 天" value="7" />
+          <el-option label="近 15 天" value="15" />
+        </el-select>
+      </div>
     </div>
     <div class="trend-chart-body">
       <v-chart :option="chartOption" autoresize class="trend-chart" />
@@ -19,9 +24,12 @@ import * as echarts from 'echarts'
 import VChart from 'vue-echarts'
 import { useThemeStore } from '@/stores/theme'
 import { getDashboardTrends } from '@/api/dashboard'
+import { getClusters, type Cluster } from '@/api/clusters'
 
 const timeRange = ref('7')
 const themeStore = useThemeStore()
+const clusterFilter = ref<number | ''>('')
+const clusterList = ref<Cluster[]>([])
 
 const dates = ref<string[]>([])
 const cpuData = ref<number[]>([])
@@ -29,7 +37,7 @@ const memoryData = ref<number[]>([])
 
 async function loadTrends() {
   try {
-    const data = await getDashboardTrends(Number(timeRange.value))
+    const data = await getDashboardTrends(Number(timeRange.value), clusterFilter.value || undefined)
     dates.value = data.dates
     cpuData.value = data.cpu_avg
     memoryData.value = data.memory_avg
@@ -38,7 +46,14 @@ async function loadTrends() {
   }
 }
 
-onMounted(loadTrends)
+onMounted(async () => {
+  try {
+    const res = await getClusters()
+    clusterList.value = res.results
+  } catch {} finally {
+    loadTrends()
+  }
+})
 
 const chartOption = computed(() => {
   const isDark = themeStore.theme === 'dark'
@@ -122,6 +137,7 @@ const chartOption = computed(() => {
   padding: 20px 24px 0;
 }
 .trend-chart-title { font-size: 16px; font-weight: 600; color: var(--text-heading); margin: 0; }
+.trend-chart-filters { display: flex; gap: 8px; align-items: center; }
 .time-range-select { width: 120px; }
 .trend-chart-body { padding: 8px 16px 16px; }
 .trend-chart { width: 100%; height: 260px; }
