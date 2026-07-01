@@ -254,10 +254,18 @@ function fmtUptime(s: number) {
 .chip-body { font-size: 13px; font-weight: 500; color: var(--text-primary); }
 .chip-sub { font-size: 12px; color: var(--text-muted); }
 
-:deep(.el-table) { background: transparent; --el-table-bg-color: transparent; --el-table-tr-bg-color: transparent; --el-table-header-bg-color: transparent; --el-table-border-color: var(--border-color); --el-table-text-color: var(--text-primary); --el-table-header-text-color: var(--text-secondary); }
+:deep(.el-table) { background: var(--el-card-bg-color); --el-table-bg-color: var(--el-card-bg-color); --el-table-tr-bg-color: var(--el-card-bg-color); --el-table-header-bg-color: var(--el-card-bg-color); --el-table-border-color: var(--border-color); --el-table-text-color: var(--text-primary); --el-table-header-text-color: var(--text-secondary); }
 :deep(.el-table::before) { display: none; }
 :deep(.el-table th.el-table__cell) { background: transparent; }
 :deep(.el-table--enable-row-hover .el-table__body tr:hover > td) { background-color: rgba(64, 158, 255, 0.05); }
 :deep(.el-tag--success) { --el-tag-bg-color: rgba(103, 194, 58, 0.15); --el-tag-text-color: #67c23a; --el-tag-border-color: transparent; }
 :deep(.el-tag--danger) { --el-tag-bg-color: rgba(245, 108, 108, 0.15); --el-tag-text-color: #f56c6c; --el-tag-border-color: transparent; }
+/* 固定列强制不透明背景 */
+:deep(.el-table__fixed-right td),
+:deep(.el-table .el-table-fixed-column--right) {
+  background-color: var(--el-card-bg-color) !important;
+}
+:deep(.el-table__fixed-right th) {
+  background-color: var(--el-card-bg-color) !important;
+}
 </style>

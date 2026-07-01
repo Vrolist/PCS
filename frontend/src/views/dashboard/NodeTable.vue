@@ -9,7 +9,7 @@
       <span>加载中...</span>
     </div>
     <el-table v-else :data="nodes" style="width: 100%">
-      <el-table-column prop="name" label="节点名称" min-width="120">
+      <el-table-column prop="name" label="节点名称" min-width="120" fixed="left">
         <template #default="{ row }">
           <span class="node-name">{{ row.name }}</span>
         </template>
@@ -51,7 +51,7 @@
         </template>
       </el-table-column>
       <el-table-column prop="pve_version" label="PVE版本" min-width="160" />
-      <el-table-column prop="status" label="状态" width="100" align="center">
+      <el-table-column prop="status" label="状态" width="100" align="center" fixed="right">
         <template #default="{ row }">
           <el-tag :type="row.status === 'online' ? 'success' : 'warning'" disable-transitions>
             {{ row.status === 'online' ? '在线' : '告警' }}
@@ -115,10 +115,10 @@ function getCpuColor(percent: number): string {
   padding: 40px; color: var(--text-secondary); font-size: 14px;
 }
 :deep(.el-table) {
-  background: transparent;
-  --el-table-bg-color: transparent;
-  --el-table-tr-bg-color: transparent;
-  --el-table-header-bg-color: transparent;
+  background: var(--bg-card);
+  --el-table-bg-color: var(--bg-card);
+  --el-table-tr-bg-color: var(--bg-card);
+  --el-table-header-bg-color: var(--bg-card);
   --el-table-row-hover-bg-color: rgba(64, 158, 255, 0.05);
   --el-table-border-color: var(--border-color);
   --el-table-text-color: var(--text-primary);
@@ -127,6 +127,18 @@ function getCpuColor(percent: number): string {
 :deep(.el-table::before), :deep(.el-table--border::after) { display: none; }
 :deep(.el-table th.el-table__cell) { background: transparent; border-bottom: 1px solid var(--border-color); }
 :deep(.el-table td.el-table__cell) { border-bottom: 1px solid var(--border-color); }
+/* 固定列容器中的 td 强制使用卡片背景色 */
+:deep(.el-table__fixed td),
+:deep(.el-table__fixed-right td),
+:deep(.el-table .el-table-fixed-column--left),
+:deep(.el-table .el-table-fixed-column--right) {
+  background-color: var(--bg-card) !important;
+}
+/* 固定列表头也同步 */
+:deep(.el-table__fixed th),
+:deep(.el-table__fixed-right th) {
+  background-color: var(--bg-card) !important;
+}
 :deep(.el-table--enable-row-hover .el-table__body tr:hover > td) { background-color: rgba(64, 158, 255, 0.05); }
 :deep(.el-table--border .el-table__inner-wrapper::after),
 :deep(.el-table--border::before),
