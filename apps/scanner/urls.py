@@ -16,4 +16,5 @@ urlpatterns = [
     path("sdn/zones/", views.SDNZoneListView.as_view(), name="scanner-sdn-zones"),
     path("sdn/vnets/", views.SDNVNetListView.as_view(), name="scanner-sdn-vnets"),
     path("sdn/subnets/", views.SDNSubnetListView.as_view(), name="scanner-sdn-subnets"),
+    path("snapshots/", views.SnapshotListView.as_view(), name="scanner-snapshots"),
 ]

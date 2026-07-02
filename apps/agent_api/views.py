@@ -27,6 +27,7 @@ from apps.scanner.models import (
     Storage,
     VM,
     VMConfig,
+    VMSnapshot,
     LXCConfig,
     HAResource,
 )
@@ -147,11 +148,15 @@ class AgentHeartbeatView(APIView):
         agent.status = d["status"]
         agent.current_task = d.get("current_task", "")
         agent.error_message = d.get("error_message", "")
-        agent.version = d.get("version", agent.version)
-        agent.save(update_fields=[
+        if "version" in request.data and request.data["version"]:
+            agent.version = d["version"]
+        update_fields = [
             "last_heartbeat_at", "status", "current_task", "error_message",
-            "version", "updated_at",
-        ])
+            "updated_at",
+        ]
+        if "version" in request.data and request.data["version"]:
+            update_fields.append("version")
+        agent.save(update_fields=update_fields)
 
         # 构建响应
         response = {"ok": True}
@@ -295,6 +300,7 @@ class ScanUploadView(APIView):
             SDNZone.objects.filter(cluster=cluster, scanned_at__lt=cutoff_7d),
             SDNVNet.objects.filter(cluster=cluster, scanned_at__lt=cutoff_7d),
             SDNSubnet.objects.filter(cluster=cluster, scanned_at__lt=cutoff_7d),
+            VMSnapshot.objects.filter(vm__node__cluster=cluster, scanned_at__lt=cutoff_7d),
         ]:
             count, _ = qs.delete()
             total += count
@@ -394,6 +400,32 @@ class ScanUploadView(APIView):
                             "description": cfg.get("description", ""),
                             "tags": cfg.get("tags", ""),
                             "raw_config": cfg,
+                            "scanned_at": scanned_at,
+                        },
+                    )
+
+                # 快照
+                for snap_data in vm_data.get("snapshots", []):
+                    snap_time = snap_data.get("snap_time")
+                    if isinstance(snap_time, str):
+                        try:
+                            from django.utils.dateparse import parse_datetime
+                            snap_time = parse_datetime(snap_time)
+                        except Exception:
+                            snap_time = None
+                    VMSnapshot.objects.update_or_create(
+                        vm=vm,
+                        snapid=snap_data.get("snapid", ""),
+                        defaults={
+                            "scan": scan_task,
+                            "name": snap_data.get("name", ""),
+                            "description": snap_data.get("description", ""),
+                            "snap_time": snap_time,
+                            "parent": snap_data.get("parent", ""),
+                            "ram": snap_data.get("ram", False),
+                            "vmstate": snap_data.get("vmstate", False),
+                            "snap_type": snap_data.get("snap_type", ""),
+                            "size_mb": snap_data.get("size_mb"),
                             "scanned_at": scanned_at,
                         },
                     )

@@ -651,6 +651,14 @@ export default {
     firewall: { title: 'Firewall', subtitle: 'Cluster and node firewall rule management', comingSoon: 'Firewall feature coming soon' },
     backup: { title: 'Backup Management', subtitle: 'Virtual machine and container backup task management', comingSoon: 'Backup feature coming soon' },
     replication: { title: 'Data Replication', subtitle: 'Cross-node storage replication task management', comingSoon: 'Replication feature coming soon' },
-    snapshots: { title: 'Snapshot Management', subtitle: 'Virtual machine and container snapshot management', comingSoon: 'Snapshots feature coming soon' },
+    snapshots: {
+      title: 'Snapshot Management', subtitle: 'Virtual machine snapshot management',
+      searchPlaceholder: 'Search snapshot name/description/VM...',
+      snapName: 'Snapshot Name', snapTime: 'Snapshot Time', parent: 'Parent Snapshot',
+      saveMemory: 'Save Memory', saveState: 'Save State', snapType: 'Snapshot Type',
+      vmName: 'Virtual Machine', vmid: 'VMID', node: 'Node', cluster: 'Cluster',
+      noParent: 'None (root)', yes: 'Yes', no: 'No',
+      emptyDesc: 'No snapshots found. Deploy an Agent and complete a scan first.',
+    },
   },
 }

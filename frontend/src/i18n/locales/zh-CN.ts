@@ -658,6 +658,14 @@ export default {
     firewall: { title: '防火墙', subtitle: '集群与节点防火墙规则管理', comingSoon: 'Firewall 功能开发中' },
     backup: { title: '备份管理', subtitle: '虚拟机与容器备份任务管理', comingSoon: 'Backup 功能开发中' },
     replication: { title: '数据复制', subtitle: '跨节点存储复制任务管理', comingSoon: 'Replication 功能开发中' },
-    snapshots: { title: '快照管理', subtitle: '虚拟机与容器快照管理', comingSoon: 'Snapshots 功能开发中' },
+    snapshots: {
+      title: '快照管理', subtitle: '虚拟机快照管理',
+      searchPlaceholder: '搜索快照名称/描述/虚拟机...',
+      snapName: '快照名称', snapTime: '快照时间', parent: '父快照',
+      saveMemory: '保存内存', saveState: '保存状态', snapType: '快照类型',
+      vmName: '虚拟机', vmid: 'VMID', node: '节点', cluster: '集群',
+      noParent: '无（根快照）', yes: '是', no: '否',
+      emptyDesc: '暂无快照数据，请先部署 Agent 并完成扫描',
+    },
   },
 }

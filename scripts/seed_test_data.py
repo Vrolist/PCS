@@ -249,7 +249,36 @@ def _gen_vm(vmid, name, cpu_cores, mem_gb, disk_gb, status="running",
         "os_type": random.choice(OS_TYPES),
         "snapshot_count": snapshot_count, "has_template": has_template,
         "tags": tags, "description": description,
+        "snapshots": _gen_snapshots(vmid, snapshot_count),
     }
+
+
+def _gen_snapshots(vmid, count):
+    """生成 VM 快照列表"""
+    if count <= 0:
+        return []
+    snap_names = ["pre-update", "pre-migration", "backup-2026", "checkpoint", "before-upgrade",
+                  "weekly-auto", "pre-config", "baseline", "gold-image", "stable-v2"]
+    snapshots = []
+    parent = ""
+    for i in range(count):
+        name = f"snap{i+1}" if i < len(snap_names) else f"snap{i+1}"
+        if i < len(snap_names):
+            name = snap_names[i]
+        snap_time = datetime.now(timezone.utc) - timedelta(days=random.randint(1, 90), hours=random.randint(0, 23))
+        snapshots.append({
+            "snapid": name,
+            "name": name,
+            "description": f"VM {vmid} 快照 {i+1}",
+            "snap_time": snap_time.isoformat(),
+            "parent": parent,
+            "ram": random.choice([True, False]),
+            "vmstate": random.choice([True, False, False]),
+            "snap_type": random.choice(["snapshot", "snapshot", "qemu"]),
+            "size_mb": None,
+        })
+        parent = name
+    return snapshots
 
 
 def _gen_vm_config(vmid, cpu_cores, mem_gb, cpu_model_idx=0):

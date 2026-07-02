@@ -228,6 +228,12 @@ class PVEClient:
         except Exception:
             return []
 
+    def get_vm_snapshots(self, node, vmid):
+        try:
+            return self.get(f"/nodes/{node}/qemu/{vmid}/snapshot")
+        except Exception:
+            return []
+
     def get_sdn_zones(self):
         try:
             return self.get("/cluster/sdn/zones")
@@ -376,11 +382,19 @@ def _scan_vms(pve, node):
             "tags": vm.get("tags", ""),
             "description": "",
             "config": {},
+            "snapshots": [],
         }
         try:
             config = pve.get_vm_config(node, vmid)
             data["os_type"] = config.get("ostype", "")
             data["description"] = config.get("description", "")
+        except Exception:
+            pass
+        # 扫描快照
+        try:
+            snapshots = pve.get_vm_snapshots(node, vmid)
+            data["snapshot_count"] = len(snapshots)
+            data["snapshots"] = _parse_snapshots(snapshots)
         except Exception:
             pass
         vms.append(data)
@@ -442,6 +456,31 @@ def _parse_vm_config(cfg):
             net_info["slot"] = key
             result["net_devices"].append(net_info)
 
+    return result
+
+
+def _parse_snapshots(snapshots):
+    """解析 PVE 快照列表"""
+    result = []
+    for snap in snapshots:
+        snap_time = None
+        ts = snap.get("snaptime", 0)
+        if ts:
+            try:
+                snap_time = datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
+            except Exception:
+                pass
+        result.append({
+            "snapid": snap.get("name", ""),
+            "name": snap.get("name", ""),
+            "description": snap.get("description", ""),
+            "snap_time": snap_time,
+            "parent": snap.get("parent", ""),
+            "ram": bool(snap.get("ram", 0)),
+            "vmstate": bool(snap.get("vmstate", 0)),
+            "snap_type": snap.get("type", ""),
+            "size_mb": None,
+        })
     return result
 
 

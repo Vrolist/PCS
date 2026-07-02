@@ -254,6 +254,37 @@ class CephStatus(models.Model):
         return f"{self.cluster.name} - {self.health} ({self.scanned_at})"
 
 
+class VMSnapshot(models.Model):
+    """VM 快照（从 /nodes/{node}/qemu/{vmid}/snapshot 获取）"""
+    vm = models.ForeignKey(VM, on_delete=models.CASCADE, verbose_name="所属VM",
+                           related_name="snapshots")
+    scan = models.ForeignKey(ScanTask, on_delete=models.SET_NULL, null=True, blank=True)
+
+    snapid = models.CharField("快照ID", max_length=128, help_text="PVE 快照标识，如 snap1")
+    name = models.CharField("快照名称", max_length=256, blank=True)
+    description = models.TextField("描述", blank=True)
+    snap_time = models.DateTimeField("快照时间", null=True, blank=True)
+    parent = models.CharField("父快照", max_length=128, blank=True,
+                              help_text="上一级快照标识，空表示根快照")
+    ram = models.BooleanField("保存内存", default=False,
+                              help_text="创建快照时是否保存内存状态")
+    vmstate = models.BooleanField("保存运行状态", default=False)
+    snap_type = models.CharField("快照类型", max_length=32, blank=True,
+                                 help_text="如 snapshot / qemu / vztmpl")
+    size_mb = models.BigIntegerField("快照大小(MB)", null=True, blank=True)
+
+    scanned_at = models.DateTimeField("扫描时间", db_index=True)
+
+    class Meta:
+        verbose_name = "VM快照"
+        verbose_name_plural = "VM快照"
+        unique_together = ("vm", "snapid")
+        ordering = ["-snap_time"]
+
+    def __str__(self):
+        return f"{self.vm.name} - {self.snapid}"
+
+
 class VMConfig(models.Model):
     """VM 详细配置（从 /nodes/{node}/qemu/{vmid}/config 获取）"""
     vm = models.ForeignKey(VM, on_delete=models.CASCADE, verbose_name="所属VM",

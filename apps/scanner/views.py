@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.clusters.models import Cluster
-from .models import ClusterNode, VM, LXC, VMConfig, LXCConfig, HAResource, Storage, NetworkInterface, CephStatus, SDNZone, SDNVNet, SDNSubnet
+from .models import ClusterNode, VM, LXC, VMConfig, LXCConfig, VMSnapshot, HAResource, Storage, NetworkInterface, CephStatus, SDNZone, SDNVNet, SDNSubnet
 
 
 def _user_cluster_ids(user):
@@ -768,4 +768,71 @@ class HAListView(APIView):
             "max_shutdown": r.max_shutdown,
             "scanned_at": r.scanned_at,
         } for r in resources]
+        return Response(data)
+
+
+class SnapshotListView(APIView):
+    """GET /api/scanner/snapshots/ — VM 快照列表（每个快照只展示最新一条）"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        cluster_ids = _user_cluster_ids(request.user)
+        cluster_filter = request.query_params.get("cluster_id")
+        node_filter = request.query_params.get("node_id")
+        vmid_filter = request.query_params.get("vmid")
+        search = request.query_params.get("search", "").strip()
+
+        node_ids = _latest_node_ids(request.user)
+
+        # 在最新节点中，按 (vm, snapid) 去重取最新
+        latest = (
+            VMSnapshot.objects
+            .filter(vm__node_id__in=node_ids)
+            .values("vm_id", "snapid")
+            .annotate(last_scan=Max("scanned_at"))
+        )
+        q = Q()
+        for item in latest:
+            q |= Q(
+                vm_id=item["vm_id"],
+                snapid=item["snapid"],
+                scanned_at=item["last_scan"],
+            )
+        if not q:
+            return Response([])
+
+        snaps = VMSnapshot.objects.filter(q).select_related("vm", "vm__node", "vm__node__cluster")
+
+        if cluster_filter:
+            snaps = snaps.filter(vm__node__cluster_id=cluster_filter)
+        if node_filter:
+            snaps = snaps.filter(vm__node_id=node_filter)
+        if vmid_filter:
+            snaps = snaps.filter(vm__vmid=vmid_filter)
+        if search:
+            snaps = snaps.filter(
+                Q(name__icontains=search) | Q(description__icontains=search) |
+                Q(vm__name__icontains=search) | Q(snapid__icontains=search)
+            )
+
+        data = [{
+            "id": s.id,
+            "snapid": s.snapid,
+            "name": s.name,
+            "description": s.description,
+            "snap_time": s.snap_time,
+            "parent": s.parent,
+            "ram": s.ram,
+            "vmstate": s.vmstate,
+            "snap_type": s.snap_type,
+            "size_mb": s.size_mb,
+            "vm_id": s.vm_id,
+            "vm_vmid": s.vm.vmid,
+            "vm_name": s.vm.name,
+            "vm_status": s.vm.status,
+            "node_name": s.vm.node.node_name,
+            "cluster_id": s.vm.node.cluster_id,
+            "cluster_name": s.vm.node.cluster.name,
+            "scanned_at": s.scanned_at,
+        } for s in snaps]
         return Response(data)
