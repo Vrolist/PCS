@@ -43,6 +43,34 @@
       <template #title><span>集群管理</span></template>
     </el-menu-item>
 
+    <!-- 集群切换 -->
+    <div v-if="!appStore.sidebarCollapsed" class="cluster-switcher">
+      <el-select
+        :model-value="clusterStore.currentClusterId"
+        placeholder="选择集群"
+        size="small"
+        class="cluster-select"
+        @change="clusterStore.setCluster"
+      >
+        <el-option
+          v-for="c in clusterStore.clusterList"
+          :key="c.id"
+          :label="c.name"
+          :value="c.id"
+        />
+        <template #prefix>
+          <el-icon><Connection /></el-icon>
+        </template>
+      </el-select>
+    </div>
+
+    <!-- 折叠态：tooltip 显示当前集群名 -->
+    <el-tooltip v-else :content="clusterStore.currentCluster?.name || '选择集群'" placement="right">
+      <div class="cluster-switcher-collapsed">
+        <el-icon @click="appStore.sidebarCollapsed = false"><Connection /></el-icon>
+      </div>
+    </el-tooltip>
+
     <!-- 基本信息 -->
     <div class="menu-section">
       <span v-if="!appStore.sidebarCollapsed" class="menu-label">基本信息</span>
@@ -150,14 +178,23 @@
 </template>
 
 <script setup lang="ts">
+import { onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { useThemeStore } from '@/stores/theme'
+import { useClusterStore } from '@/stores/cluster'
 import { Monitor, Connection, Cpu, Box, Bell, Service, User, Document, Coin, Share } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const appStore = useAppStore()
 const themeStore = useThemeStore()
+const clusterStore = useClusterStore()
+
+onMounted(() => {
+  if (!clusterStore.clusterList.length) {
+    clusterStore.fetchClusters()
+  }
+})
 </script>
 
 <style scoped>
@@ -263,6 +300,30 @@ const themeStore = useThemeStore()
   margin-right: 10px;
   flex-shrink: 0;
   transition: all 0.2s ease;
+}
+
+/* 集群切换 */
+.cluster-switcher {
+  padding: 0 16px 8px;
+}
+.cluster-select {
+  width: 100%;
+}
+.cluster-switcher-collapsed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  margin: 0 6px 4px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.cluster-switcher-collapsed:hover {
+  background: rgba(64, 158, 255, 0.1);
+}
+.cluster-switcher-collapsed .el-icon {
+  font-size: 18px;
 }
 
 /* 压缩模式：图标居中 */

@@ -7,12 +7,6 @@
       </div>
       <div class="toolbar">
         <div class="toolbar-group">
-          <el-select v-model="selectedCluster" placeholder="选择集群" size="small" style="width: 180px">
-            <el-option v-for="c in clusterList" :key="c" :label="c" :value="c" />
-          </el-select>
-        </div>
-        <span class="toolbar-divider"></span>
-        <div class="toolbar-group">
           <button class="toolbar-btn" @click="zoomOut" title="缩小">−</button>
           <span class="toolbar-zoom-val">{{ Math.round(scale * 100) }}%</span>
           <button class="toolbar-btn" @click="zoomIn" title="放大">+</button>
@@ -122,10 +116,12 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { getNetworkList, type NetworkInterface } from '@/api/networks'
+import { useClusterStore } from '@/stores/cluster'
+
+const clusterStore = useClusterStore()
 
 const loading = ref(true)
 const topologyData = ref<NetworkInterface[]>([])
-const selectedCluster = ref('')
 // 图例过滤：点击可隐藏/显示某类接口
 const hiddenTypes = ref(new Set<string>())
 const legendItems = [
@@ -179,14 +175,11 @@ const maxScale = 3
 const initialSvgWidth = ref(400)
 const initialSvgHeight = ref(200)
 
-const clusterList = computed(() => {
-  const set = new Set(topologyData.value.map(n => n.cluster_name))
-  return Array.from(set).sort()
-})
-
 const filteredData = computed(() => {
-  if (!selectedCluster.value) return topologyData.value
-  return topologyData.value.filter(n => n.cluster_name === selectedCluster.value)
+  if (!clusterStore.currentClusterId) return topologyData.value
+  const name = clusterStore.currentCluster?.name
+  if (!name) return topologyData.value
+  return topologyData.value.filter(n => n.cluster_name === name)
 })
 
 // 集群切换或图例过滤时重新布局
@@ -647,7 +640,6 @@ function zoomOut() {
 }
 
 function resetView() {
-  selectedCluster.value = clusterList.value[0] || ''
   scale.value = 1
   segmentOffsets.value = {}
   initPositions()
@@ -686,16 +678,15 @@ function getIfaceStroke(type: string): string {
 onMounted(async () => {
   loading.value = true
   try {
+    if (!clusterStore.clusterList.length) await clusterStore.fetchClusters()
     topologyData.value = await getNetworkList()
-    // 默认选择第一个集群
-    if (clusterList.value.length && !selectedCluster.value) {
-      selectedCluster.value = clusterList.value[0]
-    }
     initPositions()
   } catch {} finally {
     loading.value = false
   }
 })
+
+watch(() => clusterStore.currentClusterId, () => { initPositions() })
 </script>
 
 <style scoped>

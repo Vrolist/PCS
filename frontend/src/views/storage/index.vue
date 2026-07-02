@@ -5,9 +5,6 @@
     </div>
 
     <div class="filter-bar">
-      <el-select v-model="clusterFilter" placeholder="选择集群" clearable style="width: 180px" @change="fetchData">
-        <el-option v-for="c in clusterList" :key="c.id" :label="c.name" :value="c.id" />
-      </el-select>
       <el-select v-model="filterNode" placeholder="全部节点" clearable style="width: 160px">
         <el-option v-for="n in nodes" :key="n" :label="n" :value="n" />
       </el-select>
@@ -55,15 +52,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { getStorageList, type Storage } from '@/api/storage'
-import { getClusters, type Cluster } from '@/api/clusters'
+import { useClusterStore } from '@/stores/cluster'
+
+const clusterStore = useClusterStore()
 
 const loading = ref(false)
 const storageList = ref<Storage[]>([])
 const filterNode = ref('')
-const clusterFilter = ref<number | ''>('')
-const clusterList = ref<Cluster[]>([])
 
 const nodes = computed(() => {
   const set = new Set(storageList.value.map(s => s.node_name))
@@ -79,7 +76,7 @@ async function fetchData() {
   loading.value = true
   try {
     const params: Record<string, any> = {}
-    if (clusterFilter.value !== '') params.cluster_id = clusterFilter.value
+    if (clusterStore.currentClusterId) params.cluster_id = clusterStore.currentClusterId
     storageList.value = await getStorageList(params)
   } finally {
     loading.value = false
@@ -102,16 +99,11 @@ function getProgressColor(percent: number): string {
 }
 
 onMounted(async () => {
-  try {
-    const res = await getClusters()
-    clusterList.value = res.results
-    if (clusterList.value.length) {
-      clusterFilter.value = clusterList.value[0].id
-    }
-  } catch {} finally {
-    fetchData()
-  }
+  if (!clusterStore.clusterList.length) await clusterStore.fetchClusters()
+  fetchData()
 })
+
+watch(() => clusterStore.currentClusterId, () => { fetchData() })
 </script>
 
 <style scoped>

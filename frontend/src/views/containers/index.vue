@@ -6,9 +6,6 @@
         <p class="page-desc">查看和管理所有 PVE LXC 容器</p>
       </div>
       <div class="header-actions">
-        <el-select v-model="clusterFilter" placeholder="选择集群" clearable style="width: 180px" @change="loadData">
-          <el-option v-for="c in clusterList" :key="c.id" :label="c.name" :value="c.id" />
-        </el-select>
         <el-select v-model="nodeFilter" placeholder="节点" clearable style="width: 160px" @change="loadData">
           <el-option v-for="n in nodes" :key="n.id" :label="n.node_name" :value="n.id" />
         </el-select>
@@ -170,13 +167,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { Loading } from '@element-plus/icons-vue'
 import { getContainers, getContainerDetail } from '@/api/containers'
 import type { ContainerInfo, ContainerDetail } from '@/api/containers'
 import { getNodes } from '@/api/nodes'
 import type { NodeInfo } from '@/api/nodes'
-import { getClusters, type Cluster } from '@/api/clusters'
+import { useClusterStore } from '@/stores/cluster'
+
+const clusterStore = useClusterStore()
 
 const loading = ref(true)
 const containers = ref<ContainerInfo[]>([])
@@ -185,8 +184,6 @@ const statusFilter = ref('')
 const typeFilter = ref('')
 const nodeFilter = ref<number | ''>('')
 const nodes = ref<NodeInfo[]>([])
-const clusterFilter = ref<number | ''>('')
-const clusterList = ref<Cluster[]>([])
 let timer: ReturnType<typeof setTimeout> | null = null
 
 const detailVisible = ref(false)
@@ -194,22 +191,17 @@ const detailLoading = ref(false)
 const detailData = ref<ContainerDetail | null>(null)
 
 onMounted(async () => {
-  try {
-    const res = await getClusters()
-    clusterList.value = res.results
-    if (clusterList.value.length) {
-      clusterFilter.value = clusterList.value[0].id
-    }
-  } catch {} finally {
-    loadData()
-  }
+  if (!clusterStore.clusterList.length) await clusterStore.fetchClusters()
+  loadData()
 })
+
+watch(() => clusterStore.currentClusterId, () => { loadData() })
 
 async function loadData() {
   loading.value = true
   try {
     const params: Record<string, any> = {}
-    if (clusterFilter.value !== '') params.cluster_id = clusterFilter.value
+    if (clusterStore.currentClusterId) params.cluster_id = clusterStore.currentClusterId
     if (statusFilter.value) params.status = statusFilter.value
     if (search.value) params.search = search.value
     if (nodeFilter.value !== '') params.node_id = nodeFilter.value
