@@ -133,7 +133,10 @@ const profileRules: FormRules = {
   company: [{ max: 128, message: '公司名称不超过 128 个字符', trigger: 'blur' }],
 }
 
-onMounted(() => {
+onMounted(async () => {
+  if (!authStore.user) {
+    await authStore.fetchUser()
+  }
   if (authStore.user) {
     Object.assign(userData, authStore.user)
     profileForm.phone = authStore.user.phone || ''
