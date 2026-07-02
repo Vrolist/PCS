@@ -48,24 +48,33 @@
       <span v-if="!appStore.sidebarCollapsed" class="menu-label">选择集群</span>
     </div>
 
-    <div v-if="!appStore.sidebarCollapsed" class="cluster-switcher">
-      <el-select
-        :model-value="clusterStore.currentClusterId"
-        placeholder="选择集群"
-        size="small"
-        class="cluster-select"
-        @change="clusterStore.setCluster"
-      >
-        <el-option
-          v-for="c in clusterStore.clusterList"
-          :key="c.id"
-          :label="c.name"
-          :value="c.id"
-        />
-        <template #prefix>
-          <el-icon><Connection /></el-icon>
-        </template>
-      </el-select>
+    <div v-if="!appStore.sidebarCollapsed" class="cluster-selector" ref="clusterSelectorRef">
+      <div class="cluster-trigger" @click="clusterDropdownOpen = !clusterDropdownOpen">
+        <span class="cluster-dot" :class="{ online: clusterStore.currentCluster }"></span>
+        <span class="cluster-name">{{ clusterStore.currentCluster?.name || '选择集群' }}</span>
+        <el-icon class="cluster-caret" :class="{ open: clusterDropdownOpen }"><ArrowDown /></el-icon>
+      </div>
+      <transition name="dropdown">
+        <div v-if="clusterDropdownOpen" class="cluster-dropdown">
+          <div
+            v-for="c in clusterStore.clusterList"
+            :key="c.id"
+            class="cluster-option"
+            :class="{ selected: c.id === clusterStore.currentClusterId }"
+            @click="selectCluster(c.id)"
+          >
+            <span class="cluster-dot online"></span>
+            <div class="cluster-option-info">
+              <span class="cluster-option-name">{{ c.name }}</span>
+              <span class="cluster-option-meta">{{ c.total_nodes || 0 }} 节点 · {{ c.total_vms || 0 }} VM</span>
+            </div>
+            <el-icon v-if="c.id === clusterStore.currentClusterId" class="cluster-check"><Check /></el-icon>
+          </div>
+          <div v-if="!clusterStore.clusterList.length" class="cluster-option empty">
+            <span class="cluster-option-name" style="color: var(--text-muted)">暂无集群</span>
+          </div>
+        </div>
+      </transition>
     </div>
 
     <!-- 折叠态：tooltip 显示当前集群名 -->
@@ -194,17 +203,32 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, onMounted, watch } from 'vue'
+import { ref, reactive, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { useThemeStore } from '@/stores/theme'
 import { useClusterStore } from '@/stores/cluster'
-import { Monitor, Connection, Cpu, Box, Bell, Service, User, Document, Coin, Share, Lock, FolderOpened, CopyDocument, Camera, ArrowRight } from '@element-plus/icons-vue'
+import { Monitor, Connection, Cpu, Box, Bell, Service, User, Document, Coin, Share, Lock, FolderOpened, CopyDocument, Camera, ArrowRight, ArrowDown, Check } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const appStore = useAppStore()
 const themeStore = useThemeStore()
 const clusterStore = useClusterStore()
+
+// 集群选择器
+const clusterDropdownOpen = ref(false)
+const clusterSelectorRef = ref<HTMLElement>()
+
+function selectCluster(id: number) {
+  clusterStore.setCluster(id)
+  clusterDropdownOpen.value = false
+}
+
+function handleClickOutside(e: MouseEvent) {
+  if (clusterSelectorRef.value && !clusterSelectorRef.value.contains(e.target as Node)) {
+    clusterDropdownOpen.value = false
+  }
+}
 
 // 菜单分组路由映射
 const sectionRoutes: Record<string, string[]> = {
@@ -248,6 +272,11 @@ onMounted(() => {
   if (!clusterStore.clusterList.length) {
     clusterStore.fetchClusters()
   }
+  document.addEventListener('click', handleClickOutside)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleClickOutside)
 })
 </script>
 
@@ -377,13 +406,124 @@ onMounted(() => {
   transition: all 0.2s ease;
 }
 
-/* 集群切换 */
-.cluster-switcher {
-  padding: 0 16px 8px;
+/* 集群选择器 */
+.cluster-selector {
+  position: relative;
+  padding: 0 12px 8px;
 }
-.cluster-select {
-  width: 100%;
+.cluster-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
 }
+.cluster-trigger:hover {
+  border-color: rgba(64, 158, 255, 0.3);
+  background: rgba(64, 158, 255, 0.04);
+}
+.cluster-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #c0c4cc;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+.cluster-dot.online {
+  background: #67c23a;
+  box-shadow: 0 0 6px rgba(103, 194, 58, 0.4);
+}
+.cluster-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cluster-caret {
+  font-size: 12px;
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+.cluster-caret.open {
+  transform: rotate(180deg);
+}
+.cluster-dropdown {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: calc(100% + 4px);
+  border-radius: 12px;
+  padding: 6px;
+  z-index: 100;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+}
+.cluster-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.cluster-option:hover {
+  background: rgba(64, 158, 255, 0.08);
+}
+.cluster-option.selected {
+  background: rgba(64, 158, 255, 0.1);
+}
+.cluster-option.empty {
+  cursor: default;
+  justify-content: center;
+}
+.cluster-option.empty:hover {
+  background: transparent;
+}
+.cluster-option-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cluster-option-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cluster-option-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.cluster-check {
+  font-size: 14px;
+  color: #409eff;
+  flex-shrink: 0;
+}
+
+/* dropdown 动画 */
+.dropdown-enter-active, .dropdown-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.dropdown-enter-from, .dropdown-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
 .cluster-switcher-collapsed {
   display: flex;
   align-items: center;
@@ -490,6 +630,25 @@ onMounted(() => {
 }
 .sidebar-menu.is-dark .section-arrow {
   color: rgba(255, 255, 255, 0.35);
+}
+.sidebar-menu.is-dark .cluster-trigger {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+}
+.sidebar-menu.is-dark .cluster-trigger:hover {
+  border-color: rgba(64, 158, 255, 0.3);
+  background: rgba(64, 158, 255, 0.06);
+}
+.sidebar-menu.is-dark .cluster-dropdown {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: var(--bg-primary);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+.sidebar-menu.is-dark .cluster-option:hover {
+  background: rgba(64, 158, 255, 0.12);
+}
+.sidebar-menu.is-dark .cluster-option.selected {
+  background: rgba(64, 158, 255, 0.15);
 }
 .sidebar-menu.is-dark .sidebar-item:hover {
   background: rgba(64, 158, 255, 0.1) !important;
