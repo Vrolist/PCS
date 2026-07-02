@@ -76,165 +76,173 @@
     </el-tooltip>
 
     <!-- 基本信息 -->
-    <div class="menu-section">
-      <span v-if="!appStore.sidebarCollapsed" class="menu-label">基本信息</span>
+    <div v-if="!appStore.sidebarCollapsed" class="menu-section collapsible" @click="toggleSection('basic')">
+      <span class="menu-label">基本信息</span>
+      <el-icon class="section-arrow" :class="{ expanded: expandedSections.basic }"><ArrowRight /></el-icon>
     </div>
-
-    <el-menu-item index="/dashboard/nodes" class="sidebar-item">
-      <div class="item-icon-wrap">
-        <el-icon><Cpu /></el-icon>
-      </div>
-      <template #title><span>节点管理</span></template>
-    </el-menu-item>
-
-    <el-menu-item index="/dashboard/vms" class="sidebar-item">
-      <div class="item-icon-wrap">
-        <el-icon><Cpu /></el-icon>
-      </div>
-      <template #title><span>虚拟机</span></template>
-    </el-menu-item>
-
-    <el-menu-item index="/dashboard/containers" class="sidebar-item">
-      <div class="item-icon-wrap">
-        <el-icon><Box /></el-icon>
-      </div>
-      <template #title><span>容器</span></template>
-    </el-menu-item>
-
-    <el-menu-item index="/dashboard/storage" class="sidebar-item">
-      <div class="item-icon-wrap">
-        <el-icon><Coin /></el-icon>
-      </div>
-      <template #title><span>存储管理</span></template>
-    </el-menu-item>
-
-    <el-menu-item index="/dashboard/networks" class="sidebar-item">
-      <div class="item-icon-wrap">
-        <el-icon><Connection /></el-icon>
-      </div>
-      <template #title><span>网络接口</span></template>
-    </el-menu-item>
+    <div v-else class="menu-section">
+      <span class="menu-label" style="font-size:0"></span>
+    </div>
+    <template v-if="expandedSections.basic || appStore.sidebarCollapsed">
+      <el-menu-item index="/dashboard/nodes" class="sidebar-item">
+        <div class="item-icon-wrap"><el-icon><Cpu /></el-icon></div>
+        <template #title><span>节点管理</span></template>
+      </el-menu-item>
+      <el-menu-item index="/dashboard/vms" class="sidebar-item">
+        <div class="item-icon-wrap"><el-icon><Cpu /></el-icon></div>
+        <template #title><span>虚拟机</span></template>
+      </el-menu-item>
+      <el-menu-item index="/dashboard/containers" class="sidebar-item">
+        <div class="item-icon-wrap"><el-icon><Box /></el-icon></div>
+        <template #title><span>容器</span></template>
+      </el-menu-item>
+      <el-menu-item index="/dashboard/storage" class="sidebar-item">
+        <div class="item-icon-wrap"><el-icon><Coin /></el-icon></div>
+        <template #title><span>存储管理</span></template>
+      </el-menu-item>
+      <el-menu-item index="/dashboard/networks" class="sidebar-item">
+        <div class="item-icon-wrap"><el-icon><Connection /></el-icon></div>
+        <template #title><span>网络接口</span></template>
+      </el-menu-item>
+    </template>
 
     <!-- 进阶信息 -->
-    <div class="menu-section">
-      <span v-if="!appStore.sidebarCollapsed" class="menu-label">进阶信息</span>
+    <div v-if="!appStore.sidebarCollapsed" class="menu-section collapsible" @click="toggleSection('advanced')">
+      <span class="menu-label">进阶信息</span>
+      <el-icon class="section-arrow" :class="{ expanded: expandedSections.advanced }"><ArrowRight /></el-icon>
     </div>
-
-    <el-menu-item index="/dashboard/network-topology" class="sidebar-item">
-      <div class="item-icon-wrap">
-        <el-icon><Share /></el-icon>
-      </div>
-      <template #title><span>网络拓扑</span></template>
-    </el-menu-item>
-
-    <el-menu-item index="/dashboard/ceph" class="sidebar-item">
-      <div class="item-icon-wrap">
-        <el-icon><Box /></el-icon>
-      </div>
-      <template #title><span>Ceph 存储</span></template>
-    </el-menu-item>
-
-    <el-menu-item index="/dashboard/ha" class="sidebar-item">
-      <div class="item-icon-wrap">
-        <el-icon><Connection /></el-icon>
-      </div>
-      <template #title><span>HA</span></template>
-    </el-menu-item>
-
-    <el-menu-item index="/dashboard/sdn" class="sidebar-item">
-      <div class="item-icon-wrap">
-        <el-icon><Share /></el-icon>
-      </div>
-      <template #title><span>SDN</span></template>
-    </el-menu-item>
-
-    <el-menu-item index="/dashboard/firewall" class="sidebar-item">
-      <div class="item-icon-wrap">
-        <el-icon><Lock /></el-icon>
-      </div>
-      <template #title><span>Firewall</span></template>
-    </el-menu-item>
-
-    <el-menu-item index="/dashboard/backup" class="sidebar-item">
-      <div class="item-icon-wrap">
-        <el-icon><FolderOpened /></el-icon>
-      </div>
-      <template #title><span>Backup</span></template>
-    </el-menu-item>
-
-    <el-menu-item index="/dashboard/replication" class="sidebar-item">
-      <div class="item-icon-wrap">
-        <el-icon><CopyDocument /></el-icon>
-      </div>
-      <template #title><span>Replication</span></template>
-    </el-menu-item>
-
-    <el-menu-item index="/dashboard/snapshots" class="sidebar-item">
-      <div class="item-icon-wrap">
-        <el-icon><Camera /></el-icon>
-      </div>
-      <template #title><span>Snapshots</span></template>
-    </el-menu-item>
+    <div v-else class="menu-section">
+      <span class="menu-label" style="font-size:0"></span>
+    </div>
+    <template v-if="expandedSections.advanced || appStore.sidebarCollapsed">
+      <el-menu-item index="/dashboard/network-topology" class="sidebar-item">
+        <div class="item-icon-wrap"><el-icon><Share /></el-icon></div>
+        <template #title><span>网络拓扑</span></template>
+      </el-menu-item>
+      <el-menu-item index="/dashboard/ceph" class="sidebar-item">
+        <div class="item-icon-wrap"><el-icon><Box /></el-icon></div>
+        <template #title><span>Ceph 存储</span></template>
+      </el-menu-item>
+      <el-menu-item index="/dashboard/ha" class="sidebar-item">
+        <div class="item-icon-wrap"><el-icon><Connection /></el-icon></div>
+        <template #title><span>HA</span></template>
+      </el-menu-item>
+      <el-menu-item index="/dashboard/sdn" class="sidebar-item">
+        <div class="item-icon-wrap"><el-icon><Share /></el-icon></div>
+        <template #title><span>SDN</span></template>
+      </el-menu-item>
+      <el-menu-item index="/dashboard/firewall" class="sidebar-item">
+        <div class="item-icon-wrap"><el-icon><Lock /></el-icon></div>
+        <template #title><span>Firewall</span></template>
+      </el-menu-item>
+      <el-menu-item index="/dashboard/backup" class="sidebar-item">
+        <div class="item-icon-wrap"><el-icon><FolderOpened /></el-icon></div>
+        <template #title><span>Backup</span></template>
+      </el-menu-item>
+      <el-menu-item index="/dashboard/replication" class="sidebar-item">
+        <div class="item-icon-wrap"><el-icon><CopyDocument /></el-icon></div>
+        <template #title><span>Replication</span></template>
+      </el-menu-item>
+      <el-menu-item index="/dashboard/snapshots" class="sidebar-item">
+        <div class="item-icon-wrap"><el-icon><Camera /></el-icon></div>
+        <template #title><span>Snapshots</span></template>
+      </el-menu-item>
+    </template>
 
     <!-- 运维检测 -->
-    <div class="menu-section">
-      <span v-if="!appStore.sidebarCollapsed" class="menu-label">运维检测</span>
+    <div v-if="!appStore.sidebarCollapsed" class="menu-section collapsible" @click="toggleSection('ops')">
+      <span class="menu-label">运维检测</span>
+      <el-icon class="section-arrow" :class="{ expanded: expandedSections.ops }"><ArrowRight /></el-icon>
     </div>
-
-    <el-menu-item index="/dashboard/alerts" class="sidebar-item">
-      <div class="item-icon-wrap">
-        <el-icon><Bell /></el-icon>
-      </div>
-      <template #title><span>告警中心</span></template>
-    </el-menu-item>
-
-    <el-menu-item index="/dashboard/services" class="sidebar-item">
-      <div class="item-icon-wrap">
-        <el-icon><Service /></el-icon>
-      </div>
-      <template #title><span>运维服务</span></template>
-    </el-menu-item>
+    <div v-else class="menu-section">
+      <span class="menu-label" style="font-size:0"></span>
+    </div>
+    <template v-if="expandedSections.ops || appStore.sidebarCollapsed">
+      <el-menu-item index="/dashboard/alerts" class="sidebar-item">
+        <div class="item-icon-wrap"><el-icon><Bell /></el-icon></div>
+        <template #title><span>告警中心</span></template>
+      </el-menu-item>
+      <el-menu-item index="/dashboard/services" class="sidebar-item">
+        <div class="item-icon-wrap"><el-icon><Service /></el-icon></div>
+        <template #title><span>运维服务</span></template>
+      </el-menu-item>
+    </template>
 
     <!-- 用户信息 -->
-    <div class="menu-section">
-      <span v-if="!appStore.sidebarCollapsed" class="menu-label">用户信息</span>
+    <div v-if="!appStore.sidebarCollapsed" class="menu-section collapsible" @click="toggleSection('user')">
+      <span class="menu-label">用户信息</span>
+      <el-icon class="section-arrow" :class="{ expanded: expandedSections.user }"><ArrowRight /></el-icon>
     </div>
-
-    <el-menu-item index="/dashboard/settings" class="sidebar-item">
-      <div class="item-icon-wrap">
-        <el-icon><User /></el-icon>
-      </div>
-      <template #title><span>用户信息</span></template>
-    </el-menu-item>
-
-    <el-menu-item index="/dashboard/user-logs" class="sidebar-item">
-      <div class="item-icon-wrap">
-        <el-icon><Document /></el-icon>
-      </div>
-      <template #title><span>操作日志</span></template>
-    </el-menu-item>
-
-    <el-menu-item index="/dashboard/user-notifications" class="sidebar-item">
-      <div class="item-icon-wrap">
-        <el-icon><Bell /></el-icon>
-      </div>
-      <template #title><span>通知设置</span></template>
-    </el-menu-item>
+    <div v-else class="menu-section">
+      <span class="menu-label" style="font-size:0"></span>
+    </div>
+    <template v-if="expandedSections.user || appStore.sidebarCollapsed">
+      <el-menu-item index="/dashboard/settings" class="sidebar-item">
+        <div class="item-icon-wrap"><el-icon><User /></el-icon></div>
+        <template #title><span>用户信息</span></template>
+      </el-menu-item>
+      <el-menu-item index="/dashboard/user-logs" class="sidebar-item">
+        <div class="item-icon-wrap"><el-icon><Document /></el-icon></div>
+        <template #title><span>操作日志</span></template>
+      </el-menu-item>
+      <el-menu-item index="/dashboard/user-notifications" class="sidebar-item">
+        <div class="item-icon-wrap"><el-icon><Bell /></el-icon></div>
+        <template #title><span>通知设置</span></template>
+      </el-menu-item>
+    </template>
   </el-menu>
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { reactive, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { useThemeStore } from '@/stores/theme'
 import { useClusterStore } from '@/stores/cluster'
-import { Monitor, Connection, Cpu, Box, Bell, Service, User, Document, Coin, Share, Lock, FolderOpened, CopyDocument, Camera } from '@element-plus/icons-vue'
+import { Monitor, Connection, Cpu, Box, Bell, Service, User, Document, Coin, Share, Lock, FolderOpened, CopyDocument, Camera, ArrowRight } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const appStore = useAppStore()
 const themeStore = useThemeStore()
 const clusterStore = useClusterStore()
+
+// 菜单分组路由映射
+const sectionRoutes: Record<string, string[]> = {
+  basic: ['/dashboard/nodes', '/dashboard/vms', '/dashboard/containers', '/dashboard/storage', '/dashboard/networks'],
+  advanced: ['/dashboard/network-topology', '/dashboard/ceph', '/dashboard/ha', '/dashboard/sdn', '/dashboard/firewall', '/dashboard/backup', '/dashboard/replication', '/dashboard/snapshots'],
+  ops: ['/dashboard/alerts', '/dashboard/services'],
+  user: ['/dashboard/settings', '/dashboard/user-logs', '/dashboard/user-notifications'],
+}
+
+function getInitialSections(): Record<string, boolean> {
+  const saved = localStorage.getItem('sidebar_sections')
+  if (saved) {
+    try { return JSON.parse(saved) } catch {}
+  }
+  return { basic: true, advanced: true, ops: true, user: true }
+}
+
+const expandedSections = reactive<Record<string, boolean>>(getInitialSections())
+
+function toggleSection(key: string) {
+  expandedSections[key] = !expandedSections[key]
+  localStorage.setItem('sidebar_sections', JSON.stringify(expandedSections))
+}
+
+// 当前路由所在分组自动展开
+function autoExpandActiveSection() {
+  for (const [key, paths] of Object.entries(sectionRoutes)) {
+    if (paths.some(p => route.path.startsWith(p))) {
+      if (!expandedSections[key]) {
+        expandedSections[key] = true
+        localStorage.setItem('sidebar_sections', JSON.stringify(expandedSections))
+      }
+      break
+    }
+  }
+}
+
+watch(() => route.path, autoExpandActiveSection, { immediate: true })
 
 onMounted(() => {
   if (!clusterStore.clusterList.length) {
@@ -305,6 +313,27 @@ onMounted(() => {
 }
 .menu-section {
   padding: 16px 20px 6px;
+}
+.menu-section.collapsible {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  padding: 12px 20px 6px;
+  border-radius: 0;
+  transition: background 0.15s;
+  user-select: none;
+}
+.menu-section.collapsible:hover {
+  background: rgba(64, 158, 255, 0.06);
+}
+.section-arrow {
+  font-size: 12px;
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+.section-arrow.expanded {
+  transform: rotate(90deg);
 }
 .menu-label {
   font-size: 11px;
@@ -413,6 +442,9 @@ onMounted(() => {
 .logo-sub {
   color: rgba(0, 0, 0, 0.35);
 }
+.section-arrow {
+  color: rgba(0, 0, 0, 0.25);
+}
 .menu-label {
   color: rgba(0, 0, 0, 0.3);
 }
@@ -452,6 +484,12 @@ onMounted(() => {
 }
 .sidebar-menu.is-dark .menu-label {
   color: rgba(255, 255, 255, 0.25);
+}
+.sidebar-menu.is-dark .menu-section.collapsible:hover {
+  background: rgba(64, 158, 255, 0.08);
+}
+.sidebar-menu.is-dark .section-arrow {
+  color: rgba(255, 255, 255, 0.35);
 }
 .sidebar-menu.is-dark .sidebar-item:hover {
   background: rgba(64, 158, 255, 0.1) !important;
