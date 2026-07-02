@@ -2,25 +2,25 @@
   <div class="page-container">
     <div class="page-header">
       <div>
-        <h2 class="page-title">网络拓扑</h2>
-        <p class="page-desc">可视化展示 PVE 集群网络架构</p>
+        <h2 class="page-title">{{ t('networkTopology.title') }}</h2>
+        <p class="page-desc">{{ t('networkTopology.subtitle') }}</p>
       </div>
       <div class="toolbar">
         <div class="toolbar-group">
-          <button class="toolbar-btn" @click="zoomOut" title="缩小">−</button>
+          <button class="toolbar-btn" @click="zoomOut" :title="t('networkTopology.zoomOut')">−</button>
           <span class="toolbar-zoom-val">{{ Math.round(scale * 100) }}%</span>
-          <button class="toolbar-btn" @click="zoomIn" title="放大">+</button>
+          <button class="toolbar-btn" @click="zoomIn" :title="t('networkTopology.zoomIn')">+</button>
         </div>
         <span class="toolbar-divider"></span>
         <div class="toolbar-group">
-          <button class="toolbar-btn-text" @click="resetView">重置</button>
+          <button class="toolbar-btn-text" @click="resetView">{{ t('networkTopology.reset') }}</button>
         </div>
       </div>
     </div>
 
     <div class="topology-container" v-loading="loading">
       <div v-if="!loading && !topologyData.length" class="empty-state">
-        <el-empty description="暂无网络拓扑数据" />
+        <el-empty :description="t('networkTopology.emptyDesc')" />
       </div>
       <div v-else class="topology-canvas">
         <svg :viewBox="currentViewBox" class="topology-svg"
@@ -54,7 +54,7 @@
             <rect x="0" y="0" :width="nodeWidth" :height="nodeHeight" rx="12"
               :fill="nodeFill" :stroke="nodeStroke" stroke-width="2" />
             <text :x="nodeWidth / 2" y="24" text-anchor="middle" class="node-label">{{ node.name }}</text>
-            <text :x="nodeWidth / 2" y="42" text-anchor="middle" class="node-sub">{{ node.ifaceCount }} 个接口</text>
+            <text :x="nodeWidth / 2" y="42" text-anchor="middle" class="node-sub">{{ node.ifaceCount }} {{ t('networkTopology.interfaces') }}</text>
           </g>
           <!-- 接口 -->
           <g v-for="iface in interfacePositions" :key="'iface-' + iface.id"
@@ -90,8 +90,8 @@
     <!-- 图例（左静态 / 中可过滤 / 右不存在） -->
     <div class="legend-bar">
       <!-- 左侧：不可隐藏的静态项 -->
-      <span class="legend-item legend-static"><span class="legend-dot" style="background:#4f46e5"></span>节点</span>
-      <span class="legend-item legend-static"><span class="legend-band"></span>网络段分组</span>
+      <span class="legend-item legend-static"><span class="legend-dot" style="background:#4f46e5"></span>{{ t('networkTopology.legendNode') }}</span>
+      <span class="legend-item legend-static"><span class="legend-band"></span>{{ t('networkTopology.legendSegment') }}</span>
       <span class="legend-item legend-sep"></span>
       <!-- 中间：当前集群存在、可点击过滤 -->
       <template v-for="item in legendItems" :key="item.type">
@@ -115,23 +115,25 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { getNetworkList, type NetworkInterface } from '@/api/networks'
 import { useClusterStore } from '@/stores/cluster'
 
+const { t } = useI18n()
 const clusterStore = useClusterStore()
 
 const loading = ref(true)
 const topologyData = ref<NetworkInterface[]>([])
 // 图例过滤：点击可隐藏/显示某类接口
 const hiddenTypes = ref(new Set<string>())
-const legendItems = [
-    { type: 'node', label: '节点', color: '#4f46e5' },
-    { type: 'eth', label: '物理网口', color: '#409eff' },
-    { type: 'bridge', label: '网桥 (Bridge)', color: '#67c23a' },
-    { type: 'bond', label: 'Bond 聚合', color: '#e6a23c' },
+const legendItems = computed(() => [
+    { type: 'node', label: t('networkTopology.legendNode'), color: '#4f46e5' },
+    { type: 'eth', label: t('networkTopology.legendPhysical'), color: '#409eff' },
+    { type: 'bridge', label: t('networkTopology.legendBridge'), color: '#67c23a' },
+    { type: 'bond', label: t('networkTopology.legendBond'), color: '#e6a23c' },
     { type: 'vlan', label: 'VLAN', color: '#8b5cf6' },
-    { type: 'other', label: '其他', color: '#909399' },
-  ]
+    { type: 'other', label: t('networkTopology.legendOther'), color: '#909399' },
+  ])
 // 当前集群中存在的接口类型集合
 const existingTypes = computed(() => {
   const types = new Set<string>()
@@ -447,11 +449,11 @@ const layerColors: Record<string, { fill: string; stroke: string; label: string 
 }
 
 /** 层级标签 */
-const layerLabels: Record<string, string> = {
-  'layer-management': '管理网段',
-  'layer-bond': '聚合网段',
-  'layer-physical': '物理网卡',
-}
+const layerLabels = computed<Record<string, string>>(() => ({
+  'layer-management': t('networkTopology.layerMgmt'),
+  'layer-bond': t('networkTopology.layerAgg'),
+  'layer-physical': t('networkTopology.layerPhysical'),
+}))
 
 const networkSegments = computed<NetworkSegment[]>(() => {
   const allIfaces = interfacePositions.value
@@ -489,7 +491,7 @@ const networkSegments = computed<NetworkSegment[]>(() => {
     const height = Math.max(contentHeight, segMinHeight)
 
     const colors = layerColors[layerKey] || layerColors['layer-physical']
-    const label = layerLabels[layerKey] || '网络段'
+    const label = layerLabels.value[layerKey] || '网络段'
 
     segments.push({
       cidr: layerKey,

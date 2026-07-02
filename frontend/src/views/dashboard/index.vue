@@ -2,8 +2,8 @@
   <div class="dashboard">
     <div class="dash-header">
       <div>
-        <h2 class="dash-title">控制台</h2>
-        <p class="dash-subtitle">欢迎回来，{{ authStore.user?.username || 'buladou' }}</p>
+        <h2 class="dash-title">{{ t('dashboard.title') }}</h2>
+        <p class="dash-subtitle">{{ t('dashboard.welcomeBack') }}，{{ authStore.user?.username || 'buladou' }}</p>
       </div>
       <div class="dash-actions">
       </div>
@@ -29,12 +29,14 @@
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import StatCards from './StatCards.vue'
 import TrendChart from './TrendChart.vue'
 import NodeTable from './NodeTable.vue'
 import AlertList from './AlertList.vue'
 
+const { t } = useI18n()
 const authStore = useAuthStore()
 </script>
 

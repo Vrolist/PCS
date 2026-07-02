@@ -3,12 +3,12 @@ import { createPinia } from 'pinia'
 import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
 import 'element-plus/theme-chalk/dark/css-vars.css'
-import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 
 import App from './App.vue'
 import ServerIcon from './components/ServerIcon.vue'
 import router from './router'
+import i18n from '@/i18n'
 import { useThemeStore } from './stores/theme'
 import './style.css'
 
@@ -24,7 +24,8 @@ app.component('ServerIcon', ServerIcon)
 const pinia = createPinia()
 app.use(pinia)
 app.use(router)
-app.use(ElementPlus, { locale: zhCn })
+app.use(i18n)
+app.use(ElementPlus)
 
 // 初始化主题
 const themeStore = useThemeStore(pinia)

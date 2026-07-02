@@ -1,17 +1,17 @@
 <template>
   <div class="page-container">
     <div class="page-header">
-      <h2>Ceph 存储</h2>
+      <h2>{{ t('nav.cephStorage') }}</h2>
     </div>
 
 
 
-    <div v-if="loading" class="empty-state">加载中...</div>
-    <div v-else-if="!cephData" class="empty-state">暂无 Ceph 数据</div>
+    <div v-if="loading" class="empty-state">{{ t('common.loading') }}</div>
+    <div v-else-if="!cephData" class="empty-state">{{ t('ceph.noData') }}</div>
     <div v-else>
       <div class="stats-row">
         <el-card shadow="never" class="stat-card">
-          <div class="stat-label">健康状态</div>
+          <div class="stat-label">{{ t('ceph.healthStatus') }}</div>
           <div class="stat-value">
             <el-tag :type="cephData.health === 'HEALTH_OK' ? 'success' : 'danger'" size="large">
               {{ cephData.health }}
@@ -19,25 +19,25 @@
           </div>
         </el-card>
         <el-card shadow="never" class="stat-card">
-          <div class="stat-label">OSD 数量</div>
+          <div class="stat-label">{{ t('ceph.osdCount') }}</div>
           <div class="stat-value">{{ cephData.total_osds }}</div>
         </el-card>
         <el-card shadow="never" class="stat-card">
-          <div class="stat-label">PG 总数</div>
+          <div class="stat-label">{{ t('ceph.pgTotal') }}</div>
           <div class="stat-value">{{ cephData.total_pgs }}</div>
         </el-card>
         <el-card shadow="never" class="stat-card">
-          <div class="stat-label">容量</div>
+          <div class="stat-label">{{ t('ceph.capacity') }}</div>
           <div class="stat-value">{{ formatGB(cephData.bytes_used_gb) }} / {{ formatGB(cephData.bytes_total_gb) }}</div>
         </el-card>
       </div>
 
       <el-card shadow="never" style="margin-top: 16px;">
-        <template #header>详情</template>
+        <template #header>{{ t('ceph.detail') }}</template>
         <el-descriptions :column="2" border size="small">
-          <el-descriptions-item label="集群名称">{{ cephData.cluster_name || '--' }}</el-descriptions-item>
-          <el-descriptions-item label="版本">{{ cephData.version || '--' }}</el-descriptions-item>
-          <el-descriptions-item label="运行时长">{{ cephData.uptime || '--' }}</el-descriptions-item>
+          <el-descriptions-item :label="t('ceph.clusterName')">{{ cephData.cluster_name || '--' }}</el-descriptions-item>
+          <el-descriptions-item :label="t('ceph.version')">{{ cephData.version || '--' }}</el-descriptions-item>
+          <el-descriptions-item :label="t('ceph.runtime')">{{ cephData.uptime || '--' }}</el-descriptions-item>
         </el-descriptions>
       </el-card>
     </div>
@@ -46,9 +46,11 @@
 
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { getCephStatus, type CephStatus } from '@/api/ceph'
 import { useClusterStore } from '@/stores/cluster'
 
+const { t } = useI18n()
 const clusterStore = useClusterStore()
 
 const loading = ref(false)

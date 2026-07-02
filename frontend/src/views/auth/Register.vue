@@ -10,7 +10,7 @@
     <!-- Back to home -->
     <router-link to="/" class="back-link">
       <el-icon><ArrowLeft /></el-icon>
-      <span>返回首页</span>
+      <span>{{ t('common.backToHome') }}</span>
     </router-link>
 
     <!-- Theme toggle -->
@@ -29,28 +29,28 @@
               <span class="logo-sub"><span class="accent-l">P</span>ve<span class="accent-l">C</span>luster<span class="accent-l">S</span>can</span>
             </div>
           </div>
-          <h2 class="brand-title">开始免费使用</h2>
-          <p class="brand-desc">注册即享完整的 PVE 集群监控能力，无需信用卡。</p>
+          <h2 class="brand-title">{{ t('register.startFree') }}</h2>
+          <p class="brand-desc">{{ t('register.registerDesc') }}</p>
           <div class="brand-benefits">
             <div class="benefit-row">
               <el-icon :size="18" color="#67c23a"><CircleCheckFilled /></el-icon>
               <div>
-                <strong>多集群管理</strong>
-                <p>同时管理多个 PVE 集群</p>
+                <strong>{{ t('register.multiCluster') }}</strong>
+                <p>{{ t('register.multiClusterDesc') }}</p>
               </div>
             </div>
             <div class="benefit-row">
               <el-icon :size="18" color="#67c23a"><CircleCheckFilled /></el-icon>
               <div>
-                <strong>实时告警</strong>
-                <p>秒级检测异常并通知</p>
+                <strong>{{ t('register.realtimeAlert') }}</strong>
+                <p>{{ t('register.realtimeAlertDesc') }}</p>
               </div>
             </div>
             <div class="benefit-row">
               <el-icon :size="18" color="#67c23a"><CircleCheckFilled /></el-icon>
               <div>
-                <strong>历史趋势</strong>
-                <p>数据归档，趋势可回溯</p>
+                <strong>{{ t('register.historyTrend') }}</strong>
+                <p>{{ t('register.historyTrendDesc') }}</p>
               </div>
             </div>
           </div>
@@ -60,8 +60,8 @@
       <!-- Right: Form -->
       <div class="auth-form-panel">
         <div class="form-card">
-          <h2 class="form-title">创建账号</h2>
-          <p class="form-subtitle">填写以下信息完成注册</p>
+          <h2 class="form-title">{{ t('register.createAccount') }}</h2>
+          <p class="form-subtitle">{{ t('register.createAccountSubtitle') }}</p>
 
           <el-form
             ref="formRef"
@@ -75,7 +75,7 @@
             <el-form-item prop="username">
               <el-input
                 v-model="form.username"
-                placeholder="用户名"
+                :placeholder="t('register.usernamePlaceholder')"
                 :prefix-icon="User"
               />
             </el-form-item>
@@ -83,7 +83,7 @@
             <el-form-item prop="email">
               <el-input
                 v-model="form.email"
-                placeholder="邮箱"
+                :placeholder="t('register.emailPlaceholder')"
                 :prefix-icon="Message"
               />
             </el-form-item>
@@ -92,7 +92,7 @@
               <el-input
                 v-model="form.password"
                 type="password"
-                placeholder="密码"
+                :placeholder="t('register.passwordPlaceholder')"
                 :prefix-icon="Lock"
                 show-password
               />
@@ -102,7 +102,7 @@
               <el-input
                 v-model="form.confirmPassword"
                 type="password"
-                placeholder="确认密码"
+                :placeholder="t('register.confirmPasswordPlaceholder')"
                 :prefix-icon="Lock"
                 show-password
               />
@@ -116,14 +116,14 @@
                 class="submit-btn"
                 round
               >
-                {{ loading ? '注册中...' : '创建账号' }}
+                {{ loading ? t('register.registering') : t('register.register') }}
               </el-button>
             </el-form-item>
           </el-form>
 
           <div class="form-footer">
-            <span>已有账号？</span>
-            <router-link to="/login" class="form-link">立即登录</router-link>
+            <span>{{ t('register.hasAccount') }}</span>
+            <router-link to="/login" class="form-link">{{ t('register.loginNow') }}</router-link>
           </div>
         </div>
       </div>
@@ -134,10 +134,13 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { User, Lock, Message, CircleCheckFilled } from '@element-plus/icons-vue'
 import { useThemeStore } from '@/stores/theme'
 import { register } from '@/api/auth'
+
+const { t } = useI18n()
 
 const router = useRouter()
 const themeStore = useThemeStore()
@@ -153,7 +156,7 @@ const form = reactive({
 
 const validateConfirm = (_rule: any, value: string, callback: any) => {
   if (value !== form.password) {
-    callback(new Error('两次输入的密码不一致'))
+    callback(new Error(t('register.passwordMismatch')))
   } else {
     callback()
   }
@@ -161,19 +164,19 @@ const validateConfirm = (_rule: any, value: string, callback: any) => {
 
 const rules = {
   username: [
-    { required: true, message: '请输入用户名', trigger: 'blur' },
-    { min: 2, max: 32, message: '用户名长度 2-32 位', trigger: 'blur' },
+    { required: true, message: t('register.usernameRequired'), trigger: 'blur' },
+    { min: 2, max: 32, message: t('register.usernameLength'), trigger: 'blur' },
   ],
   email: [
-    { required: true, message: '请输入邮箱', trigger: 'blur' },
-    { type: 'email', message: '邮箱格式不正确', trigger: 'blur' },
+    { required: true, message: t('register.emailRequired'), trigger: 'blur' },
+    { type: 'email', message: t('register.emailInvalid'), trigger: 'blur' },
   ],
   password: [
-    { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 6, message: '密码至少 6 位', trigger: 'blur' },
+    { required: true, message: t('register.passwordRequired'), trigger: 'blur' },
+    { min: 6, message: t('register.passwordMinLength'), trigger: 'blur' },
   ],
   confirmPassword: [
-    { required: true, message: '请确认密码', trigger: 'blur' },
+    { required: true, message: t('register.confirmPasswordRequired'), trigger: 'blur' },
     { validator: validateConfirm, trigger: 'blur' },
   ],
 }
@@ -190,7 +193,7 @@ async function handleRegister() {
       password: form.password,
       password2: form.confirmPassword,
     })
-    ElMessage.success('注册成功，请登录')
+    ElMessage.success(t('register.registerSuccess'))
     router.push('/login')
   } catch {
     // error handled by request interceptor

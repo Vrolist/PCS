@@ -1,7 +1,7 @@
 <template>
   <div class="alert-card">
     <div class="alert-card-header">
-      <span class="alert-card-title">最近告警</span>
+      <span class="alert-card-title">{{ t('dashboard.recentAlerts') }}</span>
       <el-badge v-if="alerts.length > 0" :value="alerts.length" :max="99" type="danger" />
     </div>
     <div class="alert-list">
@@ -9,7 +9,7 @@
         <el-icon class="is-loading" :size="20"><Loading /></el-icon>
       </div>
       <div v-else-if="alerts.length === 0" class="alert-empty">
-        <span>暂无告警</span>
+        <span>{{ t('dashboard.noAlerts') }}</span>
       </div>
       <div
         v-for="(alert, index) in alerts"
@@ -35,10 +35,12 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Loading } from '@element-plus/icons-vue'
 import { getDashboardAlerts } from '@/api/dashboard'
 import type { DashboardAlert } from '@/api/dashboard'
 
+const { t } = useI18n()
 const loading = ref(true)
 const alerts = ref<DashboardAlert[]>([])
 
@@ -56,10 +58,10 @@ function formatTime(iso: string) {
   const d = new Date(iso)
   const now = new Date()
   const diff = (now.getTime() - d.getTime()) / 1000
-  if (diff < 60) return '刚刚'
-  if (diff < 3600) return `${Math.floor(diff / 60)}分钟前`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}小时前`
-  return `${Math.floor(diff / 86400)}天前`
+  if (diff < 60) return t('common.justNow')
+  if (diff < 3600) return `${Math.floor(diff / 60)}${t('common.minutesAgo')}`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}${t('common.hoursAgo')}`
+  return `${Math.floor(diff / 86400)}${t('common.daysAgo')}`
 }
 
 function tagType(severity: string) {
@@ -68,7 +70,7 @@ function tagType(severity: string) {
 }
 
 function tagLabel(severity: string) {
-  return { critical: '严重', warning: '警告', info: '信息' }[severity] || severity
+  return { critical: t('dashboard.critical'), warning: t('dashboard.warning'), info: t('dashboard.info') }[severity] || severity
 }
 </script>
 

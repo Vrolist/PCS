@@ -10,7 +10,7 @@
     <!-- Back to home -->
     <router-link to="/" class="back-link">
       <el-icon><ArrowLeft /></el-icon>
-      <span>返回首页</span>
+      <span>{{ t('common.backToHome') }}</span>
     </router-link>
 
     <!-- Theme toggle -->
@@ -29,8 +29,8 @@
               <span class="logo-sub"><span class="accent-l">P</span>ve<span class="accent-l">C</span>luster<span class="accent-l">S</span>can</span>
             </div>
           </div>
-          <h2 class="brand-title">欢迎回来</h2>
-          <p class="brand-desc">登录后即可管理你的 PVE 集群，查看监控数据与检测报告。</p>
+          <h2 class="brand-title">{{ t('login.welcomeBack') }}</h2>
+          <p class="brand-desc">{{ t('login.welcomeDesc') }}</p>
           <div class="brand-features">
             <div v-for="item in brandItems" :key="item.label" class="brand-feature">
               <el-icon :size="16" color="#409eff"><component :is="item.icon" /></el-icon>
@@ -43,8 +43,8 @@
       <!-- Right: Form -->
       <div class="auth-form-panel">
         <div class="form-card">
-          <h2 class="form-title">登录账户</h2>
-          <p class="form-subtitle">请输入你的登录信息</p>
+          <h2 class="form-title">{{ t('login.loginTitle') }}</h2>
+          <p class="form-subtitle">{{ t('login.loginSubtitle') }}</p>
 
           <el-form
             ref="formRef"
@@ -58,7 +58,7 @@
             <el-form-item prop="username">
               <el-input
                 v-model="form.username"
-                placeholder="用户名 / 邮箱"
+                :placeholder="t('login.usernamePlaceholder')"
                 :prefix-icon="User"
               />
             </el-form-item>
@@ -67,14 +67,14 @@
               <el-input
                 v-model="form.password"
                 type="password"
-                placeholder="密码"
+                :placeholder="t('login.passwordPlaceholder')"
                 :prefix-icon="Lock"
                 show-password
               />
             </el-form-item>
 
             <div class="form-options">
-              <router-link to="/forgot-password" class="forgot-link">忘记密码？</router-link>
+              <router-link to="/forgot-password" class="forgot-link">{{ t('login.forgotPassword') }}</router-link>
             </div>
 
             <el-form-item>
@@ -85,14 +85,14 @@
                 class="submit-btn"
                 round
               >
-                {{ loading ? '登录中...' : '登录' }}
+                {{ loading ? t('login.loggingIn') : t('login.login') }}
               </el-button>
             </el-form-item>
           </el-form>
 
           <div class="form-footer">
-            <span>还没有账号？</span>
-            <router-link to="/register" class="form-link">立即注册</router-link>
+            <span>{{ t('login.noAccount') }}</span>
+            <router-link to="/register" class="form-link">{{ t('login.registerNow') }}</router-link>
           </div>
         </div>
       </div>
@@ -103,11 +103,14 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { User, Lock } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 import { login } from '@/api/auth'
+
+const { t } = useI18n()
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -121,15 +124,15 @@ const form = reactive({
 })
 
 const rules = {
-  username: [{ required: true, message: '请输入用户名或邮箱', trigger: 'blur' }],
-  password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
+  username: [{ required: true, message: t('login.usernameRequired'), trigger: 'blur' }],
+  password: [{ required: true, message: t('login.passwordRequired'), trigger: 'blur' }],
 }
 
 const brandItems = [
-  { icon: 'Search', label: '自动发现集群资源' },
-  { icon: 'Monitor', label: '实时监控节点状态' },
-  { icon: 'WarningFilled', label: '智能告警检测' },
-  { icon: 'Connection', label: '多 Agent 架构' },
+  { icon: 'Search', label: t('login.autoDiscoveryLabel') },
+  { icon: 'Monitor', label: t('login.realtimeMonitorLabel') },
+  { icon: 'WarningFilled', label: t('login.smartAlertLabel') },
+  { icon: 'Connection', label: t('login.multiAgentLabel') },
 ]
 
 async function handleLogin() {
@@ -141,7 +144,7 @@ async function handleLogin() {
     const res: any = await login(form)
     authStore.setToken(res.access)
     if (res.refresh) authStore.setRefreshToken(res.refresh)
-    ElMessage.success('登录成功')
+    ElMessage.success(t('login.loginSuccess'))
     router.push('/dashboard')
   } catch (err: any) {
     const detail = err?.response?.data
@@ -152,7 +155,7 @@ async function handleLogin() {
     } else if (detail?.non_field_errors) {
       ElMessage.error(detail.non_field_errors[0])
     } else {
-      ElMessage.error('登录失败，请检查用户名和密码')
+      ElMessage.error(t('login.loginFailed'))
     }
   } finally {
     loading.value = false

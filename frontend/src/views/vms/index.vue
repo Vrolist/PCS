@@ -2,127 +2,127 @@
   <div class="page-container">
     <div class="page-header">
       <div>
-        <h2 class="page-title">虚拟机</h2>
-        <p class="page-desc">查看和管理所有 PVE 虚拟机实例</p>
+        <h2 class="page-title">{{ t('vms.title') }}</h2>
+        <p class="page-desc">{{ t('vms.subtitle') }}</p>
       </div>
       <div class="header-actions">
-        <el-select v-model="nodeFilter" placeholder="节点" clearable style="width: 160px" @change="loadData">
+        <el-select v-model="nodeFilter" :placeholder="t('vms.nodeFilter')" clearable style="width: 160px" @change="loadData">
           <el-option v-for="n in nodes" :key="n.id" :label="n.node_name" :value="n.id" />
         </el-select>
-        <el-select v-model="statusFilter" placeholder="状态" clearable style="width: 110px" @change="loadData">
-          <el-option label="运行中" value="running" />
-          <el-option label="已停止" value="stopped" />
-          <el-option label="暂停" value="paused" />
+        <el-select v-model="statusFilter" :placeholder="t('vms.statusFilter')" clearable style="width: 110px" @change="loadData">
+          <el-option :label="t('vms.running')" value="running" />
+          <el-option :label="t('vms.stopped')" value="stopped" />
+          <el-option :label="t('vms.paused')" value="paused" />
         </el-select>
-        <el-input v-model="search" placeholder="搜索名称 / VMID" clearable prefix-icon="Search" style="width: 220px" @input="debounceLoad" />
+        <el-input v-model="search" :placeholder="t('vms.searchPlaceholder')" clearable prefix-icon="Search" style="width: 220px" @input="debounceLoad" />
       </div>
     </div>
     <el-card shadow="hover" class="table-card">
       <div v-if="loading" class="loading-box">
         <el-icon class="is-loading" :size="20"><Loading /></el-icon>
-        <span>加载中...</span>
+        <span>{{ t('common.loading') }}</span>
       </div>
       <el-table v-else :data="vms" style="width: 100%" stripe :default-sort="{ prop: 'vmid', order: 'ascending' }">
         <el-table-column label="VMID" width="80" align="center" sortable sort-by="vmid">
           <template #default="{ row }"><code class="vmid">{{ row.vmid }}</code></template>
         </el-table-column>
-        <el-table-column prop="name" label="名称" min-width="160" fixed>
+        <el-table-column prop="name" :label="t('vms.name')" min-width="160" fixed>
           <template #default="{ row }">
             <span class="vm-name">{{ row.name }}</span>
             <div class="sub-text">{{ row.node_name }}</div>
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态" width="90" align="center" sortable sort-by="status">
+        <el-table-column prop="status" :label="t('common.status')" width="90" align="center" sortable sort-by="status">
           <template #default="{ row }">
             <el-tag :type="statusType(row.status)" size="small" disable-transitions>{{ statusLabel(row.status) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="CPU" min-width="120" sortable :sort-method="(a, b) => (a.cpu_usage || 0) - (b.cpu_usage || 0)">
+        <el-table-column :label="t('vms.cpu')" min-width="120" sortable :sort-method="(a, b) => (a.cpu_usage || 0) - (b.cpu_usage || 0)">
           <template #default="{ row }">
             <div class="usage-cell">
               <el-progress :percentage="Math.round(row.cpu_usage || 0)" :stroke-width="8" :color="cpuColor(Math.round(row.cpu_usage || 0))" :show-text="false" />
-              <span class="usage-text">{{ Math.round(row.cpu_usage || 0) }}% · {{ row.cpu_cores || '?' }}核</span>
+              <span class="usage-text">{{ Math.round(row.cpu_usage || 0) }}% · {{ row.cpu_cores || '?' }}{{ t('common.cores') }}</span>
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="内存" min-width="140" sortable :sort-method="(a, b) => (a.memory_mb || 0) - (b.memory_mb || 0)">
+        <el-table-column :label="t('vms.memory')" min-width="140" sortable :sort-method="(a, b) => (a.memory_mb || 0) - (b.memory_mb || 0)">
           <template #default="{ row }">
             <span>{{ fmtMB(row.memory_used_mb) }} / {{ fmtMB(row.memory_mb) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="磁盘" min-width="110" sortable :sort-method="(a, b) => (a.max_disk_gb || 0) - (b.max_disk_gb || 0)">
+        <el-table-column :label="t('vms.disk')" min-width="110" sortable :sort-method="(a, b) => (a.max_disk_gb || 0) - (b.max_disk_gb || 0)">
           <template #default="{ row }">
             <span>{{ row.max_disk_gb || 0 }}GB</span>
           </template>
         </el-table-column>
-        <el-table-column label="网络 (累计)" min-width="140">
+        <el-table-column :label="t('vms.networkTotal')" min-width="140">
           <template #default="{ row }">
             <span class="net-text">↓{{ fmtBytes(row.net_in_bps) }} ↑{{ fmtBytes(row.net_out_bps) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="运行时长" min-width="100">
+        <el-table-column :label="t('vms.runtime')" min-width="100">
           <template #default="{ row }">{{ fmtUptime(row.uptime_seconds) }}</template>
         </el-table-column>
-        <el-table-column prop="os_type" label="系统" width="90">
+        <el-table-column prop="os_type" :label="t('vms.os')" width="90">
           <template #default="{ row }">{{ row.os_type || '-' }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="80" align="center" fixed="right">
+        <el-table-column :label="t('common.operation')" width="80" align="center" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" link size="small" @click="showDetail(row)">详情</el-button>
+            <el-button type="primary" link size="small" @click="showDetail(row)">{{ t('common.detail') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
-      <el-empty v-if="!loading && !vms.length" description="暂无虚拟机数据" />
+      <el-empty v-if="!loading && !vms.length" :description="t('vms.emptyDesc')" />
     </el-card>
     <!-- VM 详情弹窗 -->
-    <el-dialog v-model="detailVisible" :title="detailData?.vm?.name || 'VM 详情'" width="720px" destroy-on-close top="5vh">
+    <el-dialog v-model="detailVisible" :title="detailData?.vm?.name || t('vms.vmDetailTitle')" width="720px" destroy-on-close top="5vh">
       <div v-if="detailLoading" class="loading-box">
         <el-icon class="is-loading" :size="20"><Loading /></el-icon>
-        <span>加载中...</span>
+        <span>{{ t('common.loading') }}</span>
       </div>
       <div v-else-if="detailData" class="detail-content">
         <!-- 基本信息 -->
         <div class="detail-section">
-          <h4>基本信息</h4>
+          <h4>{{ t('vms.basicInfo') }}</h4>
           <div class="detail-kv">
             <div class="kv-row"><span class="kv-label">VMID</span><span class="kv-val mono">{{ detailData.vm.vmid }}</span></div>
-            <div class="kv-row"><span class="kv-label">状态</span><span class="kv-val"><el-tag :type="detailData.vm.status === 'running' ? 'success' : 'danger'" size="small">{{ detailData.vm.status === 'running' ? '运行中' : detailData.vm.status === 'paused' ? '暂停' : '已停止' }}</el-tag></span></div>
-            <div class="kv-row"><span class="kv-label">节点</span><span class="kv-val">{{ detailData.vm.node_name }}</span></div>
-            <div class="kv-row"><span class="kv-label">集群</span><span class="kv-val">{{ detailData.vm.cluster_name }}</span></div>
-            <div class="kv-row" v-if="detailData.vm.has_template"><span class="kv-label">类型</span><span class="kv-val"><el-tag type="warning" size="small" effect="plain">模板</el-tag></span></div>
-            <div class="kv-row"><span class="kv-label">系统</span><span class="kv-val">{{ detailData.vm.os_type || '-' }}</span></div>
-            <div class="kv-row"><span class="kv-label">CPU</span><span class="kv-val">{{ detailData.vm.cpu_usage }}% · {{ detailData.vm.cpu_cores }}核 × {{ detailData.vm.cpu_sockets || 1 }}插槽</span></div>
-            <div class="kv-row"><span class="kv-label">内存</span><span class="kv-val">{{ fmtMB(detailData.vm.memory_used_mb) }} / {{ fmtMB(detailData.vm.memory_mb) }}</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('common.status') }}</span><span class="kv-val"><el-tag :type="detailData.vm.status === 'running' ? 'success' : 'danger'" size="small">{{ detailData.vm.status === 'running' ? t('vms.running') : detailData.vm.status === 'paused' ? t('vms.paused') : t('vms.stopped') }}</el-tag></span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('common.name') }}</span><span class="kv-val">{{ detailData.vm.node_name }}</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('vms.cluster') }}</span><span class="kv-val">{{ detailData.vm.cluster_name }}</span></div>
+            <div class="kv-row" v-if="detailData.vm.has_template"><span class="kv-label">{{ t('common.type') }}</span><span class="kv-val"><el-tag type="warning" size="small" effect="plain">{{ t('vms.template') }}</el-tag></span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('vms.os') }}</span><span class="kv-val">{{ detailData.vm.os_type || '-' }}</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('vms.cpu') }}</span><span class="kv-val">{{ detailData.vm.cpu_usage }}% · {{ detailData.vm.cpu_cores }}{{ t('common.cores') }} × {{ detailData.vm.cpu_sockets || 1 }}{{ t('nodes.cpuSockets') }}</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('vms.memory') }}</span><span class="kv-val">{{ fmtMB(detailData.vm.memory_used_mb) }} / {{ fmtMB(detailData.vm.memory_mb) }}</span></div>
             <div class="kv-row" v-if="detailData.vm.balloon_min_mb"><span class="kv-label">Balloon</span><span class="kv-val">{{ fmtMB(detailData.vm.balloon_min_mb) }} ~ {{ fmtMB(detailData.vm.balloon_max_mb) }}</span></div>
-            <div class="kv-row"><span class="kv-label">磁盘</span><span class="kv-val">{{ detailData.vm.disk_gb }}GB / {{ detailData.vm.max_disk_gb }}GB</span></div>
-            <div class="kv-row"><span class="kv-label">网络</span><span class="kv-val">↓{{ fmtBits(detailData.vm.net_in_bps) }} ↑{{ fmtBits(detailData.vm.net_out_bps) }}</span></div>
-            <div class="kv-row"><span class="kv-label">磁盘 IOPS</span><span class="kv-val">读 {{ detailData.vm.disk_read_iops?.toFixed(1) || 0 }} / 写 {{ detailData.vm.disk_write_iops?.toFixed(1) || 0 }}</span></div>
-            <div class="kv-row" v-if="detailData.vm.uptime_seconds"><span class="kv-label">运行时长</span><span class="kv-val">{{ fmtUptime(detailData.vm.uptime_seconds) }}</span></div>
-            <div class="kv-row" v-if="detailData.vm.snapshot_count"><span class="kv-label">快照数</span><span class="kv-val">{{ detailData.vm.snapshot_count }}</span></div>
-            <div class="kv-row" v-if="detailData.vm.tags"><span class="kv-label">标签</span><span class="kv-val">{{ detailData.vm.tags }}</span></div>
-            <div class="kv-row" v-if="detailData.vm.description"><span class="kv-label">描述</span><span class="kv-val">{{ detailData.vm.description }}</span></div>
-            <div class="kv-row"><span class="kv-label">扫描时间</span><span class="kv-val mono">{{ fmtTime(detailData.vm.scanned_at) }}</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('vms.disk') }}</span><span class="kv-val">{{ detailData.vm.disk_gb }}GB / {{ detailData.vm.max_disk_gb }}GB</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('common.type') }}</span><span class="kv-val">↓{{ fmtBits(detailData.vm.net_in_bps) }} ↑{{ fmtBits(detailData.vm.net_out_bps) }}</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('vms.diskIOPS') }}</span><span class="kv-val">{{ t('vms.read') }} {{ detailData.vm.disk_read_iops?.toFixed(1) || 0 }} / {{ t('vms.write') }} {{ detailData.vm.disk_write_iops?.toFixed(1) || 0 }}</span></div>
+            <div class="kv-row" v-if="detailData.vm.uptime_seconds"><span class="kv-label">{{ t('vms.runtime') }}</span><span class="kv-val">{{ fmtUptime(detailData.vm.uptime_seconds) }}</span></div>
+            <div class="kv-row" v-if="detailData.vm.snapshot_count"><span class="kv-label">{{ t('vms.snapshotCount') }}</span><span class="kv-val">{{ detailData.vm.snapshot_count }}</span></div>
+            <div class="kv-row" v-if="detailData.vm.tags"><span class="kv-label">{{ t('vms.tags') }}</span><span class="kv-val">{{ detailData.vm.tags }}</span></div>
+            <div class="kv-row" v-if="detailData.vm.description"><span class="kv-label">{{ t('clusters.description') }}</span><span class="kv-val">{{ detailData.vm.description }}</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('common.scanTime') }}</span><span class="kv-val mono">{{ fmtTime(detailData.vm.scanned_at) }}</span></div>
           </div>
         </div>
         <!-- 配置信息 -->
         <div class="detail-section" v-if="detailData.config">
-          <h4>配置</h4>
+          <h4>{{ t('vms.config') }}</h4>
           <div class="detail-kv">
-            <div class="kv-row"><span class="kv-label">CPU 类型</span><span class="kv-val mono">{{ detailData.config.cpu_type || 'host' }}</span></div>
-            <div class="kv-row"><span class="kv-label">CPU 核心</span><span class="kv-val">{{ detailData.config.cpu_cores }}核 × {{ detailData.config.cpu_sockets || 1 }}插槽</span></div>
-            <div class="kv-row"><span class="kv-label">内存</span><span class="kv-val">{{ detailData.config.memory_mb ? fmtMB(detailData.config.memory_mb) : '-' }}</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('vms.cpuType') }}</span><span class="kv-val mono">{{ detailData.config.cpu_type || 'host' }}</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('vms.cpuCores') }}</span><span class="kv-val">{{ detailData.config.cpu_cores }}{{ t('common.cores') }} × {{ detailData.config.cpu_sockets || 1 }}{{ t('vms.cpuSockets') }}</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('vms.memory') }}</span><span class="kv-val">{{ detailData.config.memory_mb ? fmtMB(detailData.config.memory_mb) : '-' }}</span></div>
             <div class="kv-row" v-if="detailData.config.balloon_min_mb"><span class="kv-label">Balloon</span><span class="kv-val">{{ fmtMB(detailData.config.balloon_min_mb) }}</span></div>
-            <div class="kv-row" v-if="detailData.config.os_type"><span class="kv-label">系统类型</span><span class="kv-val">{{ detailData.config.os_type }}</span></div>
-            <div class="kv-row"><span class="kv-label">启动顺序</span><span class="kv-val mono">{{ detailData.config.boot_order || '-' }}</span></div>
-            <div class="kv-row"><span class="kv-label">QEMU Agent</span><span class="kv-val"><el-tag :type="detailData.config.agent_enabled ? 'success' : 'info'" size="small">{{ detailData.config.agent_enabled ? '启用' : '未启用' }}</el-tag></span></div>
-            <div class="kv-row"><span class="kv-label">HA</span><span class="kv-val"><el-tag :type="detailData.config.ha_enabled ? 'success' : 'info'" size="small">{{ detailData.config.ha_enabled ? (detailData.config.ha_group || '启用') : '未启用' }}</el-tag></span></div>
-            <div class="kv-row" v-if="detailData.config.tags"><span class="kv-label">标签</span><span class="kv-val">{{ detailData.config.tags }}</span></div>
-            <div class="kv-row" v-if="detailData.config.description"><span class="kv-label">描述</span><span class="kv-val">{{ detailData.config.description }}</span></div>
+            <div class="kv-row" v-if="detailData.config.os_type"><span class="kv-label">{{ t('vms.osType') }}</span><span class="kv-val">{{ detailData.config.os_type }}</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('vms.bootOrder') }}</span><span class="kv-val mono">{{ detailData.config.boot_order || '-' }}</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('vms.qemuAgent') }}</span><span class="kv-val"><el-tag :type="detailData.config.agent_enabled ? 'success' : 'info'" size="small">{{ detailData.config.agent_enabled ? t('common.enabled') : t('common.disabled') }}</el-tag></span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('vms.ha') }}</span><span class="kv-val"><el-tag :type="detailData.config.ha_enabled ? 'success' : 'info'" size="small">{{ detailData.config.ha_enabled ? (detailData.config.ha_group || t('common.enabled')) : t('common.disabled') }}</el-tag></span></div>
+            <div class="kv-row" v-if="detailData.config.tags"><span class="kv-label">{{ t('vms.tags') }}</span><span class="kv-val">{{ detailData.config.tags }}</span></div>
+            <div class="kv-row" v-if="detailData.config.description"><span class="kv-label">{{ t('clusters.description') }}</span><span class="kv-val">{{ detailData.config.description }}</span></div>
           </div>
         </div>
         <!-- SCSI 磁盘 -->
         <div class="detail-section" v-if="detailData.config?.scsi_disks?.length">
-          <h4>SCSI 磁盘</h4>
+          <h4>{{ t('vms.scsiDisks') }}</h4>
           <div class="device-list">
             <div v-for="d in detailData.config.scsi_disks" :key="d.slot" class="device-chip">
               <span class="chip-tag">scsi{{ d.slot }}</span>
@@ -133,7 +133,7 @@
         </div>
         <!-- IDE 设备 -->
         <div class="detail-section" v-if="detailData.config?.ide_disks?.length">
-          <h4>IDE 设备</h4>
+          <h4>{{ t('vms.ideDevices') }}</h4>
           <div class="device-list">
             <div v-for="d in detailData.config.ide_disks" :key="d.slot" class="device-chip">
               <span class="chip-tag">ide{{ d.slot }}</span>
@@ -145,19 +145,19 @@
         </div>
         <!-- 网卡 -->
         <div class="detail-section" v-if="detailData.config?.net_devices?.length">
-          <h4>网卡</h4>
+          <h4>{{ t('vms.nics') }}</h4>
           <div class="device-list">
             <div v-for="n in detailData.config.net_devices" :key="n.slot" class="device-chip">
               <span class="chip-tag">net{{ n.slot }}</span>
               <span class="chip-body">{{ n.model || '-' }}</span>
-              <span class="chip-sub">桥接 {{ n.bridge || '-' }}</span>
+              <span class="chip-sub">{{ t('vms.bridge') }} {{ n.bridge || '-' }}</span>
               <span class="chip-sub mono">{{ n.hwaddr || '-' }}</span>
             </div>
           </div>
         </div>
       </div>
       <template #footer>
-        <el-button @click="detailVisible = false">关闭</el-button>
+        <el-button @click="detailVisible = false">{{ t('common.close') }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -165,7 +165,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Loading } from '@element-plus/icons-vue'
+
+const { t } = useI18n()
 import { getVMs, getVMDetail } from '@/api/vms'
 import type { VMInfo, VMDetail } from '@/api/vms'
 import { getNodes } from '@/api/nodes'
@@ -218,7 +221,7 @@ async function showDetail(row: VMInfo) {
 }
 
 function statusType(s: string) { return s === 'running' ? 'success' : s === 'stopped' ? 'danger' : 'warning' }
-function statusLabel(s: string) { return s === 'running' ? '运行中' : s === 'stopped' ? '已停止' : s === 'paused' ? '暂停' : s }
+function statusLabel(s: string) { return s === 'running' ? t('vms.running') : s === 'stopped' ? t('vms.stopped') : s === 'paused' ? t('vms.paused') : s }
 function cpuColor(p: number) { return p > 85 ? '#f56c6c' : p >= 70 ? '#e6a23c' : '#67c23a' }
 function fmtMB(mb: number) { return mb >= 1024 ? `${(mb / 1024).toFixed(1)}GB` : `${mb || 0}MB` }
 function fmtBytes(bytes: number) {
@@ -242,7 +245,7 @@ function fmtTime(iso: string) {
 function fmtUptime(s: number) {
   if (!s) return '-'
   const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600)
-  return d > 0 ? `${d}天${h}时` : `${h}时${Math.floor((s % 3600) / 60)}分`
+  return d > 0 ? `${d}${t('common.days')}${h}${t('common.hours')}` : `${h}${t('common.hours')}${Math.floor((s % 3600) / 60)}${t('common.minutes')}`
 }
 </script>
 

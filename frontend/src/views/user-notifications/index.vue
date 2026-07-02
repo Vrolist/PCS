@@ -2,15 +2,21 @@
   <div class="page-container">
     <div class="page-header">
       <div>
-        <h2 class="page-title">通知设置</h2>
-        <p class="page-desc">管理通知和告警推送方式</p>
+        <h2 class="page-title">{{ t('notifications.title') }}</h2>
+        <p class="page-desc">{{ t('notifications.subtitle') }}</p>
       </div>
     </div>
     <el-card shadow="hover">
-      <el-empty description="通知设置功能开发中" />
+      <el-empty :description="t('notifications.comingSoon')" />
     </el-card>
   </div>
 </template>
+
+<script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
+</script>
 
 <style scoped>
 .page-container {

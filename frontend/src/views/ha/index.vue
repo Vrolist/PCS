@@ -2,12 +2,12 @@
   <div class="page-container">
     <div class="page-header">
       <div>
-        <h2 class="page-title">高可用管理</h2>
-        <p class="page-desc">高可用资源组管理与状态监控</p>
+        <h2 class="page-title">{{ t('advanced.ha.title') }}</h2>
+        <p class="page-desc">{{ t('advanced.ha.subtitle') }}</p>
       </div>
     </div>
     <el-card shadow="hover">
-      <el-empty description="HA 高可用功能开发中">
+      <el-empty :description="t('advanced.ha.comingSoon')">
         <template #image>
           <el-icon :size="64" style="color: var(--text-muted)"><Connection /></el-icon>
         </template>
@@ -18,6 +18,9 @@
 
 <script setup lang="ts">
 import { Connection } from '@element-plus/icons-vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 </script>
 
 <style scoped>

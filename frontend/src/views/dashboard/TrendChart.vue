@@ -1,14 +1,14 @@
 <template>
   <div class="trend-chart-card">
     <div class="trend-chart-header">
-      <h3 class="trend-chart-title">资源趋势</h3>
+      <h3 class="trend-chart-title">{{ t('dashboard.resourceTrend') }}</h3>
       <div class="trend-chart-filters">
-        <el-select v-model="clusterFilter" size="small" placeholder="全部集群" clearable style="width: 140px" @change="loadTrends">
+        <el-select v-model="clusterFilter" size="small" :placeholder="t('dashboard.allClusters')" clearable style="width: 140px" @change="loadTrends">
           <el-option v-for="c in clusterList" :key="c.id" :label="c.name" :value="c.id" />
         </el-select>
         <el-select v-model="timeRange" size="small" class="time-range-select" @change="loadTrends">
-          <el-option label="近 7 天" value="7" />
-          <el-option label="近 15 天" value="15" />
+          <el-option :label="t('dashboard.last7Days')" value="7" />
+          <el-option :label="t('dashboard.last15Days')" value="15" />
         </el-select>
       </div>
     </div>
@@ -20,12 +20,14 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import * as echarts from 'echarts'
 import VChart from 'vue-echarts'
 import { useThemeStore } from '@/stores/theme'
 import { getDashboardTrends } from '@/api/dashboard'
 import { getClusters, type Cluster } from '@/api/clusters'
 
+const { t } = useI18n()
 const timeRange = ref('7')
 const themeStore = useThemeStore()
 const clusterFilter = ref<number | ''>('')
@@ -92,7 +94,7 @@ const chartOption = computed(() => {
     },
     series: [
       {
-        name: 'CPU 使用率',
+        name: t('dashboard.cpuUsage'),
         type: 'line',
         smooth: true,
         data: cpuData.value,
@@ -106,7 +108,7 @@ const chartOption = computed(() => {
         }
       },
       {
-        name: '内存使用率',
+        name: t('dashboard.memoryUsage'),
         type: 'line',
         smooth: true,
         data: memoryData.value,

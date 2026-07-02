@@ -2,12 +2,12 @@
   <div class="page-container">
     <div class="page-header">
       <div>
-        <h2 class="page-title">快照管理</h2>
-        <p class="page-desc">虚拟机与容器快照管理</p>
+        <h2 class="page-title">{{ t('advanced.snapshots.title') }}</h2>
+        <p class="page-desc">{{ t('advanced.snapshots.subtitle') }}</p>
       </div>
     </div>
     <el-card shadow="hover">
-      <el-empty description="Snapshots 功能开发中">
+      <el-empty :description="t('advanced.snapshots.comingSoon')">
         <template #image>
           <el-icon :size="64" style="color: var(--text-muted)"><Camera /></el-icon>
         </template>
@@ -18,6 +18,9 @@
 
 <script setup lang="ts">
 import { Camera } from '@element-plus/icons-vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 </script>
 
 <style scoped>

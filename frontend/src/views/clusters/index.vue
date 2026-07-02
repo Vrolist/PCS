@@ -2,24 +2,24 @@
   <div class="clusters-page">
     <div class="page-header">
       <div>
-        <h2 class="page-title">集群管理</h2>
-        <p class="page-subtitle">管理您的 PVE 集群与 Agent</p>
+        <h2 class="page-title">{{ t('clusters.title') }}</h2>
+        <p class="page-subtitle">{{ t('clusters.subtitle') }}</p>
       </div>
-      <el-button type="primary" size="large" @click="showCreate = true">+ 新建集群</el-button>
+      <el-button type="primary" size="large" @click="showCreate = true">{{ t('clusters.createNew') }}</el-button>
     </div>
 
     <!-- 加载中 -->
     <el-card v-if="loading" shadow="hover">
       <div style="text-align: center; padding: 60px">
         <el-icon class="is-loading" :size="32"><Loading /></el-icon>
-        <p style="margin-top: 12px; color: var(--text-secondary)">加载中...</p>
+        <p style="margin-top: 12px; color: var(--text-secondary)">{{ t('common.loading') }}</p>
       </div>
     </el-card>
 
     <!-- 空状态 -->
     <el-card v-else-if="clusters.length === 0" shadow="hover">
-      <el-empty description="暂无集群，点击上方按钮创建">
-        <el-button type="primary" @click="showCreate = true">新建集群</el-button>
+      <el-empty :description="t('clusters.emptyDesc')">
+        <el-button type="primary" @click="showCreate = true">{{ t('clusters.createButton') }}</el-button>
       </el-empty>
     </el-card>
 
@@ -48,7 +48,7 @@
                   </span>
                   <span class="meta-chip">
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>
-                    {{ cluster.last_scanned_at ? formatTime(cluster.last_scanned_at) : '未扫描' }}
+                    {{ cluster.last_scanned_at ? formatTime(cluster.last_scanned_at) : t('clusters.notScanned') }}
                   </span>
                 </div>
               </div>
@@ -56,65 +56,65 @@
             <div class="cluster-actions">
               <el-button size="default" plain @click="viewDetail(cluster)">
                 <el-icon><View /></el-icon>
-                详情
+                {{ t('common.detail') }}
               </el-button>
               <template v-if="cluster.is_active">
                 <el-button size="default" plain type="warning" @click="handleToggleActive(cluster, false)">
                   <el-icon><VideoPause /></el-icon>
-                  停用
+                  {{ t('clusters.stop') }}
                 </el-button>
               </template>
               <template v-else>
                 <el-button size="default" plain type="success" @click="handleToggleActive(cluster, true)">
                   <el-icon><CircleCheck /></el-icon>
-                  恢复
+                  {{ t('clusters.restore') }}
                 </el-button>
                 <el-button size="default" plain type="danger" @click="confirmDelete(cluster)">
                   <el-icon><Delete /></el-icon>
-                  删除
+                  {{ t('clusters.delete') }}
                 </el-button>
               </template>
             </div>
           </div>
           <!-- 统计网格 -->
           <div class="cluster-stats">
-            <div class="stat-item" title="PVE 节点数量">
+            <div class="stat-item" :title="t('clusters.nodesCount')">
               <div class="stat-icon stat-icon-node">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>
               </div>
               <div class="stat-body">
                 <span class="stat-value">{{ cluster.total_nodes }}</span>
-                <span class="stat-label">节点</span>
+                <span class="stat-label">{{ t('common.nodes') }}</span>
               </div>
             </div>
-            <div class="stat-item" title="虚拟机实例数">
+            <div class="stat-item" :title="t('clusters.vmsCount')">
               <div class="stat-icon stat-icon-vm">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="12" rx="1"/><path d="M9 16v4"/><path d="M15 16v4"/><path d="M7 20h10"/></svg>
               </div>
               <div class="stat-body">
                 <span class="stat-value">{{ cluster.total_vms }}</span>
-                <span class="stat-label">虚拟机</span>
+                <span class="stat-label">{{ t('common.vms') }}</span>
               </div>
             </div>
-            <div class="stat-item" title="LXC 容器数量">
+            <div class="stat-item" :title="t('clusters.containersCount')">
               <div class="stat-icon stat-icon-lxc">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 9v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9"/><path d="M22 5H2v3h20V5z"/><path d="M8 14h8"/><path d="M8 18h5"/></svg>
               </div>
               <div class="stat-body">
                 <span class="stat-value">{{ cluster.total_lxc }}</span>
-                <span class="stat-label">容器</span>
+                <span class="stat-label">{{ t('common.containers') }}</span>
               </div>
             </div>
-            <div class="stat-item" title="存储设备数">
+            <div class="stat-item" :title="t('clusters.storageCount')">
               <div class="stat-icon stat-icon-storage">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v4c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 11v4c0 1.66 4.03 3 9 3s9-1.34 9-3v-4"/><path d="M3 17v4c0 1.66 4.03 3 9 3s9-1.34 9-3v-4"/></svg>
               </div>
               <div class="stat-body">
                 <span class="stat-value">{{ cluster.total_storage }}</span>
-                <span class="stat-label">存储</span>
+                <span class="stat-label">{{ t('common.storage') }}</span>
               </div>
             </div>
-            <div class="stat-item" title="Agent 在线/总数">
+            <div class="stat-item" :title="t('clusters.agentsCount')">
               <div class="stat-icon stat-icon-agent">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 20.6V19a3 3 0 0 1 3-3h4a3 3 0 0 1 3 3v1.6"/></svg>
               </div>
@@ -131,65 +131,65 @@
     </div>
 
     <!-- 新建集群弹窗 -->
-    <el-dialog v-model="showCreate" title="新建集群" width="560px" :close-on-click-modal="false">
+    <el-dialog v-model="showCreate" :title="t('clusters.createTitle')" width="560px" :close-on-click-modal="false">
       <el-form ref="createFormRef" :model="createForm" :rules="createRules" label-width="120px">
-        <el-form-item label="集群名称" prop="name">
-          <el-input v-model="createForm.name" placeholder="如：生产环境集群" maxlength="128" />
+        <el-form-item :label="t('clusters.nameLabel')" prop="name">
+          <el-input v-model="createForm.name" :placeholder="t('clusters.clusterNamePlaceholder')" maxlength="128" />
         </el-form-item>
-        <el-form-item label="描述" prop="description">
-          <el-input v-model="createForm.description" type="textarea" :rows="2" placeholder="可选描述" />
+        <el-form-item :label="t('clusters.description')" prop="description">
+          <el-input v-model="createForm.description" type="textarea" :rows="2" :placeholder="t('clusters.descPlaceholder')" />
         </el-form-item>
-        <el-divider content-position="left">PVE 连接信息（可选，填入后安装无需交互）</el-divider>
-        <el-form-item label="PVE API 地址" prop="pve_endpoint">
-          <el-input v-model="createForm.pve_endpoint" placeholder="如 https://192.168.1.200:8006" />
+        <el-divider content-position="left">{{ t('clusters.pveConnectionInfo') }}</el-divider>
+        <el-form-item :label="t('clusters.apiEndpointLabel')" prop="pve_endpoint">
+          <el-input v-model="createForm.pve_endpoint" :placeholder="t('clusters.apiEndpointPlaceholder')" />
         </el-form-item>
         <el-form-item label="PVE API Token" prop="pve_token">
-          <el-input v-model="createForm.pve_token" placeholder="如 root@pam!monitor:xxxxxxxxxxxx" show-password />
+          <el-input v-model="createForm.pve_token" :placeholder="t('clusters.pveTokenPlaceholder')" show-password />
         </el-form-item>
-        <p class="form-hint">在 PVE 的「数据中心 → 权限 → API Tokens」中创建只读 Token</p>
+        <p class="form-hint">{{ t('clusters.apiTokenTip') }}</p>
       </el-form>
       <template #footer>
-        <el-button @click="showCreate = false">取消</el-button>
-        <el-button type="primary" :loading="creating" @click="handleCreate">创建</el-button>
+        <el-button @click="showCreate = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="creating" @click="handleCreate">{{ t('clusters.create') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- 集群详情弹窗 -->
-    <el-dialog v-model="showDetail" :title="detail?.name || '集群详情'" width="720px">
+    <el-dialog v-model="showDetail" :title="detail?.name || t('clusters.basicInfo')" width="720px">
       <template v-if="detail">
         <div class="detail-section">
-          <h4>基本信息</h4>
+          <h4>{{ t('clusters.basicInfo') }}</h4>
           <div class="detail-grid">
             <div class="detail-item">
-              <span class="detail-label">状态</span>
+              <span class="detail-label">{{ t('common.status') }}</span>
               <el-tag :type="statusType(detail.status)" size="small">{{ statusLabel(detail.status) }}</el-tag>
             </div>
             <div class="detail-item">
-              <span class="detail-label">PVE 版本</span>
-              <span>{{ detail.pve_version || '未知' }}</span>
+              <span class="detail-label">{{ t('clusters.pveVersion') }}</span>
+              <span>{{ detail.pve_version || t('common.unknown') }}</span>
             </div>
             <div class="detail-item">
-              <span class="detail-label">最后扫描</span>
-              <span>{{ detail.last_scanned_at ? formatTime(detail.last_scanned_at) : '未扫描' }}</span>
+              <span class="detail-label">{{ t('clusters.lastScan') }}</span>
+              <span>{{ detail.last_scanned_at ? formatTime(detail.last_scanned_at) : t('clusters.notScanned') }}</span>
             </div>
             <div class="detail-item">
-              <span class="detail-label">节点</span>
-              <span>{{ detail.total_nodes }} 台</span>
+              <span class="detail-label">{{ t('common.nodes') }}</span>
+              <span>{{ detail.total_nodes }} {{ t('common.unitTai') }}</span>
             </div>
             <div class="detail-item">
-              <span class="detail-label">虚拟机</span>
-              <span>{{ detail.total_vms }} 台</span>
+              <span class="detail-label">{{ t('common.vms') }}</span>
+              <span>{{ detail.total_vms }} {{ t('common.unitTai') }}</span>
             </div>
             <div class="detail-item">
-              <span class="detail-label">容器</span>
-              <span>{{ detail.total_lxc }} 台</span>
+              <span class="detail-label">{{ t('common.containers') }}</span>
+              <span>{{ detail.total_lxc }} {{ t('common.unitTai') }}</span>
             </div>
             <div class="detail-item" v-if="detail.total_storage">
-              <span class="detail-label">存储</span>
-              <span>{{ detail.total_storage }} 个</span>
+              <span class="detail-label">{{ t('common.storage') }}</span>
+              <span>{{ detail.total_storage }} {{ t('common.unitGe') }}</span>
             </div>
             <div class="detail-item" v-if="detail.description">
-              <span class="detail-label">描述</span>
+              <span class="detail-label">{{ t('clusters.description') }}</span>
               <span>{{ detail.description }}</span>
             </div>
           </div>
@@ -200,55 +200,55 @@
             <el-collapse-item>
               <template #title>
                 <div class="install-title-row">
-                  <h4>一键安装命令</h4>
+                  <h4>{{ t('clusters.installCommand') }}</h4>
                   <el-button size="small" @click.stop="copyCommand(detail.install_command)">
-                    <el-icon><CopyDocument /></el-icon> 复制
+                    <el-icon><CopyDocument /></el-icon> {{ t('clusters.copy') }}
                   </el-button>
                 </div>
               </template>
               <div class="install-cmd-box">
                 <code>{{ detail.install_command }}</code>
               </div>
-              <p class="install-hint">在 PVE 节点上以 root 执行此命令即可自动安装 Agent</p>
+              <p class="install-hint">{{ t('clusters.installTip') }}</p>
             </el-collapse-item>
           </el-collapse>
         </div>
 
         <div class="detail-section">
-          <h4>Agent 列表 ({{ detail.agents.length }})</h4>
+          <h4>{{ t('common.nodes') }} ({{ detail.agents.length }})</h4>
           <el-table v-if="detail.agents.length > 0" :data="detail.agents" stripe>
-            <el-table-column prop="hostname" label="主机名" width="120" />
+            <el-table-column prop="hostname" :label="t('clusters.hostname')" width="120" />
             <el-table-column prop="agent_id" label="Agent ID" width="160">
               <template #default="{ row }">
                 <code style="font-size: 12px">{{ row.agent_id.slice(0, 12) }}...</code>
               </template>
             </el-table-column>
-            <el-table-column label="状态" width="80">
+            <el-table-column :label="t('common.status')" width="80">
               <template #default="{ row }">
                 <el-tag :type="agentStatusType(row.status)" size="small">{{ agentStatusLabel(row.status) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="版本" width="110">
+            <el-table-column :label="t('common.version')" width="110">
               <template #default="{ row }">
                 <span style="margin-right: 4px">{{ row.version }}</span>
                 <span
                   v-if="latestAgentVersion && compareVersions(row.version, latestAgentVersion) < 0"
                   class="version-tag version-outdated"
-                >可更新</span>
+                >{{ t('clusters.updateAvailable') }}</span>
                 <el-icon
                   v-else-if="latestAgentVersion"
                   class="version-check"
                 ><CircleCheckFilled /></el-icon>
               </template>
             </el-table-column>
-            <el-table-column prop="total_scans" label="扫描次数" width="90" />
-            <el-table-column label="最后心跳" min-width="140">
+            <el-table-column prop="total_scans" :label="t('clusters.scanCount')" width="90" />
+            <el-table-column :label="t('clusters.lastHeartbeat')" min-width="140">
               <template #default="{ row }">
-                {{ row.last_heartbeat_at ? formatTime(row.last_heartbeat_at) : '从未' }}
+                {{ row.last_heartbeat_at ? formatTime(row.last_heartbeat_at) : t('clusters.never') }}
               </template>
             </el-table-column>
           </el-table>
-          <el-empty v-else description="暂无 Agent，请执行上方安装命令" :image-size="60" />
+          <el-empty v-else :description="t('clusters.noAgent')" :image-size="60" />
         </div>
       </template>
     </el-dialog>
@@ -257,7 +257,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
+
+const { t } = useI18n()
 import type { FormInstance } from 'element-plus'
 import { Loading, View, Delete, CopyDocument, VideoPause, CircleCheck, CircleCheckFilled } from '@element-plus/icons-vue'
 import { getClusters, getCluster, createCluster, updateCluster, deleteCluster, getLatestAgentVersion } from '@/api/clusters'
@@ -294,9 +297,9 @@ async function fetchLatestAgentVersion() {
 
 const createForm = ref({ name: '', description: '', pve_endpoint: '', pve_token: '' })
 const createRules = {
-  name: [{ required: true, message: '请输入集群名称', trigger: 'blur' }],
-  pve_endpoint: [{ required: true, message: '请输入 PVE API 地址', trigger: 'blur' }],
-  pve_token: [{ required: true, message: '请输入 PVE API Token', trigger: 'blur' }],
+  name: [{ required: true, message: t('clusters.nameRequired'), trigger: 'blur' }],
+  pve_endpoint: [{ required: true, message: t('clusters.apiRequired'), trigger: 'blur' }],
+  pve_token: [{ required: true, message: t('clusters.tokenRequired'), trigger: 'blur' }],
 }
 
 async function loadClusters() {
@@ -317,7 +320,7 @@ async function handleCreate() {
   creating.value = true
   try {
     await createCluster(createForm.value)
-    ElMessage.success('集群创建成功')
+    ElMessage.success(t('clusters.createSuccess'))
     showCreate.value = false
     createForm.value = { name: '', description: '', pve_endpoint: '', pve_token: '' }
     await loadClusters()
@@ -338,15 +341,15 @@ async function viewDetail(cluster: Cluster) {
 }
 
 async function handleToggleActive(cluster: Cluster, activate: boolean) {
-  const label = activate ? '恢复' : '停用'
+  const label = activate ? t('clusters.confirmRestore') : t('clusters.confirmStop')
   try {
     await ElMessageBox.confirm(
-      `确定${label}集群「${cluster.name}」？${activate ? '恢复后 Agent 将继续上报数据。' : '停用后 Agent 将暂停数据上报，仍会保持心跳等待恢复。'}`,
-      `确认${label}`,
-      { type: activate ? 'success' : 'warning', confirmButtonText: label, cancelButtonText: '取消' },
+      `${t('clusters.confirmAction', { action: label, name: cluster.name })}${activate ? t('clusters.confirmRestoreHint') : t('clusters.confirmStopHint')}`,
+      t('clusters.confirmActionTitle', { action: label }),
+      { type: activate ? 'success' : 'warning', confirmButtonText: label, cancelButtonText: t('common.cancel') },
     )
     await updateCluster(cluster.id, { is_active: activate })
-    ElMessage.success(`集群已${label}`)
+    ElMessage.success(t('clusters.actionSuccess', { action: label }))
     await loadClusters()
   } catch {
     // user cancelled or error
@@ -356,26 +359,26 @@ async function handleToggleActive(cluster: Cluster, activate: boolean) {
 async function confirmDelete(cluster: Cluster) {
   try {
     await ElMessageBox.confirm(
-      `确定删除集群「${cluster.name}」？集群中的所有数据将被永久删除。`,
-      '确认删除',
-      { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' },
+      t('clusters.confirmDelete', { name: cluster.name }),
+      t('clusters.confirmDeleteTitle'),
+      { type: 'warning', confirmButtonText: t('clusters.delete'), cancelButtonText: t('common.cancel') },
     )
     // 二次确认
     await ElMessageBox.confirm(
-      `此操作不可恢复。请在下方输入「${cluster.name}」以确认删除：`,
-      '二次确认',
+      t('clusters.deleteConfirm', { name: cluster.name }),
+      t('clusters.deleteConfirmTitle'),
       {
         type: 'error',
-        confirmButtonText: '确认删除',
-        cancelButtonText: '取消',
+        confirmButtonText: t('clusters.confirmDeleteButton'),
+        cancelButtonText: t('common.cancel'),
         inputValue: '',
-        inputPlaceholder: `请输入 ${cluster.name}`,
-        inputValidator: (v: string) => v === cluster.name || '输入不匹配',
-        inputErrorMessage: '集群名称不匹配',
+        inputPlaceholder: `${t('common.name')} ${cluster.name}`,
+        inputValidator: (v: string) => v === cluster.name || t('clusters.inputMismatch'),
+        inputErrorMessage: t('clusters.nameMismatch'),
       },
     )
     await deleteCluster(cluster.id)
-    ElMessage.success('已删除')
+    ElMessage.success(t('clusters.deleted'))
     await loadClusters()
   } catch {
     // user cancelled or error
@@ -391,9 +394,9 @@ function copyCommand(cmd: string) {
   ta.select()
   try {
     document.execCommand('copy')
-    ElMessage.success('已复制到剪贴板')
+    ElMessage.success(t('common.copySuccess'))
   } catch {
-    ElMessage.error('复制失败，请手动复制')
+    ElMessage.error(t('common.copyFailed'))
   } finally {
     document.body.removeChild(ta)
   }
@@ -403,9 +406,9 @@ function formatTime(iso: string) {
   const d = new Date(iso)
   const now = new Date()
   const diff = (now.getTime() - d.getTime()) / 1000
-  if (diff < 60) return '刚刚'
-  if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`
-  if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`
+  if (diff < 60) return t('common.justNow')
+  if (diff < 3600) return `${Math.floor(diff / 60)} ${t('common.minutesAgo')}`
+  if (diff < 86400) return `${Math.floor(diff / 3600)} ${t('common.hoursAgo')}`
   return d.toLocaleDateString('zh-CN')
 }
 
@@ -413,13 +416,13 @@ function statusType(s: string) {
   return s === 'active' ? 'success' : s === 'error' ? 'danger' : 'warning'
 }
 function statusLabel(s: string) {
-  return { active: '活跃', pending: '待激活', error: '错误', archived: '已归档' }[s] || s
+  return { active: t('clusters.active'), pending: t('clusters.pending'), error: t('clusters.error'), archived: t('clusters.archived') }[s] || s
 }
 function agentStatusType(s: string) {
   return s === 'online' ? 'success' : s === 'error' ? 'danger' : 'info'
 }
 function agentStatusLabel(s: string) {
-  return { online: '在线', offline: '离线', error: '错误', paused: '暂停' }[s] || s
+  return { online: t('clusters.agentOnline'), offline: t('clusters.agentOffline'), error: t('clusters.error'), paused: t('clusters.agentPaused') }[s] || s
 }
 
 onMounted(() => {

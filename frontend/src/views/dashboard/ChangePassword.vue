@@ -9,11 +9,11 @@
             <h3 class="user-name">{{ authStore.user?.username || '-' }}</h3>
             <div class="user-detail">
               <div class="detail-row">
-                <span class="detail-label">邮箱</span>
+                <span class="detail-label">{{ t('changePassword.email') }}</span>
                 <span class="detail-value">{{ authStore.user?.email || '-' }}</span>
               </div>
               <div class="detail-row">
-                <span class="detail-label">加入时间</span>
+                <span class="detail-label">{{ t('changePassword.joinTime') }}</span>
                 <span class="detail-value">{{ authStore.user?.date_joined?.slice(0, 10) || '-' }}</span>
               </div>
             </div>
@@ -25,7 +25,7 @@
       <div class="cp-right">
         <el-card shadow="hover" class="form-card">
           <template #header>
-            <span class="form-title">修改密码</span>
+            <span class="form-title">{{ t('changePassword.title') }}</span>
           </template>
           <el-form
             ref="formRef"
@@ -35,25 +35,25 @@
             class="pw-form"
             @keyup.enter="handleSubmit"
           >
-            <el-form-item label="新密码" prop="new_password">
+            <el-form-item :label="t('changePassword.newPassword')" prop="new_password">
               <el-input
                 v-model="form.new_password"
                 type="password"
-                placeholder="请输入新密码"
+                :placeholder="t('changePassword.newPassPlaceholder')"
                 show-password
               />
             </el-form-item>
-            <el-form-item label="确认新密码" prop="new_password2">
+            <el-form-item :label="t('changePassword.confirmPassword')" prop="new_password2">
               <el-input
                 v-model="form.new_password2"
                 type="password"
-                placeholder="请再次输入新密码"
+                :placeholder="t('changePassword.confirmPassPlaceholder')"
                 show-password
               />
             </el-form-item>
             <el-form-item>
               <el-button type="primary" :loading="submitting" @click="handleSubmit">
-                确认修改
+                {{ t('changePassword.submit') }}
               </el-button>
             </el-form-item>
           </el-form>
@@ -64,7 +64,7 @@
     <!-- 成功弹窗 -->
     <el-dialog
       v-model="successDialog"
-      title="修改成功"
+      :title="t('changePassword.successTitle')"
       :show-close="false"
       :close-on-click-modal="false"
       :close-on-press-escape="false"
@@ -73,12 +73,12 @@
     >
       <div class="success-body">
         <el-icon :size="48" color="#67c23a"><SuccessFilled /></el-icon>
-        <p class="success-msg">密码修改成功，已自动退出登录</p>
-        <p class="success-hint">请使用新密码重新登录</p>
+        <p class="success-msg">{{ t('changePassword.successMessage') }}</p>
+        <p class="success-hint">{{ t('changePassword.reLogin') }}</p>
       </div>
       <template #footer>
         <el-button type="primary" @click="doLogout" :loading="logouting">
-          确定
+          {{ t('changePassword.ok') }}
         </el-button>
       </template>
     </el-dialog>
@@ -87,12 +87,14 @@
 
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { changePassword } from '@/api/auth'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { SuccessFilled } from '@element-plus/icons-vue'
 
+const { t } = useI18n()
 const router = useRouter()
 const authStore = useAuthStore()
 
@@ -108,7 +110,7 @@ const form = reactive({
 
 const validatePass2 = (_rule: any, value: string, callback: any) => {
   if (value !== form.new_password) {
-    callback(new Error('两次输入的密码不一致'))
+    callback(new Error(t('changePassword.passwordMismatch')))
   } else {
     callback()
   }
@@ -116,11 +118,11 @@ const validatePass2 = (_rule: any, value: string, callback: any) => {
 
 const rules: FormRules = {
   new_password: [
-    { required: true, message: '请输入新密码', trigger: 'blur' },
-    { min: 6, message: '密码至少 6 位', trigger: 'blur' },
+    { required: true, message: t('changePassword.passwordRequired'), trigger: 'blur' },
+    { min: 6, message: t('changePassword.passwordMinLength'), trigger: 'blur' },
   ],
   new_password2: [
-    { required: true, message: '请再次输入新密码', trigger: 'blur' },
+    { required: true, message: t('changePassword.confirmPasswordRequired'), trigger: 'blur' },
     { validator: validatePass2, trigger: 'blur' },
   ],
 }
@@ -137,7 +139,7 @@ async function handleSubmit() {
     })
     successDialog.value = true
   } catch (e: any) {
-    const msg = e?.response?.data?.detail || e?.response?.data?.[0] || '修改失败'
+    const msg = e?.response?.data?.detail || e?.response?.data?.[0] || t('changePassword.changeFailed')
     ElMessage.error(msg)
   } finally {
     submitting.value = false

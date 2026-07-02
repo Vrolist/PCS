@@ -2,12 +2,12 @@
   <div class="page-container">
     <div class="page-header">
       <div>
-        <h2 class="page-title">软件定义网络</h2>
-        <p class="page-desc">虚拟网络与子网管理</p>
+        <h2 class="page-title">{{ t('advanced.sdn.title') }}</h2>
+        <p class="page-desc">{{ t('advanced.sdn.subtitle') }}</p>
       </div>
     </div>
     <el-card shadow="hover">
-      <el-empty description="SDN 功能开发中">
+      <el-empty :description="t('advanced.sdn.comingSoon')">
         <template #image>
           <el-icon :size="64" style="color: var(--text-muted)"><Share /></el-icon>
         </template>
@@ -18,6 +18,9 @@
 
 <script setup lang="ts">
 import { Share } from '@element-plus/icons-vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 </script>
 
 <style scoped>

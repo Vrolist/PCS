@@ -2,44 +2,44 @@
   <div class="page-container">
     <div class="page-header">
       <div>
-        <h2 class="page-title">节点管理</h2>
-        <p class="page-desc">管理和监控 PVE 集群节点状态</p>
+        <h2 class="page-title">{{ t('nodes.title') }}</h2>
+        <p class="page-desc">{{ t('nodes.subtitle') }}</p>
       </div>
       <div class="header-actions">
         <div class="header-stats" v-if="nodes.length">
-          <el-tag type="success" effect="plain">在线 {{ onlineCount }}</el-tag>
-          <el-tag type="info" effect="plain">总计 {{ nodes.length }}</el-tag>
+          <el-tag type="success" effect="plain">{{ t('nodes.onlineCount') }} {{ onlineCount }}</el-tag>
+          <el-tag type="info" effect="plain">{{ t('nodes.totalCount') }} {{ nodes.length }}</el-tag>
         </div>
       </div>
     </div>
     <el-card shadow="hover" class="table-card">
       <div v-if="loading" class="loading-box">
         <el-icon class="is-loading" :size="20"><Loading /></el-icon>
-        <span>加载中...</span>
+        <span>{{ t('common.loading') }}</span>
       </div>
       <el-table v-else :data="nodes" style="width: 100%" stripe>
-        <el-table-column prop="node_name" label="节点名称" min-width="130" fixed>
+        <el-table-column prop="node_name" :label="t('dashboard.nodeName')" min-width="130" fixed>
           <template #default="{ row }">
             <span class="node-name">{{ row.node_name }}</span>
             <div class="sub-text">{{ row.cluster_name }}</div>
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态" width="90" align="center">
+        <el-table-column prop="status" :label="t('common.status')" width="90" align="center">
           <template #default="{ row }">
             <el-tag :type="row.status === 'online' ? 'success' : 'danger'" size="small" disable-transitions>
-              {{ row.status === 'online' ? '在线' : '离线' }}
+              {{ row.status === 'online' ? t('common.online') : t('common.offline') }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="CPU" min-width="150">
+        <el-table-column :label="t('nodes.cpu')" min-width="150">
           <template #default="{ row }">
             <div class="usage-cell">
               <el-progress :percentage="cpuPercent(row)" :stroke-width="8" :color="cpuColor(cpuPercent(row))" :show-text="false" />
-              <span class="usage-text">{{ cpuPercent(row) }}% · {{ row.cpu_cores || '?' }}核</span>
+              <span class="usage-text">{{ cpuPercent(row) }}% · {{ row.cpu_cores || '?' }}{{ t('common.cores') }}</span>
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="内存" min-width="180">
+        <el-table-column :label="t('vms.memory')" min-width="180">
           <template #default="{ row }">
             <div class="usage-cell">
               <el-progress :percentage="Math.round(row.memory_usage_pct || 0)" :stroke-width="8" color="#409eff" :show-text="false" />
@@ -47,80 +47,80 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="磁盘" min-width="130">
+        <el-table-column :label="t('vms.disk')" min-width="130">
           <template #default="{ row }">
             <span>{{ row.rootfs_used_gb || 0 }}GB / {{ row.rootfs_total_gb || 0 }}GB</span>
           </template>
         </el-table-column>
-        <el-table-column label="I/O延迟" width="90" align="center">
+        <el-table-column :label="t('nodes.ioDelay')" width="90" align="center">
           <template #default="{ row }">
             <span :class="{ 'text-warn': (row.disk_io_delay_ms || 0) > 50 }">{{ (row.disk_io_delay_ms || 0).toFixed(1) }}ms</span>
           </template>
         </el-table-column>
-        <el-table-column prop="ip_address" label="IP 地址" min-width="140">
-          <template #default="{ row }">{{ row.ip_address || '未知' }}</template>
+        <el-table-column prop="ip_address" :label="t('common.ip')" min-width="140">
+          <template #default="{ row }">{{ row.ip_address || t('common.unknown') }}</template>
         </el-table-column>
-        <el-table-column prop="pve_version" label="PVE 版本" min-width="140" />
-        <el-table-column label="运行时长" min-width="100">
+        <el-table-column prop="pve_version" :label="t('clusters.pveVersion')" min-width="140" />
+        <el-table-column :label="t('nodes.runtime')" min-width="100">
           <template #default="{ row }">{{ fmtUptime(row.uptime_seconds) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="80" align="center" fixed="right">
+        <el-table-column :label="t('common.operation')" width="80" align="center" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" link size="small" @click="showDetail(row)">详情</el-button>
+            <el-button type="primary" link size="small" @click="showDetail(row)">{{ t('common.detail') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
-      <el-empty v-if="!loading && !nodes.length" description="暂无节点数据，请先部署 Agent 采集数据" />
+      <el-empty v-if="!loading && !nodes.length" :description="t('nodes.emptyDesc')" />
     </el-card>
 
     <!-- 节点详情弹窗 -->
-    <el-dialog v-model="detailVisible" :title="detailData?.node?.node_name || '节点详情'" width="820px" destroy-on-close top="5vh">
+    <el-dialog v-model="detailVisible" :title="detailData?.node?.node_name || t('nodes.nodeDetailTitle')" width="820px" destroy-on-close top="5vh">
       <div v-if="detailLoading" class="loading-box">
         <el-icon class="is-loading" :size="20"><Loading /></el-icon>
-        <span>加载中...</span>
+        <span>{{ t('common.loading') }}</span>
       </div>
       <div v-else-if="detailData" class="detail-content">
         <!-- 基本信息 -->
         <div class="detail-section">
-          <h4>基本信息</h4>
+          <h4>{{ t('nodes.basicInfo') }}</h4>
           <div class="detail-kv">
-            <div class="kv-row"><span class="kv-label">节点名称</span><span class="kv-val">{{ detailData.node.node_name }}</span></div>
-            <div class="kv-row"><span class="kv-label">集群</span><span class="kv-val">{{ detailData.node.cluster_name }}</span></div>
-            <div class="kv-row"><span class="kv-label">状态</span><span class="kv-val"><el-tag :type="detailData.node.status === 'online' ? 'success' : 'danger'" size="small">{{ detailData.node.status === 'online' ? '在线' : '离线' }}</el-tag></span></div>
-            <div class="kv-row"><span class="kv-label">IP 地址</span><span class="kv-val mono">{{ detailData.node.ip_address || '-' }}</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('dashboard.nodeName') }}</span><span class="kv-val">{{ detailData.node.node_name }}</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('vms.cluster') }}</span><span class="kv-val">{{ detailData.node.cluster_name }}</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('common.status') }}</span><span class="kv-val"><el-tag :type="detailData.node.status === 'online' ? 'success' : 'danger'" size="small">{{ detailData.node.status === 'online' ? t('common.online') : t('common.offline') }}</el-tag></span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('common.ip') }}</span><span class="kv-val mono">{{ detailData.node.ip_address || '-' }}</span></div>
             <div class="kv-row" v-if="detailData.node.mac_address"><span class="kv-label">MAC</span><span class="kv-val mono">{{ detailData.node.mac_address }}</span></div>
-            <div class="kv-row"><span class="kv-label">PVE 版本</span><span class="kv-val mono">{{ detailData.node.pve_version || '-' }}</span></div>
-            <div class="kv-row"><span class="kv-label">内核版本</span><span class="kv-val mono">{{ detailData.node.kernel_version || '-' }}</span></div>
-            <div class="kv-row"><span class="kv-label">运行时长</span><span class="kv-val">{{ fmtUptime(detailData.node.uptime_seconds) }}</span></div>
-            <div class="kv-row"><span class="kv-label">角色</span><span class="kv-val">
+            <div class="kv-row"><span class="kv-label">{{ t('clusters.pveVersion') }}</span><span class="kv-val mono">{{ detailData.node.pve_version || '-' }}</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('nodes.kernelVersion') }}</span><span class="kv-val mono">{{ detailData.node.kernel_version || '-' }}</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('nodes.runtime') }}</span><span class="kv-val">{{ fmtUptime(detailData.node.uptime_seconds) }}</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('nodes.role') }}</span><span class="kv-val">
               <el-tag v-if="detailData.node.is_ceph_node" type="success" size="small" effect="plain">Ceph</el-tag>
               <el-tag v-if="detailData.node.is_ha_node" type="warning" size="small" effect="plain" style="margin-left:4px">HA</el-tag>
               <span v-if="!detailData.node.is_ceph_node && !detailData.node.is_ha_node">-</span>
             </span></div>
-            <div class="kv-row"><span class="kv-label">扫描时间</span><span class="kv-val mono">{{ fmtTime(detailData.node.scanned_at) }}</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('common.scanTime') }}</span><span class="kv-val mono">{{ fmtTime(detailData.node.scanned_at) }}</span></div>
           </div>
         </div>
         <!-- 硬件信息 -->
         <div class="detail-section">
-          <h4>硬件</h4>
+          <h4>{{ t('nodes.hardware') }}</h4>
           <div class="detail-kv">
-            <div class="kv-row"><span class="kv-label">CPU 型号</span><span class="kv-val">{{ detailData.node.cpu_model || '-' }}</span></div>
-            <div class="kv-row"><span class="kv-label">CPU</span><span class="kv-val">{{ detailData.node.cpu_load?.toFixed(1) || 0 }}% · {{ detailData.node.cpu_cores }}核 × {{ detailData.node.cpu_sockets || 1 }}插槽</span></div>
-            <div class="kv-row"><span class="kv-label">内存</span><span class="kv-val">{{ fmtMB(detailData.node.memory_used_mb) }} / {{ fmtMB(detailData.node.memory_total_mb) }} ({{ detailData.node.memory_usage_pct?.toFixed(1) || 0 }}%)</span></div>
-            <div class="kv-row"><span class="kv-label">可用内存</span><span class="kv-val">{{ fmtMB(detailData.node.memory_free_mb) }}</span></div>
-            <div class="kv-row"><span class="kv-label">Swap</span><span class="kv-val">{{ fmtMB(detailData.node.swap_used_mb) }} / {{ fmtMB(detailData.node.swap_total_mb) }}</span></div>
-            <div class="kv-row"><span class="kv-label">根分区</span><span class="kv-val">{{ detailData.node.rootfs_used_gb }}GB / {{ detailData.node.rootfs_total_gb }}GB (可用 {{ detailData.node.rootfs_avail_gb }}GB)</span></div>
-            <div class="kv-row"><span class="kv-label">I/O 延迟</span><span class="kv-val" :class="{ 'text-warn': (detailData.node.disk_io_delay_ms || 0) > 50 }">{{ (detailData.node.disk_io_delay_ms || 0).toFixed(1) }}ms</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('nodes.cpuModel') }}</span><span class="kv-val">{{ detailData.node.cpu_model || '-' }}</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('nodes.cpuCores') }}</span><span class="kv-val">{{ detailData.node.cpu_load?.toFixed(1) || 0 }}% · {{ detailData.node.cpu_cores }}{{ t('common.cores') }} × {{ detailData.node.cpu_sockets || 1 }}{{ t('nodes.cpuSockets') }}</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('nodes.memoryTotal') }}</span><span class="kv-val">{{ fmtMB(detailData.node.memory_used_mb) }} / {{ fmtMB(detailData.node.memory_total_mb) }} ({{ detailData.node.memory_usage_pct?.toFixed(1) || 0 }}%)</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('nodes.memoryAvail') }}</span><span class="kv-val">{{ fmtMB(detailData.node.memory_free_mb) }}</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('nodes.swap') }}</span><span class="kv-val">{{ fmtMB(detailData.node.swap_used_mb) }} / {{ fmtMB(detailData.node.swap_total_mb) }}</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('nodes.rootFs') }}</span><span class="kv-val">{{ detailData.node.rootfs_used_gb }}GB / {{ detailData.node.rootfs_total_gb }}GB ({{ t('nodes.rootFsAvail') }} {{ detailData.node.rootfs_avail_gb }}GB)</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('nodes.ioDelay') }}</span><span class="kv-val" :class="{ 'text-warn': (detailData.node.disk_io_delay_ms || 0) > 50 }">{{ (detailData.node.disk_io_delay_ms || 0).toFixed(1) }}ms</span></div>
           </div>
         </div>
         <!-- 网络接口 -->
         <div class="detail-section" v-if="detailData.networks?.length">
-          <h4>网络接口</h4>
+          <h4>{{ t('nodes.networkInterfaces') }}</h4>
           <div class="device-list">
             <div v-for="net in detailData.networks" :key="net.name" class="device-chip">
               <span class="chip-tag">{{ net.name }}</span>
               <span class="chip-body">{{ net.type }}</span>
-              <el-tag :type="net.active ? 'success' : 'info'" size="small" effect="plain">{{ net.active ? '启用' : '禁用' }}</el-tag>
+              <el-tag :type="net.active ? 'success' : 'info'" size="small" effect="plain">{{ net.active ? t('common.enabled') : t('common.disabled') }}</el-tag>
               <span v-if="net.address" class="chip-sub mono">{{ net.address }}</span>
               <span v-if="net.gateway" class="chip-sub">GW {{ net.gateway }}</span>
               <span v-if="net.speed_mbps" class="chip-sub">{{ net.speed_mbps }}Mbps</span>
@@ -129,15 +129,15 @@
         </div>
         <!-- 存储 -->
         <div class="detail-section" v-if="detailData.storages?.length">
-          <h4>存储</h4>
+          <h4>{{ t('nodes.storage') }}</h4>
           <div class="device-list">
             <div v-for="s in detailData.storages" :key="s.name" class="device-chip">
               <span class="chip-tag">{{ s.name }}</span>
               <span class="chip-body">{{ s.type }}</span>
-              <el-tag :type="s.status === 'available' ? 'success' : 'danger'" size="small" effect="plain">{{ s.status === 'available' ? '可用' : '不可用' }}</el-tag>
+              <el-tag :type="s.status === 'available' ? 'success' : 'danger'" size="small" effect="plain">{{ s.status === 'available' ? t('nodes.storageAvailable') : t('nodes.storageUnavailable') }}</el-tag>
               <span v-if="s.total_gb" class="chip-sub">{{ s.used_gb || 0 }}GB / {{ s.total_gb }}GB</span>
               <span v-if="s.content_types" class="chip-sub mono">{{ s.content_types }}</span>
-              <el-tag v-if="s.shared" type="info" size="small" effect="plain">共享</el-tag>
+              <el-tag v-if="s.shared" type="info" size="small" effect="plain">{{ t('nodes.shared') }}</el-tag>
             </div>
           </div>
         </div>
@@ -146,17 +146,17 @@
           <el-collapse v-model="vmCollapse">
             <el-collapse-item title="" name="vm">
               <template #title>
-                <h4 class="collapse-title">虚拟机 ({{ detailData.vms.length }})</h4>
+                <h4 class="collapse-title">{{ t('nodes.vmTab') }} ({{ detailData.vms.length }})</h4>
               </template>
               <div class="resource-list">
                 <div v-for="vm in detailData.vms" :key="vm.vmid" class="resource-item">
                   <div class="resource-header">
                     <code class="mono">{{ vm.vmid }}</code>
                     <span class="resource-name">{{ vm.name }}</span>
-                    <el-tag :type="vm.status === 'running' ? 'success' : 'danger'" size="small">{{ vm.status === 'running' ? '运行' : '停止' }}</el-tag>
+                    <el-tag :type="vm.status === 'running' ? 'success' : 'danger'" size="small">{{ vm.status === 'running' ? t('nodes.running') : t('nodes.stopped') }}</el-tag>
                   </div>
                   <div class="resource-detail">
-                    <span>CPU {{ vm.cpu_usage?.toFixed(1) || 0 }}% · {{ vm.cpu_cores }}核</span>
+                    <span>CPU {{ vm.cpu_usage?.toFixed(1) || 0 }}% · {{ vm.cpu_cores }}{{ t('common.cores') }}</span>
                     <span>{{ fmtMB(vm.memory_used_mb) }} / {{ fmtMB(vm.memory_mb) }}</span>
                     <span>{{ vm.disk_gb }}GB</span>
                   </div>
@@ -170,18 +170,18 @@
           <el-collapse v-model="ctCollapse">
             <el-collapse-item title="" name="ct">
               <template #title>
-                <h4 class="collapse-title">容器 ({{ detailData.containers.length }})</h4>
+                <h4 class="collapse-title">{{ t('nodes.containerTab') }} ({{ detailData.containers.length }})</h4>
               </template>
               <div class="resource-list">
                 <div v-for="ct in detailData.containers" :key="ct.vmid" class="resource-item">
                   <div class="resource-header">
                     <code class="mono">{{ ct.vmid }}</code>
                     <span class="resource-name">{{ ct.name }}</span>
-                    <el-tag v-if="ct.has_template" type="warning" size="small" effect="plain">模板</el-tag>
-                    <el-tag v-else :type="ct.status === 'running' ? 'success' : 'danger'" size="small">{{ ct.status === 'running' ? '运行' : '停止' }}</el-tag>
+                    <el-tag v-if="ct.has_template" type="warning" size="small" effect="plain">{{ t('nodes.template') }}</el-tag>
+                    <el-tag v-else :type="ct.status === 'running' ? 'success' : 'danger'" size="small">{{ ct.status === 'running' ? t('nodes.running') : t('nodes.stopped') }}</el-tag>
                   </div>
                   <div class="resource-detail">
-                    <span>CPU {{ ct.cpu_usage?.toFixed(1) || 0 }}% · {{ ct.cpu_cores }}核</span>
+                    <span>CPU {{ ct.cpu_usage?.toFixed(1) || 0 }}% · {{ ct.cpu_cores }}{{ t('common.cores') }}</span>
                     <span>{{ fmtMB(ct.memory_used_mb) }} / {{ fmtMB(ct.memory_mb) }}</span>
                     <span>{{ ct.disk_gb }}GB</span>
                   </div>
@@ -192,7 +192,7 @@
         </div>
       </div>
       <template #footer>
-        <el-button @click="detailVisible = false">关闭</el-button>
+        <el-button @click="detailVisible = false">{{ t('common.close') }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -200,7 +200,10 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Loading } from '@element-plus/icons-vue'
+
+const { t } = useI18n()
 import { getNodes, getNodeDetail } from '@/api/nodes'
 import type { NodeInfo, NodeDetail } from '@/api/nodes'
 import { useClusterStore } from '@/stores/cluster'
@@ -250,7 +253,7 @@ function fmtTime(iso: string) {
 function fmtUptime(s: number) {
   if (!s) return '-'
   const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600)
-  return d > 0 ? `${d}天${h}时` : `${h}时${Math.floor((s % 3600) / 60)}分`
+  return d > 0 ? `${d}${t('common.days')}${h}${t('common.hours')}` : `${h}${t('common.hours')}${Math.floor((s % 3600) / 60)}${t('common.minutes')}`
 }
 </script>
 

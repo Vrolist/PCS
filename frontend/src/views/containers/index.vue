@@ -2,66 +2,66 @@
   <div class="page-container">
     <div class="page-header">
       <div>
-        <h2 class="page-title">容器</h2>
-        <p class="page-desc">查看和管理所有 PVE LXC 容器</p>
+        <h2 class="page-title">{{ t('containers.title') }}</h2>
+        <p class="page-desc">{{ t('containers.subtitle') }}</p>
       </div>
       <div class="header-actions">
-        <el-select v-model="nodeFilter" placeholder="节点" clearable style="width: 160px" @change="loadData">
+        <el-select v-model="nodeFilter" :placeholder="t('containers.nodeFilter')" clearable style="width: 160px" @change="loadData">
           <el-option v-for="n in nodes" :key="n.id" :label="n.node_name" :value="n.id" />
         </el-select>
-        <el-select v-model="statusFilter" placeholder="状态" clearable style="width: 110px" @change="loadData">
-          <el-option label="运行中" value="running" />
-          <el-option label="已停止" value="stopped" />
+        <el-select v-model="statusFilter" :placeholder="t('containers.statusFilter')" clearable style="width: 110px" @change="loadData">
+          <el-option :label="t('containers.running')" value="running" />
+          <el-option :label="t('containers.stopped')" value="stopped" />
         </el-select>
-        <el-select v-model="typeFilter" placeholder="类型" clearable style="width: 110px" @change="loadData">
-          <el-option label="容器" value="container" />
-          <el-option label="模板" value="template" />
+        <el-select v-model="typeFilter" :placeholder="t('containers.typeFilter')" clearable style="width: 110px" @change="loadData">
+          <el-option :label="t('containers.typeContainer')" value="container" />
+          <el-option :label="t('containers.typeTemplate')" value="template" />
         </el-select>
-        <el-input v-model="search" placeholder="搜索名称 / ID" clearable prefix-icon="Search" style="width: 220px" @input="debounceLoad" />
+        <el-input v-model="search" :placeholder="t('containers.searchPlaceholder')" clearable prefix-icon="Search" style="width: 220px" @input="debounceLoad" />
       </div>
     </div>
     <el-card shadow="hover" class="table-card">
       <div v-if="loading" class="loading-box">
         <el-icon class="is-loading" :size="20"><Loading /></el-icon>
-        <span>加载中...</span>
+        <span>{{ t('common.loading') }}</span>
       </div>
       <el-table v-else :data="containers" style="width: 100%" stripe>
         <el-table-column label="ID" width="80" align="center">
           <template #default="{ row }"><code class="vmid">{{ row.vmid }}</code></template>
         </el-table-column>
-        <el-table-column prop="name" label="名称" min-width="160" fixed>
+        <el-table-column prop="name" :label="t('containers.name')" min-width="160" fixed>
           <template #default="{ row }">
             <span class="ct-name">{{ row.name }}</span>
             <div class="sub-text">{{ row.node_name }}</div>
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态" width="90" align="center">
+        <el-table-column prop="status" :label="t('containers.status')" width="90" align="center">
           <template #default="{ row }">
             <el-tag :type="row.status === 'running' ? 'success' : 'danger'" size="small" disable-transitions>
-              {{ row.status === 'running' ? '运行中' : '已停止' }}
+              {{ row.status === 'running' ? t('containers.running') : t('containers.stopped') }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="类型" width="80" align="center">
+        <el-table-column :label="t('containers.type')" width="80" align="center">
           <template #default="{ row }">
-            <el-tag v-if="row.has_template" type="warning" size="small" effect="plain">模板</el-tag>
-            <el-tag v-else type="primary" size="small" effect="plain">容器</el-tag>
+            <el-tag v-if="row.has_template" type="warning" size="small" effect="plain">{{ t('containers.typeTemplate') }}</el-tag>
+            <el-tag v-else type="primary" size="small" effect="plain">{{ t('containers.typeContainer') }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="IP 地址" min-width="140">
+        <el-table-column :label="t('containers.ip')" min-width="140">
           <template #default="{ row }">
             <span style="font-family: monospace; font-size: 12px;">{{ row.ip_address || '--' }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="CPU" min-width="120">
+        <el-table-column :label="t('containers.cpu')" min-width="120">
           <template #default="{ row }">
             <div class="usage-cell">
               <el-progress :percentage="Math.round(row.cpu_usage || 0)" :stroke-width="8" :color="cpuColor(Math.round(row.cpu_usage || 0))" :show-text="false" />
-              <span class="usage-text">{{ Math.round(row.cpu_usage || 0) }}% · {{ row.cpu_cores || '?' }}核</span>
+              <span class="usage-text">{{ Math.round(row.cpu_usage || 0) }}% · {{ row.cpu_cores || '?' }}{{ t('common.cores') }}</span>
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="内存" min-width="140">
+        <el-table-column :label="t('containers.memory')" min-width="140">
           <template #default="{ row }">
             <span>{{ fmtMB(row.memory_used_mb) }} / {{ fmtMB(row.memory_mb) }}</span>
           </template>
@@ -71,68 +71,68 @@
             <span>{{ fmtMB(row.swap_used_mb) }} / {{ fmtMB(row.swap_mb) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="磁盘" min-width="100">
+        <el-table-column :label="t('containers.disk')" min-width="100">
           <template #default="{ row }">
             <span>{{ row.disk_gb || 0 }}GB</span>
           </template>
         </el-table-column>
-        <el-table-column label="运行时长" min-width="100">
+        <el-table-column :label="t('containers.runtime')" min-width="100">
           <template #default="{ row }">{{ fmtUptime(row.uptime_seconds) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="80" align="center" fixed="right">
+        <el-table-column :label="t('common.operation')" width="80" align="center" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" link size="small" @click="showDetail(row)">详情</el-button>
+            <el-button type="primary" link size="small" @click="showDetail(row)">{{ t('common.detail') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
-      <el-empty v-if="!loading && !containers.length" description="暂无容器数据" />
+      <el-empty v-if="!loading && !containers.length" :description="t('containers.emptyDesc')" />
     </el-card>
 
     <!-- 详情对话框 -->
-    <el-dialog v-model="detailVisible" :title="detailData?.container?.name || '容器详情'" width="720px" :close-on-click-modal="true" top="5vh">
+    <el-dialog v-model="detailVisible" :title="detailData?.container?.name || t('containers.containerDetailTitle')" width="720px" :close-on-click-modal="true" top="5vh">
       <div v-if="detailLoading" class="loading-box">
         <el-icon class="is-loading" :size="20"><Loading /></el-icon>
-        <span>加载中...</span>
+        <span>{{ t('common.loading') }}</span>
       </div>
       <div v-else-if="detailData" class="detail-content">
         <!-- 基本信息 -->
         <div class="detail-section">
-          <h4>基本信息</h4>
+          <h4>{{ t('containers.basicInfo') }}</h4>
           <div class="detail-kv">
             <div class="kv-row"><span class="kv-label">VMID</span><span class="kv-val mono">{{ detailData.container.vmid }}</span></div>
-            <div class="kv-row"><span class="kv-label">状态</span><span class="kv-val"><el-tag :type="detailData.container.status === 'running' ? 'success' : 'danger'" size="small" disable-transitions>{{ detailData.container.status === 'running' ? '运行中' : '已停止' }}</el-tag></span></div>
-            <div class="kv-row"><span class="kv-label">节点</span><span class="kv-val">{{ detailData.container.node_name }}</span></div>
-            <div class="kv-row"><span class="kv-label">集群</span><span class="kv-val">{{ detailData.container.cluster_name }}</span></div>
-            <div class="kv-row"><span class="kv-label">类型</span><span class="kv-val"><el-tag :type="detailData.container.has_template ? 'warning' : 'primary'" size="small" effect="plain">{{ detailData.container.has_template ? '模板' : '容器' }}</el-tag></span></div>
-            <div class="kv-row" v-if="detailData.container.ip_address"><span class="kv-label">IP 地址</span><span class="kv-val mono">{{ detailData.container.ip_address }}</span></div>
-            <div class="kv-row"><span class="kv-label">CPU</span><span class="kv-val">{{ Math.round(detailData.container.cpu_usage || 0) }}% · {{ detailData.container.cpu_cores || '?' }} 核</span></div>
-            <div class="kv-row"><span class="kv-label">内存</span><span class="kv-val">{{ fmtMB(detailData.container.memory_used_mb) }} / {{ fmtMB(detailData.container.memory_mb) }}</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('containers.status') }}</span><span class="kv-val"><el-tag :type="detailData.container.status === 'running' ? 'success' : 'danger'" size="small" disable-transitions>{{ detailData.container.status === 'running' ? t('containers.running') : t('containers.stopped') }}</el-tag></span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('common.name') }}</span><span class="kv-val">{{ detailData.container.node_name }}</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('containers.cluster') }}</span><span class="kv-val">{{ detailData.container.cluster_name }}</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('containers.type') }}</span><span class="kv-val"><el-tag :type="detailData.container.has_template ? 'warning' : 'primary'" size="small" effect="plain">{{ detailData.container.has_template ? t('containers.typeTemplate') : t('containers.typeContainer') }}</el-tag></span></div>
+            <div class="kv-row" v-if="detailData.container.ip_address"><span class="kv-label">{{ t('containers.ip') }}</span><span class="kv-val mono">{{ detailData.container.ip_address }}</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('containers.cpu') }}</span><span class="kv-val">{{ Math.round(detailData.container.cpu_usage || 0) }}% · {{ detailData.container.cpu_cores || '?' }} {{ t('common.cores') }}</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('containers.memory') }}</span><span class="kv-val">{{ fmtMB(detailData.container.memory_used_mb) }} / {{ fmtMB(detailData.container.memory_mb) }}</span></div>
             <div class="kv-row"><span class="kv-label">Swap</span><span class="kv-val">{{ fmtMB(detailData.container.swap_used_mb) }} / {{ fmtMB(detailData.container.swap_mb) }}</span></div>
-            <div class="kv-row"><span class="kv-label">磁盘</span><span class="kv-val">{{ detailData.container.disk_gb || 0 }}GB</span></div>
-            <div class="kv-row" v-if="detailData.container.uptime_seconds"><span class="kv-label">运行时长</span><span class="kv-val">{{ fmtUptime(detailData.container.uptime_seconds) }}</span></div>
-            <div class="kv-row" v-if="detailData.container.tags"><span class="kv-label">标签</span><span class="kv-val">{{ detailData.container.tags }}</span></div>
-            <div class="kv-row" v-if="detailData.container.description"><span class="kv-label">描述</span><span class="kv-val">{{ detailData.container.description }}</span></div>
-            <div class="kv-row"><span class="kv-label">扫描时间</span><span class="kv-val mono">{{ fmtTime(detailData.container.scanned_at) }}</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('containers.disk') }}</span><span class="kv-val">{{ detailData.container.disk_gb || 0 }}GB</span></div>
+            <div class="kv-row" v-if="detailData.container.uptime_seconds"><span class="kv-label">{{ t('containers.runtime') }}</span><span class="kv-val">{{ fmtUptime(detailData.container.uptime_seconds) }}</span></div>
+            <div class="kv-row" v-if="detailData.container.tags"><span class="kv-label">{{ t('containers.tags') }}</span><span class="kv-val">{{ detailData.container.tags }}</span></div>
+            <div class="kv-row" v-if="detailData.container.description"><span class="kv-label">{{ t('clusters.description') }}</span><span class="kv-val">{{ detailData.container.description }}</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('common.scanTime') }}</span><span class="kv-val mono">{{ fmtTime(detailData.container.scanned_at) }}</span></div>
           </div>
         </div>
         <!-- 配置信息 -->
         <div v-if="detailData.config" class="detail-section">
-          <h4>配置</h4>
+          <h4>{{ t('containers.config') }}</h4>
           <div class="detail-kv">
-            <div class="kv-row"><span class="kv-label">主机名</span><span class="kv-val">{{ detailData.config.hostname || '-' }}</span></div>
-            <div class="kv-row"><span class="kv-label">系统类型</span><span class="kv-val">{{ detailData.config.os_type || '-' }}</span></div>
-            <div class="kv-row"><span class="kv-label">CPU 核心</span><span class="kv-val">{{ detailData.config.cpu_cores || '-' }}</span></div>
-            <div class="kv-row"><span class="kv-label">内存</span><span class="kv-val">{{ detailData.config.memory_mb ? fmtMB(detailData.config.memory_mb) : '-' }}</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('containers.hostname') }}</span><span class="kv-val">{{ detailData.config.hostname || '-' }}</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('containers.osType') }}</span><span class="kv-val">{{ detailData.config.os_type || '-' }}</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('containers.cpuCores') }}</span><span class="kv-val">{{ detailData.config.cpu_cores || '-' }}</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('containers.memory') }}</span><span class="kv-val">{{ detailData.config.memory_mb ? fmtMB(detailData.config.memory_mb) : '-' }}</span></div>
             <div class="kv-row"><span class="kv-label">Swap</span><span class="kv-val">{{ detailData.config.swap_mb ? fmtMB(detailData.config.swap_mb) : '-' }}</span></div>
-            <div class="kv-row" v-if="detailData.config.startup_order"><span class="kv-label">启动顺序</span><span class="kv-val mono">{{ detailData.config.startup_order }}</span></div>
-            <div class="kv-row"><span class="kv-label">HA</span><span class="kv-val"><el-tag :type="detailData.config.ha_enabled ? 'success' : 'info'" size="small">{{ detailData.config.ha_enabled ? (detailData.config.ha_group || '启用') : '未启用' }}</el-tag></span></div>
-            <div class="kv-row" v-if="detailData.config.tags"><span class="kv-label">标签</span><span class="kv-val">{{ detailData.config.tags }}</span></div>
-            <div class="kv-row" v-if="detailData.config.description"><span class="kv-label">描述</span><span class="kv-val">{{ detailData.config.description }}</span></div>
+            <div class="kv-row" v-if="detailData.config.startup_order"><span class="kv-label">{{ t('vms.bootOrder') }}</span><span class="kv-val mono">{{ detailData.config.startup_order }}</span></div>
+            <div class="kv-row"><span class="kv-label">{{ t('containers.ha') }}</span><span class="kv-val"><el-tag :type="detailData.config.ha_enabled ? 'success' : 'info'" size="small">{{ detailData.config.ha_enabled ? (detailData.config.ha_group || t('common.enabled')) : t('common.disabled') }}</el-tag></span></div>
+            <div class="kv-row" v-if="detailData.config.tags"><span class="kv-label">{{ t('containers.tags') }}</span><span class="kv-val">{{ detailData.config.tags }}</span></div>
+            <div class="kv-row" v-if="detailData.config.description"><span class="kv-label">{{ t('clusters.description') }}</span><span class="kv-val">{{ detailData.config.description }}</span></div>
           </div>
         </div>
         <!-- 存储设备 -->
         <div class="detail-section" v-if="detailData.config?.rootfs || detailData.config?.mount_points?.length">
-          <h4>存储</h4>
+          <h4>{{ t('containers.storage') }}</h4>
           <div class="device-list">
             <div v-if="detailData.config.rootfs" class="device-chip">
               <span class="chip-tag">rootfs</span>
@@ -147,12 +147,12 @@
         </div>
         <!-- 网络设备 -->
         <div class="detail-section" v-if="detailData.config?.net_devices?.length">
-          <h4>网络</h4>
+          <h4>{{ t('containers.network') }}</h4>
           <div class="device-list">
             <div v-for="(net, idx) in detailData.config.net_devices" :key="idx" class="device-chip">
               <span class="chip-tag">{{ net.name || net.iface || `net${idx}` }}</span>
               <span class="chip-body">{{ net.type || 'veth' }}</span>
-              <span class="chip-sub">桥接 {{ net.bridge || '-' }}</span>
+              <span class="chip-sub">{{ t('containers.bridge') }} {{ net.bridge || '-' }}</span>
               <span v-if="net.address" class="chip-sub mono">{{ net.address }}</span>
               <span v-if="net.hwaddr" class="chip-sub mono">{{ net.hwaddr }}</span>
             </div>
@@ -160,7 +160,7 @@
         </div>
       </div>
       <template #footer>
-        <el-button @click="detailVisible = false">关闭</el-button>
+        <el-button @click="detailVisible = false">{{ t('common.close') }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -168,7 +168,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Loading } from '@element-plus/icons-vue'
+
+const { t } = useI18n()
 import { getContainers, getContainerDetail } from '@/api/containers'
 import type { ContainerInfo, ContainerDetail } from '@/api/containers'
 import { getNodes } from '@/api/nodes'
@@ -237,7 +240,7 @@ function fmtTime(iso: string) {
 function fmtUptime(s: number) {
   if (!s) return '-'
   const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600)
-  return d > 0 ? `${d}天${h}时` : `${h}时${Math.floor((s % 3600) / 60)}分`
+  return d > 0 ? `${d}${t('common.days')}${h}${t('common.hours')}` : `${h}${t('common.hours')}${Math.floor((s % 3600) / 60)}${t('common.minutes')}`
 }
 </script>
 

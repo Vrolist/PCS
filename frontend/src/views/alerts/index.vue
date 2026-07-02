@@ -2,42 +2,45 @@
   <div class="page-container">
     <div class="page-header">
       <div>
-        <h2 class="page-title">告警中心</h2>
-        <p class="page-desc">查看集群告警记录和处理状态</p>
+        <h2 class="page-title">{{ t('alerts.title') }}</h2>
+        <p class="page-desc">{{ t('alerts.subtitle') }}</p>
       </div>
     </div>
     <div class="filter-bar">
-      <el-select v-model="clusterFilter" placeholder="选择集群" clearable style="width: 180px" @change="fetchData">
+      <el-select v-model="clusterFilter" :placeholder="t('alerts.selectCluster')" clearable style="width: 180px" @change="fetchData">
         <el-option v-for="c in clusterList" :key="c.id" :label="c.name" :value="c.id" />
       </el-select>
     </div>
     <el-card shadow="hover">
       <el-table :data="alerts" style="width: 100%" stripe v-loading="loading">
-        <el-table-column prop="title" label="告警标题" min-width="200" />
-        <el-table-column prop="severity" label="级别" width="100" align="center">
+        <el-table-column prop="title" :label="t('alerts.alertTitle')" min-width="200" />
+        <el-table-column prop="severity" :label="t('alerts.level')" width="100" align="center">
           <template #default="{ row }">
             <el-tag :type="row.severity === 'critical' ? 'danger' : row.severity === 'warning' ? 'warning' : 'info'" size="small">
-              {{ row.severity === 'critical' ? '严重' : row.severity === 'warning' ? '警告' : '信息' }}
+              {{ row.severity === 'critical' ? t('alerts.critical') : row.severity === 'warning' ? t('alerts.warning') : t('alerts.info') }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="category" label="分类" width="100" />
-        <el-table-column prop="affected_resource" label="影响资源" min-width="120" />
-        <el-table-column prop="detail" label="详情" min-width="250" show-overflow-tooltip />
-        <el-table-column prop="cluster_name" label="集群" min-width="140" />
-        <el-table-column prop="created_at" label="告警时间" min-width="160">
+        <el-table-column prop="category" :label="t('alerts.category')" width="100" />
+        <el-table-column prop="affected_resource" :label="t('alerts.affectedResource')" min-width="120" />
+        <el-table-column prop="detail" :label="t('alerts.detail')" min-width="250" show-overflow-tooltip />
+        <el-table-column prop="cluster_name" :label="t('alerts.cluster')" min-width="140" />
+        <el-table-column prop="created_at" :label="t('alerts.alertTime')" min-width="160">
           <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
         </el-table-column>
       </el-table>
-      <el-empty v-if="!loading && !alerts.length" description="暂无告警记录" />
+      <el-empty v-if="!loading && !alerts.length" :description="t('alerts.noData')" />
     </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { getDashboardAlerts, type DashboardAlert } from '@/api/dashboard'
 import { getClusters, type Cluster } from '@/api/clusters'
+
+const { t } = useI18n()
 
 const loading = ref(true)
 const alerts = ref<DashboardAlert[]>([])

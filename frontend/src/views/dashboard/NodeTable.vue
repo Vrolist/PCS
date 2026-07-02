@@ -1,20 +1,20 @@
 <template>
   <div class="node-table-card">
     <div class="card-header">
-      <span class="card-title">节点详情</span>
+      <span class="card-title">{{ t('dashboard.nodeDetails') }}</span>
       <div class="header-right">
-        <el-select v-model="clusterFilter" size="small" placeholder="全部集群" clearable style="width: 140px" @change="fetchNodes">
+        <el-select v-model="clusterFilter" size="small" :placeholder="t('dashboard.allClusters')" clearable style="width: 140px" @change="fetchNodes">
           <el-option v-for="c in clusterList" :key="c.id" :label="c.name" :value="c.id" />
         </el-select>
-        <router-link to="/dashboard/clusters" class="view-all">查看全部</router-link>
+        <router-link to="/dashboard/clusters" class="view-all">{{ t('dashboard.viewAll') }}</router-link>
       </div>
     </div>
     <div v-if="loading" class="node-loading">
       <el-icon class="is-loading" :size="20"><Loading /></el-icon>
-      <span>加载中...</span>
+      <span>{{ t('common.loading') }}</span>
     </div>
     <el-table v-else :data="nodes" style="width: 100%">
-      <el-table-column prop="name" label="节点名称" min-width="120" fixed="left">
+      <el-table-column prop="name" :label="t('dashboard.nodeName')" min-width="120" fixed="left">
         <template #default="{ row }">
           <span class="node-name">{{ row.name }}</span>
         </template>
@@ -32,7 +32,7 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="内存" min-width="200">
+      <el-table-column :label="t('dashboard.memory')" min-width="200">
         <template #default="{ row }">
           <div class="usage-cell">
             <el-progress
@@ -45,22 +45,22 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="磁盘" min-width="140">
+      <el-table-column :label="t('dashboard.disk')" min-width="140">
         <template #default="{ row }">
           <span class="disk-text">{{ row.rootfs_used_gb || 0 }}GB/{{ row.rootfs_total_gb || 0 }}GB</span>
         </template>
       </el-table-column>
-      <el-table-column prop="ip_address" label="IP地址" min-width="150">
+      <el-table-column prop="ip_address" :label="t('dashboard.ipAddr')" min-width="150">
         <template #default="{ row }">
-          {{ row.ip_address || '未知' }}
+          {{ row.ip_address || t('common.unknown') }}
         </template>
       </el-table-column>
-      <el-table-column prop="cluster_name" label="集群" min-width="140" />
-      <el-table-column prop="pve_version" label="PVE版本" min-width="160" />
-      <el-table-column prop="status" label="状态" width="100" align="center" fixed="right">
+      <el-table-column prop="cluster_name" :label="t('dashboard.cluster')" min-width="140" />
+      <el-table-column prop="pve_version" :label="t('dashboard.pveVersion')" min-width="160" />
+      <el-table-column prop="status" :label="t('common.status')" width="100" align="center" fixed="right">
         <template #default="{ row }">
           <el-tag :type="row.status === 'online' ? 'success' : 'warning'" disable-transitions>
-            {{ row.status === 'online' ? '在线' : '告警' }}
+            {{ row.status === 'online' ? t('common.online') : t('dashboard.alertLevel') }}
           </el-tag>
         </template>
       </el-table-column>
@@ -70,11 +70,13 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Loading } from '@element-plus/icons-vue'
 import { getDashboardNodes } from '@/api/dashboard'
 import type { DashboardNode } from '@/api/dashboard'
 import { getClusters, type Cluster } from '@/api/clusters'
 
+const { t } = useI18n()
 const loading = ref(true)
 const nodes = ref<DashboardNode[]>([])
 const clusterFilter = ref<number | ''>('')

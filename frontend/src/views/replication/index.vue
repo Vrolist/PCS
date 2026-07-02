@@ -2,12 +2,12 @@
   <div class="page-container">
     <div class="page-header">
       <div>
-        <h2 class="page-title">数据复制</h2>
-        <p class="page-desc">跨节点存储复制任务管理</p>
+        <h2 class="page-title">{{ t('advanced.replication.title') }}</h2>
+        <p class="page-desc">{{ t('advanced.replication.subtitle') }}</p>
       </div>
     </div>
     <el-card shadow="hover">
-      <el-empty description="Replication 功能开发中">
+      <el-empty :description="t('advanced.replication.comingSoon')">
         <template #image>
           <el-icon :size="64" style="color: var(--text-muted)"><CopyDocument /></el-icon>
         </template>
@@ -18,6 +18,9 @@
 
 <script setup lang="ts">
 import { CopyDocument } from '@element-plus/icons-vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 </script>
 
 <style scoped>

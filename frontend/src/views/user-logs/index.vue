@@ -2,34 +2,34 @@
   <div class="page-container">
     <div class="page-header">
       <div>
-        <h2 class="page-title">操作日志</h2>
-        <p class="page-desc">查看用户操作记录</p>
+        <h2 class="page-title">{{ t('userLogs.title') }}</h2>
+        <p class="page-desc">{{ t('userLogs.subtitle') }}</p>
       </div>
       <div class="page-actions">
-        <el-select v-model="actionFilter" placeholder="操作类型" clearable size="default" style="width: 140px" @change="loadLogs(1)">
+        <el-select v-model="actionFilter" :placeholder="t('userLogs.actionType')" clearable size="default" style="width: 140px" @change="loadLogs(1)">
           <el-option v-for="a in actionOptions" :key="a.value" :label="a.label" :value="a.value" />
         </el-select>
       </div>
     </div>
 
     <el-card shadow="hover">
-      <el-empty v-if="!loading && logs.length === 0" description="暂无操作日志" />
+      <el-empty v-if="!loading && logs.length === 0" :description="t('userLogs.noData')" />
 
       <el-table v-else :data="logs" stripe style="width: 100%" v-loading="loading">
-        <el-table-column prop="created_at" label="操作时间" width="170">
+        <el-table-column prop="created_at" :label="t('userLogs.operationTime')" width="170">
           <template #default="{ row }">
             <span class="mono">{{ formatTime(row.created_at) }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="action_display" label="操作类型" width="100">
+        <el-table-column prop="action_display" :label="t('userLogs.actionType')" width="100">
           <template #default="{ row }">
             <el-tag :type="tagType(row.action)" size="small">{{ row.action_display }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="resource_type" label="资源类型" width="100" />
-        <el-table-column prop="resource_id" label="资源 ID" width="100" />
-        <el-table-column prop="detail" label="操作详情" min-width="240" show-overflow-tooltip />
-        <el-table-column prop="ip_address" label="IP 地址" width="150" />
+        <el-table-column prop="resource_type" :label="t('userLogs.resourceType')" width="100" />
+        <el-table-column prop="resource_id" :label="t('userLogs.resourceId')" width="100" />
+        <el-table-column prop="detail" :label="t('userLogs.detail')" min-width="240" show-overflow-tooltip />
+        <el-table-column prop="ip_address" :label="t('userLogs.ipAddr')" width="150" />
       </el-table>
 
       <div v-if="total > pageSize" class="pagination-wrap">
@@ -46,9 +46,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { getUserLogs } from '@/api/auth'
 import type { UserLog } from '@/api/auth'
+
+const { t } = useI18n()
 
 const loading = ref(false)
 const logs = ref<UserLog[]>([])
@@ -57,16 +60,16 @@ const currentPage = ref(1)
 const pageSize = 20
 const actionFilter = ref('')
 
-const actionOptions = [
-  { value: '', label: '全部' },
-  { value: 'login', label: '登录' },
-  { value: 'register', label: '注册' },
-  { value: 'create', label: '创建' },
-  { value: 'update', label: '更新' },
-  { value: 'delete', label: '删除' },
-  { value: 'change_password', label: '修改密码' },
-  { value: 'reset_password', label: '重置密码' },
-]
+const actionOptions = computed(() => [
+  { value: '', label: t('userLogs.all') },
+  { value: 'login', label: t('userLogs.login') },
+  { value: 'register', label: t('userLogs.register') },
+  { value: 'create', label: t('userLogs.create') },
+  { value: 'update', label: t('userLogs.update') },
+  { value: 'delete', label: t('userLogs.delete') },
+  { value: 'change_password', label: t('userLogs.changePassword') },
+  { value: 'reset_password', label: t('userLogs.resetPassword') },
+])
 
 function tagType(action: string) {
   const map: Record<string, string> = {

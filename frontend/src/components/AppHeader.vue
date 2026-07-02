@@ -12,9 +12,22 @@
       </el-breadcrumb>
     </div>
     <div class="header-right">
-      <button class="header-icon-btn" @click="themeStore.toggle" :title="themeStore.theme === 'dark' ? '切换到亮色' : '切换到暗色'">
+      <button class="header-icon-btn" @click="themeStore.toggle" :title="themeStore.theme === 'dark' ? t('header.switchToLight') : t('header.switchToDark')">
         <el-icon :size="16"><Sunny v-if="themeStore.theme === 'dark'" /><Moon v-else /></el-icon>
       </button>
+      <el-dropdown trigger="click" @command="handleLangChange">
+        <button class="header-icon-btn" :title="t('header.language')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+        </button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item v-for="lang in languages" :key="lang.value" :command="lang.value" :class="{ 'is-active-lang': currentLang === lang.value }">
+              <span>{{ lang.label }}</span>
+              <el-icon v-if="currentLang === lang.value" style="margin-left: auto;"><Check /></el-icon>
+            </el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
       <el-dropdown trigger="click">
         <div class="user-avatar-wrap">
           <el-avatar :size="30" icon="UserFilled" class="user-avatar" />
@@ -24,19 +37,19 @@
           <el-dropdown-menu class="header-dropdown">
             <el-dropdown-item @click="$router.push('/dashboard/settings')">
               <el-icon><User /></el-icon>
-              <span>用户信息</span>
+              <span>{{ t('header.userProfile') }}</span>
             </el-dropdown-item>
             <el-dropdown-item @click="$router.push('/dashboard/change-password')">
               <el-icon><Key /></el-icon>
-              <span>修改密码</span>
+              <span>{{ t('header.changePassword') }}</span>
             </el-dropdown-item>
             <el-dropdown-item divided v-if="authStore.user?.is_superuser" @click="goAdmin">
               <el-icon><Setting /></el-icon>
-              <span>管理后台</span>
+              <span>{{ t('header.adminPanel') }}</span>
             </el-dropdown-item>
             <el-dropdown-item divided @click="handleLogout">
               <el-icon><SwitchButton /></el-icon>
-              <span>退出登录</span>
+              <span>{{ t('header.logout') }}</span>
             </el-dropdown-item>
           </el-dropdown-menu>
         </template>
@@ -47,26 +60,44 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 import { createAdminSession } from '@/api/auth'
-import { Fold, Expand, Sunny, Moon, User, Key, Setting, SwitchButton } from '@element-plus/icons-vue'
+import { setLocale } from '@/i18n'
+import { Fold, Expand, Sunny, Moon, User, Key, Setting, SwitchButton, Check } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
 const authStore = useAuthStore()
 const themeStore = useThemeStore()
+const { t, locale } = useI18n()
 
 const breadcrumbItems = computed(() => {
   const items: string[] = []
-  if (route.meta?.title) {
+  const titleKey = route.meta?.titleKey as string
+  if (titleKey) {
+    items.push(t(titleKey))
+  } else if (route.meta?.title) {
     items.push(route.meta.title as string)
   }
   return items
 })
+
+// 语言切换
+const currentLang = computed(() => locale.value)
+const languages = [
+  { value: 'zh-CN', label: '中文' },
+  { value: 'en', label: 'English' },
+  { value: 'ja', label: '日本語' },
+  { value: 'ko', label: '한국어' },
+]
+function handleLangChange(lang: string) {
+  setLocale(lang)
+}
 
 function handleLogout() {
   authStore.logout()
@@ -188,5 +219,9 @@ async function goAdmin() {
   margin-top: 4px;
   padding-top: 8px;
   border-top: 1px solid var(--border-color);
+}
+:deep(.is-active-lang) {
+  color: var(--primary-color) !important;
+  font-weight: 500;
 }
 </style>

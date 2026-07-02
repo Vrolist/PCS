@@ -26,32 +26,32 @@
 
     <!-- 集群 -->
     <div class="menu-section">
-      <span v-if="!appStore.sidebarCollapsed" class="menu-label">集群</span>
+      <span v-if="!appStore.sidebarCollapsed" class="menu-label">{{ t('nav.clusters') }}</span>
     </div>
 
     <el-menu-item index="/dashboard" class="sidebar-item">
       <div class="item-icon-wrap">
         <el-icon><Monitor /></el-icon>
       </div>
-      <template #title><span>控制台</span></template>
+      <template #title><span>{{ t('nav.dashboard') }}</span></template>
     </el-menu-item>
 
     <el-menu-item index="/dashboard/clusters" class="sidebar-item">
       <div class="item-icon-wrap">
         <el-icon><Connection /></el-icon>
       </div>
-      <template #title><span>集群管理</span></template>
+      <template #title><span>{{ t('nav.clusters') }}</span></template>
     </el-menu-item>
 
     <!-- 选择集群 -->
     <div class="menu-section">
-      <span v-if="!appStore.sidebarCollapsed" class="menu-label">选择集群</span>
+      <span v-if="!appStore.sidebarCollapsed" class="menu-label">{{ t('nav.selectCluster') }}</span>
     </div>
 
     <div v-if="!appStore.sidebarCollapsed" class="cluster-selector" ref="clusterSelectorRef">
       <div class="cluster-trigger" @click="clusterDropdownOpen = !clusterDropdownOpen">
         <span class="cluster-dot" :class="{ online: clusterStore.currentCluster }"></span>
-        <span class="cluster-name">{{ clusterStore.currentCluster?.name || '选择集群' }}</span>
+        <span class="cluster-name">{{ clusterStore.currentCluster?.name || t('nav.selectCluster') }}</span>
         <el-icon class="cluster-caret" :class="{ open: clusterDropdownOpen }"><ArrowDown /></el-icon>
       </div>
       <transition name="dropdown">
@@ -66,19 +66,19 @@
             <span class="cluster-dot online"></span>
             <div class="cluster-option-info">
               <span class="cluster-option-name">{{ c.name }}</span>
-              <span class="cluster-option-meta">{{ c.total_nodes || 0 }} 节点 · {{ c.total_vms || 0 }} VM</span>
+              <span class="cluster-option-meta">{{ c.total_nodes || 0 }} {{ t('common.nodes') }} · {{ c.total_vms || 0 }} VM</span>
             </div>
             <el-icon v-if="c.id === clusterStore.currentClusterId" class="cluster-check"><Check /></el-icon>
           </div>
           <div v-if="!clusterStore.clusterList.length" class="cluster-option empty">
-            <span class="cluster-option-name" style="color: var(--text-muted)">暂无集群</span>
+            <span class="cluster-option-name" style="color: var(--text-muted)">{{ t('nav.noCluster') }}</span>
           </div>
         </div>
       </transition>
     </div>
 
     <!-- 折叠态：tooltip 显示当前集群名 -->
-    <el-tooltip v-else :content="clusterStore.currentCluster?.name || '选择集群'" placement="right">
+    <el-tooltip v-else :content="clusterStore.currentCluster?.name || t('nav.selectCluster')" placement="right">
       <div class="cluster-switcher-collapsed">
         <el-icon @click="appStore.sidebarCollapsed = false"><Connection /></el-icon>
       </div>
@@ -86,7 +86,7 @@
 
     <!-- 基本信息 -->
     <div v-if="!appStore.sidebarCollapsed" class="menu-section collapsible" @click="toggleSection('basic')">
-      <span class="menu-label">基本信息</span>
+      <span class="menu-label">{{ t('nav.basicInfo') }}</span>
       <el-icon class="section-arrow" :class="{ expanded: expandedSections.basic }"><ArrowRight /></el-icon>
     </div>
     <div v-else class="menu-section">
@@ -95,29 +95,29 @@
     <template v-if="expandedSections.basic || appStore.sidebarCollapsed">
       <el-menu-item index="/dashboard/nodes" class="sidebar-item">
         <div class="item-icon-wrap"><el-icon><Cpu /></el-icon></div>
-        <template #title><span>节点管理</span></template>
+        <template #title><span>{{ t('nav.nodeManagement') }}</span></template>
       </el-menu-item>
       <el-menu-item index="/dashboard/vms" class="sidebar-item">
         <div class="item-icon-wrap"><el-icon><Cpu /></el-icon></div>
-        <template #title><span>虚拟机</span></template>
+        <template #title><span>{{ t('nav.virtualMachines') }}</span></template>
       </el-menu-item>
       <el-menu-item index="/dashboard/containers" class="sidebar-item">
         <div class="item-icon-wrap"><el-icon><Box /></el-icon></div>
-        <template #title><span>容器</span></template>
+        <template #title><span>{{ t('nav.containers') }}</span></template>
       </el-menu-item>
       <el-menu-item index="/dashboard/storage" class="sidebar-item">
         <div class="item-icon-wrap"><el-icon><Coin /></el-icon></div>
-        <template #title><span>存储管理</span></template>
+        <template #title><span>{{ t('nav.storageManagement') }}</span></template>
       </el-menu-item>
       <el-menu-item index="/dashboard/networks" class="sidebar-item">
         <div class="item-icon-wrap"><el-icon><Connection /></el-icon></div>
-        <template #title><span>网络接口</span></template>
+        <template #title><span>{{ t('nav.networkInterfaces') }}</span></template>
       </el-menu-item>
     </template>
 
     <!-- 进阶信息 -->
     <div v-if="!appStore.sidebarCollapsed" class="menu-section collapsible" @click="toggleSection('advanced')">
-      <span class="menu-label">进阶信息</span>
+      <span class="menu-label">{{ t('nav.advancedInfo') }}</span>
       <el-icon class="section-arrow" :class="{ expanded: expandedSections.advanced }"><ArrowRight /></el-icon>
     </div>
     <div v-else class="menu-section">
@@ -126,41 +126,41 @@
     <template v-if="expandedSections.advanced || appStore.sidebarCollapsed">
       <el-menu-item index="/dashboard/network-topology" class="sidebar-item">
         <div class="item-icon-wrap"><el-icon><Share /></el-icon></div>
-        <template #title><span>网络拓扑</span></template>
+        <template #title><span>{{ t('nav.networkTopology') }}</span></template>
       </el-menu-item>
       <el-menu-item index="/dashboard/ceph" class="sidebar-item">
         <div class="item-icon-wrap"><el-icon><Box /></el-icon></div>
-        <template #title><span>Ceph 存储</span></template>
+        <template #title><span>{{ t('nav.cephStorage') }}</span></template>
       </el-menu-item>
       <el-menu-item index="/dashboard/ha" class="sidebar-item">
         <div class="item-icon-wrap"><el-icon><Connection /></el-icon></div>
-        <template #title><span>高可用管理</span></template>
+        <template #title><span>{{ t('nav.haManagement') }}</span></template>
       </el-menu-item>
       <el-menu-item index="/dashboard/sdn" class="sidebar-item">
         <div class="item-icon-wrap"><el-icon><Share /></el-icon></div>
-        <template #title><span>软件定义网络</span></template>
+        <template #title><span>{{ t('nav.softwareDefinedNetwork') }}</span></template>
       </el-menu-item>
       <el-menu-item index="/dashboard/firewall" class="sidebar-item">
         <div class="item-icon-wrap"><el-icon><Lock /></el-icon></div>
-        <template #title><span>防火墙</span></template>
+        <template #title><span>{{ t('nav.firewall') }}</span></template>
       </el-menu-item>
       <el-menu-item index="/dashboard/backup" class="sidebar-item">
         <div class="item-icon-wrap"><el-icon><FolderOpened /></el-icon></div>
-        <template #title><span>备份管理</span></template>
+        <template #title><span>{{ t('nav.backupManagement') }}</span></template>
       </el-menu-item>
       <el-menu-item index="/dashboard/replication" class="sidebar-item">
         <div class="item-icon-wrap"><el-icon><CopyDocument /></el-icon></div>
-        <template #title><span>数据复制</span></template>
+        <template #title><span>{{ t('nav.dataReplication') }}</span></template>
       </el-menu-item>
       <el-menu-item index="/dashboard/snapshots" class="sidebar-item">
         <div class="item-icon-wrap"><el-icon><Camera /></el-icon></div>
-        <template #title><span>快照管理</span></template>
+        <template #title><span>{{ t('nav.snapshotManagement') }}</span></template>
       </el-menu-item>
     </template>
 
     <!-- 运维检测 -->
     <div v-if="!appStore.sidebarCollapsed" class="menu-section collapsible" @click="toggleSection('ops')">
-      <span class="menu-label">运维检测</span>
+      <span class="menu-label">{{ t('nav.opsDetection') }}</span>
       <el-icon class="section-arrow" :class="{ expanded: expandedSections.ops }"><ArrowRight /></el-icon>
     </div>
     <div v-else class="menu-section">
@@ -169,17 +169,17 @@
     <template v-if="expandedSections.ops || appStore.sidebarCollapsed">
       <el-menu-item index="/dashboard/alerts" class="sidebar-item">
         <div class="item-icon-wrap"><el-icon><Bell /></el-icon></div>
-        <template #title><span>告警中心</span></template>
+        <template #title><span>{{ t('nav.alertCenter') }}</span></template>
       </el-menu-item>
       <el-menu-item index="/dashboard/services" class="sidebar-item">
         <div class="item-icon-wrap"><el-icon><Service /></el-icon></div>
-        <template #title><span>运维服务</span></template>
+        <template #title><span>{{ t('nav.opsService') }}</span></template>
       </el-menu-item>
     </template>
 
     <!-- 用户信息 -->
     <div v-if="!appStore.sidebarCollapsed" class="menu-section collapsible" @click="toggleSection('user')">
-      <span class="menu-label">用户信息</span>
+      <span class="menu-label">{{ t('nav.userInfo') }}</span>
       <el-icon class="section-arrow" :class="{ expanded: expandedSections.user }"><ArrowRight /></el-icon>
     </div>
     <div v-else class="menu-section">
@@ -188,15 +188,15 @@
     <template v-if="expandedSections.user || appStore.sidebarCollapsed">
       <el-menu-item index="/dashboard/settings" class="sidebar-item">
         <div class="item-icon-wrap"><el-icon><User /></el-icon></div>
-        <template #title><span>用户信息</span></template>
+        <template #title><span>{{ t('nav.userInfo') }}</span></template>
       </el-menu-item>
       <el-menu-item index="/dashboard/user-logs" class="sidebar-item">
         <div class="item-icon-wrap"><el-icon><Document /></el-icon></div>
-        <template #title><span>操作日志</span></template>
+        <template #title><span>{{ t('nav.operationLogs') }}</span></template>
       </el-menu-item>
       <el-menu-item index="/dashboard/user-notifications" class="sidebar-item">
         <div class="item-icon-wrap"><el-icon><Bell /></el-icon></div>
-        <template #title><span>通知设置</span></template>
+        <template #title><span>{{ t('nav.notificationSettings') }}</span></template>
       </el-menu-item>
     </template>
   </el-menu>
@@ -205,12 +205,14 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { useThemeStore } from '@/stores/theme'
 import { useClusterStore } from '@/stores/cluster'
 import { Monitor, Connection, Cpu, Box, Bell, Service, User, Document, Coin, Share, Lock, FolderOpened, CopyDocument, Camera, ArrowRight, ArrowDown, Check } from '@element-plus/icons-vue'
 
 const route = useRoute()
+const { t } = useI18n()
 const appStore = useAppStore()
 const themeStore = useThemeStore()
 const clusterStore = useClusterStore()

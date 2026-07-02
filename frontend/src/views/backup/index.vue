@@ -2,12 +2,12 @@
   <div class="page-container">
     <div class="page-header">
       <div>
-        <h2 class="page-title">备份管理</h2>
-        <p class="page-desc">虚拟机与容器备份任务管理</p>
+        <h2 class="page-title">{{ t('advanced.backup.title') }}</h2>
+        <p class="page-desc">{{ t('advanced.backup.subtitle') }}</p>
       </div>
     </div>
     <el-card shadow="hover">
-      <el-empty description="Backup 功能开发中">
+      <el-empty :description="t('advanced.backup.comingSoon')">
         <template #image>
           <el-icon :size="64" style="color: var(--text-muted)"><FolderOpened /></el-icon>
         </template>
@@ -18,6 +18,9 @@
 
 <script setup lang="ts">
 import { FolderOpened } from '@element-plus/icons-vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 </script>
 
 <style scoped>

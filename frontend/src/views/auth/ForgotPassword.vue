@@ -10,7 +10,7 @@
     <!-- Back to home -->
     <router-link to="/" class="back-link">
       <el-icon><ArrowLeft /></el-icon>
-      <span>返回首页</span>
+      <span>{{ t('common.backToHome') }}</span>
     </router-link>
 
     <!-- Theme toggle -->
@@ -29,8 +29,8 @@
               <span class="logo-sub"><span class="accent-l">P</span>ve<span class="accent-l">C</span>luster<span class="accent-l">S</span>can</span>
             </div>
           </div>
-          <h2 class="brand-title">重置密码</h2>
-          <p class="brand-desc">通过注册邮箱重置你的账户密码，安全快捷。</p>
+          <h2 class="brand-title">{{ t('forgotPassword.resetPassword') }}</h2>
+          <p class="brand-desc">{{ t('forgotPassword.resetDesc') }}</p>
           <div class="brand-features">
             <div v-for="item in brandItems" :key="item.label" class="brand-feature">
               <el-icon :size="16" color="#409eff"><component :is="item.icon" /></el-icon>
@@ -45,8 +45,8 @@
         <div class="form-card">
           <!-- Step 1: Email -->
           <template v-if="step === 1">
-            <h2 class="form-title">找回密码</h2>
-            <p class="form-subtitle">输入注册邮箱，我们将发送重置验证码</p>
+            <h2 class="form-title">{{ t('forgotPassword.findPassword') }}</h2>
+            <p class="form-subtitle">{{ t('forgotPassword.findPasswordSubtitle') }}</p>
 
             <el-form
               ref="formRef1"
@@ -60,7 +60,7 @@
               <el-form-item prop="email">
                 <el-input
                   v-model="form1.email"
-                  placeholder="注册邮箱"
+                  :placeholder="t('forgotPassword.emailPlaceholder')"
                   :prefix-icon="Message"
                 />
               </el-form-item>
@@ -73,7 +73,7 @@
                   class="submit-btn"
                   round
                 >
-                  {{ sending ? '发送中...' : '发送验证码' }}
+                  {{ sending ? t('forgotPassword.sending') : t('forgotPassword.sendCode') }}
                 </el-button>
               </el-form-item>
             </el-form>
@@ -81,8 +81,8 @@
 
           <!-- Step 2: Reset -->
           <template v-else>
-            <h2 class="form-title">设置新密码</h2>
-            <p class="form-subtitle">验证码已发送至 {{ form1.email }}</p>
+            <h2 class="form-title">{{ t('forgotPassword.setNewPassword') }}</h2>
+            <p class="form-subtitle">{{ t('forgotPassword.codeSentTo') }} {{ form1.email }}</p>
 
             <el-form
               ref="formRef2"
@@ -96,7 +96,7 @@
               <el-form-item prop="code">
                 <el-input
                   v-model="form2.code"
-                  placeholder="验证码"
+                  :placeholder="t('forgotPassword.codePlaceholder')"
                   :prefix-icon="Key"
                 />
               </el-form-item>
@@ -105,7 +105,7 @@
                 <el-input
                   v-model="form2.newPassword"
                   type="password"
-                  placeholder="新密码"
+                  :placeholder="t('forgotPassword.newPasswordPlaceholder')"
                   :prefix-icon="Lock"
                   show-password
                 />
@@ -115,7 +115,7 @@
                 <el-input
                   v-model="form2.confirmPassword"
                   type="password"
-                  placeholder="确认新密码"
+                  :placeholder="t('forgotPassword.confirmNewPasswordPlaceholder')"
                   :prefix-icon="Lock"
                   show-password
                 />
@@ -129,20 +129,20 @@
                   class="submit-btn"
                   round
                 >
-                  {{ resetting ? '重置中...' : '重置密码' }}
+                  {{ resetting ? t('forgotPassword.resetting') : t('forgotPassword.resetButton') }}
                 </el-button>
               </el-form-item>
             </el-form>
 
             <div class="form-footer">
-              <span>没有收到验证码？</span>
-              <a href="javascript:void(0)" class="form-link" @click="step = 1">重新发送</a>
+              <span>{{ t('forgotPassword.noCode') }}</span>
+              <a href="javascript:void(0)" class="form-link" @click="step = 1">{{ t('forgotPassword.resend') }}</a>
             </div>
           </template>
 
           <div class="form-footer" :style="step === 2 ? 'display:none' : ''">
-            <span>想起密码了？</span>
-            <router-link to="/login" class="form-link">返回登录</router-link>
+            <span>{{ t('forgotPassword.rememberPassword') }}</span>
+            <router-link to="/login" class="form-link">{{ t('forgotPassword.backToLogin') }}</router-link>
           </div>
         </div>
       </div>
@@ -153,10 +153,13 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { Message, Key, Lock } from '@element-plus/icons-vue'
 import { useThemeStore } from '@/stores/theme'
 import { passwordReset, passwordResetConfirm } from '@/api/auth'
+
+const { t } = useI18n()
 
 const router = useRouter()
 const themeStore = useThemeStore()
@@ -175,14 +178,14 @@ const form2 = reactive({
 
 const rules1 = {
   email: [
-    { required: true, message: '请输入注册邮箱', trigger: 'blur' },
-    { type: 'email', message: '邮箱格式不正确', trigger: 'blur' },
+    { required: true, message: t('forgotPassword.emailRequired'), trigger: 'blur' },
+    { type: 'email', message: t('forgotPassword.emailInvalid'), trigger: 'blur' },
   ],
 }
 
 const validateConfirm = (_rule: any, value: string, callback: any) => {
   if (value !== form2.newPassword) {
-    callback(new Error('两次输入的密码不一致'))
+    callback(new Error(t('forgotPassword.passwordMismatch')))
   } else {
     callback()
   }
@@ -190,23 +193,23 @@ const validateConfirm = (_rule: any, value: string, callback: any) => {
 
 const rules2 = {
   code: [
-    { required: true, message: '请输入验证码', trigger: 'blur' },
+    { required: true, message: t('forgotPassword.codeRequired'), trigger: 'blur' },
   ],
   newPassword: [
-    { required: true, message: '请输入新密码', trigger: 'blur' },
-    { min: 6, message: '密码至少 6 位', trigger: 'blur' },
+    { required: true, message: t('forgotPassword.newPasswordRequired'), trigger: 'blur' },
+    { min: 6, message: t('forgotPassword.passwordMinLength'), trigger: 'blur' },
   ],
   confirmPassword: [
-    { required: true, message: '请确认新密码', trigger: 'blur' },
+    { required: true, message: t('forgotPassword.confirmNewPasswordRequired'), trigger: 'blur' },
     { validator: validateConfirm, trigger: 'blur' },
   ],
 }
 
 const brandItems = [
-  { icon: 'Search', label: '自动发现集群资源' },
-  { icon: 'Monitor', label: '实时监控节点状态' },
-  { icon: 'WarningFilled', label: '智能告警检测' },
-  { icon: 'Connection', label: '多 Agent 架构' },
+  { icon: 'Search', label: t('login.autoDiscoveryLabel') },
+  { icon: 'Monitor', label: t('login.realtimeMonitorLabel') },
+  { icon: 'WarningFilled', label: t('login.smartAlertLabel') },
+  { icon: 'Connection', label: t('login.multiAgentLabel') },
 ]
 
 async function handleSendCode() {
@@ -216,7 +219,7 @@ async function handleSendCode() {
   sending.value = true
   try {
     await passwordReset({ email: form1.email })
-    ElMessage.success('验证码已发送到邮箱')
+    ElMessage.success(t('forgotPassword.codeSent'))
     step.value = 2
   } catch {
     // handled by interceptor
@@ -236,7 +239,7 @@ async function handleReset() {
       new_password: form2.newPassword,
       new_password2: form2.confirmPassword,
     })
-    ElMessage.success('密码重置成功，请重新登录')
+    ElMessage.success(t('forgotPassword.resetSuccess'))
     router.push('/login')
   } catch {
     // handled by interceptor

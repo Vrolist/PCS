@@ -2,8 +2,8 @@
   <div class="settings-page">
     <div class="page-header">
       <div>
-        <h2 class="page-title">用户信息</h2>
-        <p class="page-desc">管理您的个人资料与账户信息</p>
+        <h2 class="page-title">{{ t('settings.title') }}</h2>
+        <p class="page-desc">{{ t('settings.subtitle') }}</p>
       </div>
     </div>
 
@@ -14,29 +14,29 @@
           <div class="profile-header">
             <el-avatar :size="80" icon="UserFilled" class="profile-avatar" />
             <h3 class="profile-name">{{ userData.username || '-' }}</h3>
-            <el-tag v-if="userData.is_superuser" type="danger" size="small" class="role-badge">管理员</el-tag>
-            <el-tag v-else type="info" size="small" class="role-badge">普通用户</el-tag>
+            <el-tag v-if="userData.is_superuser" type="danger" size="small" class="role-badge">{{ t('settings.admin') }}</el-tag>
+            <el-tag v-else type="info" size="small" class="role-badge">{{ t('settings.normalUser') }}</el-tag>
           </div>
           <el-divider />
           <div class="profile-detail">
             <div class="profile-row">
-              <span class="profile-label">邮箱</span>
+              <span class="profile-label">{{ t('settings.email') }}</span>
               <span class="profile-val">{{ userData.email || '-' }}</span>
             </div>
             <div class="profile-row">
-              <span class="profile-label">手机</span>
+              <span class="profile-label">{{ t('settings.phone') }}</span>
               <span class="profile-val">{{ userData.phone || '-' }}</span>
             </div>
             <div class="profile-row">
-              <span class="profile-label">公司</span>
+              <span class="profile-label">{{ t('settings.company') }}</span>
               <span class="profile-val">{{ userData.company || '-' }}</span>
             </div>
             <div class="profile-row">
-              <span class="profile-label">注册时间</span>
+              <span class="profile-label">{{ t('settings.registerTime') }}</span>
               <span class="profile-val">{{ userData.date_joined?.slice(0, 10) || '-' }}</span>
             </div>
             <div class="profile-row">
-              <span class="profile-label">用户 ID</span>
+              <span class="profile-label">{{ t('settings.userId') }}</span>
               <span class="profile-val mono">{{ userData.id }}</span>
             </div>
           </div>
@@ -48,7 +48,7 @@
         <!-- 编辑资料 -->
         <el-card shadow="hover" class="form-card">
           <template #header>
-            <span class="form-title">编辑资料</span>
+            <span class="form-title">{{ t('settings.editProfile') }}</span>
           </template>
           <el-form
             ref="profileFormRef"
@@ -57,23 +57,23 @@
             label-position="top"
             class="settings-form"
           >
-            <el-form-item label="用户名">
-              <el-input v-model="userData.username" disabled placeholder="用户名不可修改" />
-              <div class="form-tip">用户名不可修改</div>
+            <el-form-item :label="t('settings.usernameLabel')">
+              <el-input v-model="userData.username" disabled :placeholder="t('settings.usernameDisabled')" />
+              <div class="form-tip">{{ t('settings.usernameDisabled') }}</div>
             </el-form-item>
-            <el-form-item label="邮箱">
-              <el-input v-model="userData.email" disabled placeholder="邮箱不可修改" />
-              <div class="form-tip">邮箱不可修改</div>
+            <el-form-item :label="t('settings.emailLabel')">
+              <el-input v-model="userData.email" disabled :placeholder="t('settings.emailDisabled')" />
+              <div class="form-tip">{{ t('settings.emailDisabled') }}</div>
             </el-form-item>
-            <el-form-item label="手机号" prop="phone">
-              <el-input v-model="profileForm.phone" placeholder="请输入手机号" maxlength="20" />
+            <el-form-item :label="t('settings.phoneLabel')" prop="phone">
+              <el-input v-model="profileForm.phone" :placeholder="t('settings.phonePlaceholder')" maxlength="20" />
             </el-form-item>
-            <el-form-item label="公司" prop="company">
-              <el-input v-model="profileForm.company" placeholder="请输入公司名称" maxlength="128" />
+            <el-form-item :label="t('settings.companyLabel')" prop="company">
+              <el-input v-model="profileForm.company" :placeholder="t('settings.companyPlaceholder')" maxlength="128" />
             </el-form-item>
             <el-form-item>
               <el-button type="primary" :loading="saving" @click="handleSaveProfile">
-                保存修改
+                {{ t('settings.saveChanges') }}
               </el-button>
             </el-form-item>
           </el-form>
@@ -82,28 +82,28 @@
         <!-- 安全设置 -->
         <el-card shadow="hover" class="form-card">
           <template #header>
-            <span class="form-title">安全设置</span>
+            <span class="form-title">{{ t('settings.securitySettings') }}</span>
           </template>
           <div class="security-section">
             <div class="security-row">
               <div class="security-info">
-                <span class="security-label">登录密码</span>
-                <span class="security-desc">定期更换密码可以提高账户安全性</span>
+                <span class="security-label">{{ t('settings.loginPassword') }}</span>
+                <span class="security-desc">{{ t('settings.loginPasswordDesc') }}</span>
               </div>
               <el-button @click="$router.push('/dashboard/change-password')">
-                修改密码
+                {{ t('settings.changePassword') }}
               </el-button>
             </div>
             <el-divider />
             <div class="security-row">
               <div class="security-info">
-                <span class="security-label">后台管理</span>
-                <span class="security-desc">进入 Django Admin 管理后台</span>
+                <span class="security-label">{{ t('settings.adminBackend') }}</span>
+                <span class="security-desc">{{ t('settings.adminBackendDesc') }}</span>
               </div>
               <el-button v-if="userData.is_superuser" type="warning" @click="handleAdminSession">
-                管理后台
+                {{ t('settings.adminBackend') }}
               </el-button>
-              <el-tag v-else type="info" size="small">仅管理员可用</el-tag>
+              <el-tag v-else type="info" size="small">{{ t('settings.adminOnly') }}</el-tag>
             </div>
           </div>
         </el-card>
@@ -114,10 +114,12 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { updateUserInfo, createAdminSession } from '@/api/auth'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 
+const { t } = useI18n()
 const authStore = useAuthStore()
 const userData: any = reactive({})
 const profileFormRef = ref<FormInstance>()
@@ -129,8 +131,8 @@ const profileForm = reactive({
 })
 
 const profileRules: FormRules = {
-  phone: [{ max: 20, message: '手机号不超过 20 个字符', trigger: 'blur' }],
-  company: [{ max: 128, message: '公司名称不超过 128 个字符', trigger: 'blur' }],
+  phone: [{ max: 20, message: () => t('settings.phoneMax'), trigger: 'blur' }],
+  company: [{ max: 128, message: () => t('settings.companyMax'), trigger: 'blur' }],
 }
 
 onMounted(async () => {
@@ -156,9 +158,9 @@ async function handleSaveProfile() {
     })
     Object.assign(userData, updated)
     authStore.setUser(updated)
-    ElMessage.success('资料更新成功')
+    ElMessage.success(t('settings.updateSuccess'))
   } catch (e: any) {
-    const msg = e?.response?.data?.detail || e?.response?.data?.[0] || '更新失败'
+    const msg = e?.response?.data?.detail || e?.response?.data?.[0] || t('settings.updateFailed')
     ElMessage.error(msg)
   } finally {
     saving.value = false
@@ -170,7 +172,7 @@ async function handleAdminSession() {
     await createAdminSession()
     window.open('/admin/', '_blank')
   } catch {
-    ElMessage.error('创建会话失败')
+    ElMessage.error(t('settings.sessionFailed'))
   }
 }
 </script>

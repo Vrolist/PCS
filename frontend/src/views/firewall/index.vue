@@ -2,12 +2,12 @@
   <div class="page-container">
     <div class="page-header">
       <div>
-        <h2 class="page-title">防火墙</h2>
-        <p class="page-desc">集群与节点防火墙规则管理</p>
+        <h2 class="page-title">{{ t('advanced.firewall.title') }}</h2>
+        <p class="page-desc">{{ t('advanced.firewall.subtitle') }}</p>
       </div>
     </div>
     <el-card shadow="hover">
-      <el-empty description="Firewall 功能开发中">
+      <el-empty :description="t('advanced.firewall.comingSoon')">
         <template #image>
           <el-icon :size="64" style="color: var(--text-muted)"><Lock /></el-icon>
         </template>
@@ -18,6 +18,9 @@
 
 <script setup lang="ts">
 import { Lock } from '@element-plus/icons-vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 </script>
 
 <style scoped>

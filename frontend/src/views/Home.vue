@@ -11,21 +11,21 @@
           </div>
         </router-link>
         <nav class="nav-actions">
-          <button class="theme-btn" @click="themeStore.toggle" :title="themeStore.theme === 'dark' ? '切换到亮色' : '切换到暗色'">
+          <button class="theme-btn" @click="themeStore.toggle" :title="themeStore.theme === 'dark' ? t('header.switchToLight') : t('header.switchToDark')">
             <el-icon :size="20"><Sunny v-if="themeStore.theme === 'dark'" /><Moon v-else /></el-icon>
           </button>
           <template v-if="authStore.isLoggedIn">
             <span class="nav-user">{{ authStore.user?.username }}</span>
             <router-link to="/dashboard">
-              <el-button type="primary" round size="default">控制台</el-button>
+              <el-button type="primary" round size="default">{{ t('nav.dashboard') }}</el-button>
             </router-link>
           </template>
           <template v-else>
             <router-link to="/login">
-              <el-button :type="themeStore.theme === 'dark' ? 'primary' : ''" plain round size="default">登录</el-button>
+              <el-button :type="themeStore.theme === 'dark' ? 'primary' : ''" plain round size="default">{{ t('login.login') }}</el-button>
             </router-link>
             <router-link to="/register">
-              <el-button type="primary" round size="default">注册</el-button>
+              <el-button type="primary" round size="default">{{ t('home.register') }}</el-button>
             </router-link>
           </template>
         </nav>
@@ -42,32 +42,31 @@
       </div>
       <div class="container hero-content">
         <div class="hero-text">
-          <div class="badge">Proxmox VE 运维利器</div>
+          <div class="badge">{{ t('home.badge') }}</div>
           <h1 class="hero-title">
-            <span class="title-line">集群监控，</span>
-            <span class="title-line accent">如此简单。</span>
+            <span class="title-line">{{ t('home.heroTitle1') }}</span>
+            <span class="title-line accent">{{ t('home.heroTitle2') }}</span>
           </h1>
           <p class="hero-subtitle">
-            一键部署 Agent，自动发现 PVE 集群全量资源。实时监控、智能告警、
-            历史趋势，让基础设施运维从被动响应走向主动管理。
+            {{ t('home.heroDesc') }}
           </p>
           <div class="hero-actions">
             <router-link to="/dashboard">
               <el-button type="primary" size="large" round class="cta-btn">
-                免费开始使用
+                {{ t('home.getStarted') }}
                 <el-icon class="btn-arrow"><ArrowRight /></el-icon>
               </el-button>
             </router-link>
             <router-link to="/login">
-              <el-button size="large" round plain class="login-btn">已有账号</el-button>
+              <el-button size="large" round plain class="login-btn">{{ t('home.hasAccount') }}</el-button>
             </router-link>
           </div>
           <div class="hero-stats">
-            <div class="stat-item"><span class="stat-num">零配置</span><span class="stat-label">部署 Agent</span></div>
+            <div class="stat-item"><span class="stat-num">{{ t('home.zeroConfig') }}</span><span class="stat-label">{{ t('home.deployAgent') }}</span></div>
             <div class="stat-dot"></div>
-            <div class="stat-item"><span class="stat-num">全自动</span><span class="stat-label">数据采集</span></div>
+            <div class="stat-item"><span class="stat-num">{{ t('home.fullyAuto') }}</span><span class="stat-label">{{ t('home.dataCollection') }}</span></div>
             <div class="stat-dot"></div>
-            <div class="stat-item"><span class="stat-num">智能化</span><span class="stat-label">告警检测</span></div>
+            <div class="stat-item"><span class="stat-num">{{ t('home.intelligent') }}</span><span class="stat-label">{{ t('home.alertDetection') }}</span></div>
           </div>
         </div>
         <div class="hero-visual">
@@ -98,9 +97,9 @@
     <section class="features" id="features">
       <div class="container">
         <div class="section-header">
-          <span class="section-tag">核心能力</span>
-          <h2 class="section-title">为什么选择 PVE&nbsp;Scan？</h2>
-          <p class="section-desc">从发现到诊断，覆盖 PVE 运维全场景的工具链</p>
+          <span class="section-tag">{{ t('home.coreFeatures') }}</span>
+          <h2 class="section-title">{{ t('home.whyChoose') }}</h2>
+          <p class="section-desc">{{ t('home.whyChooseDesc') }}</p>
         </div>
         <div class="feature-grid">
           <div v-for="(f, i) in features" :key="f.title" class="feature-card" :style="{ '--i': i }">
@@ -118,30 +117,30 @@
     <section class="remote-service">
       <div class="container">
         <div class="section-header">
-          <span class="section-tag">增值服务</span>
-          <h2 class="section-title">远程运维服务</h2>
-          <p class="section-desc">专业团队接管 PVE 集群日常运维，让你专注于业务</p>
+          <span class="section-tag">{{ t('home.service') }}</span>
+          <h2 class="section-title">{{ t('home.remoteOps') }}</h2>
+          <p class="section-desc">{{ t('home.remoteOpsDesc') }}</p>
         </div>
         <div class="service-cards">
           <div class="service-card">
             <div class="service-icon"><el-icon :size="28"><Monitor /></el-icon></div>
-            <h3>7×24 监控告警</h3>
-            <p>平台实时采集节点与 VM 数据，异常秒级检测，支持邮件/微信通知。</p>
+            <h3>{{ t('home.monitoring247') }}</h3>
+            <p>{{ t('home.monitoring247Desc') }}</p>
           </div>
           <div class="service-card">
             <div class="service-icon"><el-icon :size="28"><WarningFilled /></el-icon></div>
-            <h3>故障应急响应</h3>
-            <p>VM 宕机、存储满、Ceph OSD 异常等紧急问题，运维团队远程介入处理。</p>
+            <h3>{{ t('home.emergencyResponse') }}</h3>
+            <p>{{ t('home.emergencyResponseDesc') }}</p>
           </div>
           <div class="service-card">
             <div class="service-icon"><el-icon :size="28"><Connection /></el-icon></div>
-            <h3>安全与补丁管理</h3>
-            <p>定期检查 PVE 安全更新，协助制定补丁策略，降低漏洞风险。</p>
+            <h3>{{ t('home.securityPatch') }}</h3>
+            <p>{{ t('home.securityPatchDesc') }}</p>
           </div>
           <div class="service-card">
             <div class="service-icon"><el-icon :size="28"><TrendCharts /></el-icon></div>
-            <h3>健康报告</h3>
-            <p>定期输出集群健康报告，含资源趋势、风险预警与容量规划建议。</p>
+            <h3>{{ t('home.healthReport') }}</h3>
+            <p>{{ t('home.healthReportDesc') }}</p>
           </div>
         </div>
       </div>
@@ -151,9 +150,9 @@
     <section class="how-it-works">
       <div class="container">
         <div class="section-header">
-          <span class="section-tag">工作流程</span>
-          <h2 class="section-title">四步完成接入</h2>
-          <p class="section-desc">从零到全面监控，再到专业运维</p>
+          <span class="section-tag">{{ t('home.workflow') }}</span>
+          <h2 class="section-title">{{ t('home.fourSteps') }}</h2>
+          <p class="section-desc">{{ t('home.fourStepsDesc') }}</p>
         </div>
         <div class="steps">
           <div v-for="(step, i) in steps" :key="i" class="step-card">
@@ -172,11 +171,11 @@
     <section class="cta-section">
       <div class="container cta-container">
         <div class="cta-card">
-          <h2>准备好简化你的 PVE 运维了吗？</h2>
-          <p>注册即可开始使用，无需任何前置条件</p>
+          <h2>{{ t('home.ctaTitle') }}</h2>
+          <p>{{ t('home.ctaDesc') }}</p>
           <router-link to="/dashboard">
             <el-button type="primary" size="large" round class="cta-btn">
-              立即开始
+              {{ t('home.startNow') }}
               <el-icon class="btn-arrow"><ArrowRight /></el-icon>
             </el-button>
           </router-link>
@@ -196,17 +195,17 @@
                 <span class="logo-sub"><span class="accent-l">P</span>ve<span class="accent-l">C</span>luster<span class="accent-l">S</span>can</span>
               </div>
             </div>
-            <p class="footer-desc">PVE 集群监控平台</p>
+            <p class="footer-desc">{{ t('home.footerDesc') }}</p>
           </div>
           <div class="footer-links">
             <div class="footer-col">
-              <h4>产品</h4>
-              <a href="#features">功能特性</a>
-              <a href="#">价格</a>
+              <h4>{{ t('home.product') }}</h4>
+              <a href="#features">{{ t('home.features') }}</a>
+              <a href="#">{{ t('home.pricing') }}</a>
             </div>
             <div class="footer-col">
-              <h4>支持</h4>
-              <a href="#">文档</a>
+              <h4>{{ t('home.support') }}</h4>
+              <a href="#">{{ t('home.docs') }}</a>
               <a href="#">API</a>
             </div>
           </div>
@@ -221,9 +220,11 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useThemeStore } from '@/stores/theme'
 import { useAuthStore } from '@/stores/auth'
 
+const { t } = useI18n()
 const themeStore = useThemeStore()
 const authStore = useAuthStore()
 const scrolled = ref(false)
@@ -287,69 +288,69 @@ onUnmounted(() => {
   clearInterval(barTimer)
 })
 
-const features = [
+const features = computed(() => [
   {
-    title: '自动发现',
-    desc: 'Agent 部署后自动发现集群全部节点、VM、LXC 容器与存储，无需手动配置。',
+    title: t('home.autoDiscovery'),
+    desc: t('home.autoDiscoveryDesc'),
     icon: 'Search',
     color: '#409eff',
     bg: 'rgba(64,158,255,0.12)',
   },
   {
-    title: '实时监控',
-    desc: 'CPU、内存、磁盘、网络 IO 秒级采集，支持自定义间隔，数据所见即所得。',
+    title: t('home.realtimeMonitor'),
+    desc: t('home.realtimeMonitorDesc'),
     icon: 'Monitor',
     color: '#67c23a',
     bg: 'rgba(103,194,58,0.12)',
   },
   {
-    title: '智能检测',
-    desc: '规则引擎自动扫描资源过载、节点离线、磁盘不足等异常，及时发现隐患。',
+    title: t('home.smartDetection'),
+    desc: t('home.smartDetectionDesc'),
     icon: 'WarningFilled',
     color: '#e6a23c',
     bg: 'rgba(230,162,60,0.12)',
   },
   {
-    title: '多 Agent',
-    desc: '支持一个集群部署多个 Agent 实例，避免单点故障，数据更可靠。',
+    title: t('home.multiAgent'),
+    desc: t('home.multiAgentDesc'),
     icon: 'Connection',
     color: '#8b5cf6',
     bg: 'rgba(139,92,246,0.12)',
   },
   {
-    title: '趋势分析',
-    desc: '自动归档扫描快照，历史数据可回溯，便于容量规划与性能分析。',
+    title: t('home.trendAnalysis'),
+    desc: t('home.trendAnalysisDesc'),
     icon: 'TrendCharts',
     color: '#f56c6c',
     bg: 'rgba(245,108,108,0.12)',
   },
   {
-    title: 'Ceph 集成',
-    desc: '深度集成 Ceph 健康检测，OSD 状态、存储池用量一目了然。',
+    title: t('home.cephIntegration'),
+    desc: t('home.cephIntegrationDesc'),
     icon: 'DataAnalysis',
     color: '#409eff',
     bg: 'rgba(64,158,255,0.12)',
   },
-]
+])
 
-const steps = [
+const steps = computed(() => [
   {
-    title: '创建集群',
-    desc: '在平台创建一个 PVE 集群，获得专属的 Agent 接入 Token。',
+    title: t('home.step1'),
+    desc: t('home.step1Desc'),
   },
   {
-    title: '部署 Agent',
-    desc: '在可访问 PVE API 的服务器上执行一条命令，Agent 自动完成注册与首次扫描。',
+    title: t('home.step2'),
+    desc: t('home.step2Desc'),
   },
   {
-    title: '全面监控',
-    desc: '平台自动展示集群拓扑、资源用量和检测结果，一切尽在掌握。',
+    title: t('home.step3'),
+    desc: t('home.step3Desc'),
   },
   {
-    title: '运维服务',
-    desc: '需要时订阅远程运维服务，专业团队接管日常运维与应急响应。',
+    title: t('home.step4'),
+    desc: t('home.step4Desc'),
   },
-]
+])
 </script>
 
 <style scoped>
