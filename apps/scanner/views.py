@@ -81,6 +81,9 @@ class SDNZoneListView(APIView):
 
     def get(self, request):
         cluster_ids = _user_cluster_ids(request.user)
+        cluster_filter = request.query_params.get("cluster_id")
+        if cluster_filter:
+            cluster_ids = cluster_ids.filter(id=cluster_filter)
         zones = SDNZone.objects.filter(cluster_id__in=cluster_ids).select_related("cluster")
         data = [{
             "id": z.id,
@@ -99,6 +102,9 @@ class SDNVNetListView(APIView):
 
     def get(self, request):
         cluster_ids = _user_cluster_ids(request.user)
+        cluster_filter = request.query_params.get("cluster_id")
+        if cluster_filter:
+            cluster_ids = cluster_ids.filter(id=cluster_filter)
         vnets = SDNVNet.objects.filter(cluster_id__in=cluster_ids).select_related("cluster", "zone")
         data = [{
             "id": v.id,
@@ -119,6 +125,9 @@ class SDNSubnetListView(APIView):
 
     def get(self, request):
         cluster_ids = _user_cluster_ids(request.user)
+        cluster_filter = request.query_params.get("cluster_id")
+        if cluster_filter:
+            cluster_ids = cluster_ids.filter(id=cluster_filter)
         subnets = SDNSubnet.objects.filter(cluster_id__in=cluster_ids).select_related("cluster", "vnet")
         data = [{
             "id": s.id,

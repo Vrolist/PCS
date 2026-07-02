@@ -41,9 +41,9 @@ pve-cluster-scan/
 │   │   ├── urls.py         #   - /api/dashboard/ 路由（4 个端点）
 │   │   └── tests.py        #   - 30 个测试用例
 │   └── scanner/            # 扫描数据 & 自动检测
-│       ├── views.py        #   - 节点/VM/容器/存储/网络/Ceph/HA 列表+详情
-│       ├── urls.py         #   - /api/scanner/ 路由（10 个端点）
-│       └── models.py       #   - ClusterNode/VM/LXC/VMConfig/LXCConfig/Storage/NetworkInterface/CephStatus/ScanHistory/DetectionRule/DetectionResult
+│       ├── views.py        #   - 节点/VM/容器/存储/网络/Ceph/HA/SDN 列表+详情
+│       ├── urls.py         #   - /api/scanner/ 路由（13 个端点）
+│       └── models.py       #   - ClusterNode/VM/LXC/VMConfig/LXCConfig/Storage/NetworkInterface/CephStatus/ScanHistory/DetectionRule/DetectionResult/SDNZone/SDNVNet/SDNSubnet
 ├── frontend/               # Vue 3 + Vite 前端
 │   ├── src/
 │   │   ├── views/
@@ -63,26 +63,31 @@ pve-cluster-scan/
 │   │   │   ├── nodes/index.vue                # 节点管理（表格+详情弹窗）
 │   │   │   ├── vms/index.vue                  # 虚拟机（表格+详情弹窗）
 │   │   │   ├── containers/index.vue           # 容器（表格+详情弹窗）
-│   │   │   ├── alerts/index.vue               # 告警中心（空状态+el-card）
-│   │   │   ├── services/index.vue             # 运维服务（空状态+el-card）
+│   │   │   ├── sdn/index.vue                  # SDN 虚拟网络（Tab 切换：区域/VNet/子网）
+│   │   │   ├── alerts/index.vue               # 告警中心（告警记录表格）
+│   │   │   ├── services/index.vue             # 运维服务（HA 资源状态表格）
 │   │   │   ├── settings/index.vue             # 用户信息（完整编辑界面）
 │   │   │   ├── user-logs/index.vue            # 操作日志（分页表格+筛选）
 │   │   │   └── user-notifications/index.vue   # 通知设置（空状态）
 │   │   ├── components/
-│   │   │   ├── AppSidebar.vue        # 侧边栏导航（含折叠图标居中）
-│   │   │   └── AppHeader.vue         # 顶栏（含主题切换）
+│   │   │   ├── AppSidebar.vue        # 侧边栏导航（含折叠图标居中 + 集群选择器）
+│   │   │   └── AppHeader.vue         # 顶栏（含主题切换 + 退出登录）
 │   │   ├── layouts/MainLayout.vue    # 后台主布局（侧边栏+顶栏+内容区）
 │   │   │── router/index.ts           # 路由 + 守卫（所有后台页面在 /dashboard/ 下）
 │   │   ├── stores/
 │   │   │   ├── app.ts                # 全局状态（侧边栏折叠）
 │   │   │   ├── auth.ts               # JWT 认证
-│   │   │   └── theme.ts              # 亮暗主题（默认暗色）
+│   │   │   ├── theme.ts              # 亮暗主题（默认暗色）
+│   │   │   └── cluster.ts            # 集群列表 + 当前选中集群 (全局集群选择器)
 │   │   ├── api/
 │   │   │   ├── request.ts            # Axios 实例 + 拦截器
 │   │   │   ├── auth.ts               # 登录/注册/密码重置/用户信息/操作日志 API
 │   │   │   ├── clusters.ts           # 集群 CRUD + Agent 查询 API
 │   │   │   ├── dashboard.ts          # Dashboard 统计/告警/趋势/节点 API
-│   │   │   └── nodes.ts              # 节点/详情 API
+│   │   │   ├── nodes.ts              # 节点/详情 API
+│   │   │   ├── ceph.ts               # Ceph 状态 API
+│   │   │   ├── ha.ts                 # HA 资源 API
+│   │   │   └── sdn.ts                # SDN 区域/VNet/子网 API
 │   │   └── style.css                 # CSS 变量 / 亮暗色值
 │   ├── package.json
 │   └── vite.config.ts
@@ -98,8 +103,12 @@ pve-cluster-scan/
 ├── templates/
 │   └── vue_index.html                # Django 模板（自动适配 IP/端口）
 ├── static/                           # Vite 构建输出
+├── .venv/                            # Python 虚拟环境（Python 3.12）
 ├── manage.py
-├── dev_start.sh                      # 一键启动（Django + Vite）
+├── dev_start.sh                      # 一键启动（.venv + 依赖 + Django + Vite）
+├── scripts/
+│   └── seed_test_data.py             # 模拟测试数据种子脚本（5 级架构 + SDN）
+├── requirements.txt                  # 后端 Python 依赖
 └── CLAUDE.md
 ```
 
@@ -115,18 +124,58 @@ pve-cluster-scan/
 | 认证 | SimpleJWT（access + refresh token） |
 | 主题 | CSS 变量 + Element Plus dark 模式 |
 
+## 虚拟环境
+
+项目使用 Python 3.12 虚拟环境（`.venv/`），所有 `python manage.py` 相关命令需在虚拟环境中执行。
+
+```bash
+# 激活虚拟环境
+source .venv/bin/activate
+
+# 或使用虚拟环境中的 Python 直接执行
+.venv/bin/python <command>
+```
+
+## 一键启动（dev_start.sh）
+
+`dev_start.sh` 是项目开发服务器的统一启动入口，自动完成以下步骤：
+
+1. **虚拟环境** — 检测 `.venv` 目录，不存在则用 `python3.12 -m venv .venv` 创建并激活
+2. **后端依赖** — `pip install -r requirements.txt -q`
+3. **数据库迁移** — `python manage.py migrate`
+4. **管理员账户** — 自动创建 `buladou` 超级用户（如不存在）
+5. **前端依赖** — `cd frontend && npm install`
+6. **启动服务** — 后台启动 Vite（热更新 :5173），前台启动 Django（:8066）
+
+```bash
+# 一键启动（推荐）
+./dev_start.sh
+
+# 启动后访问
+#   Django 后端:  http://<本机IP>:8066
+#   Vite 热更新:  http://<本机IP>:5173（模板自动适配，浏览器访问 :8066 即可）
+```
+
 ## Vite 集成工作流程
 
 ```
 开发模式:
-  python manage.py runserver (Django :8000)
-  + npm run dev (Vite :5173, host=0.0.0.0)
+  方式一（推荐）: ./dev_start.sh
+    → .venv + 依赖 + 迁移 + Django :8066 + Vite :5173
+
+  方式二（分别启动）:
+    source .venv/bin/activate
+    python manage.py runserver 0.0.0.0:8066    # Django
+    cd frontend && npm run dev                  # Vite :5173
+
   → 模板上下文处理器自动注入 vite_host/vite_port
   → 浏览器根据当前访问 IP 自动加载 Vite 资源
   → 热更新正常工作（支持 localhost / 内网 IP 远程访问）
 
 生产模式:
-  npm run build → 输出到 static/frontend/（含 manifest.json）
+  cd frontend && npm run build
+  # 构建产物输出到 static/frontend/（含 manifest.json）
+  source .venv/bin/activate
   python manage.py collectstatic
   → vite_asset 模板标签从 manifest 查找构建后的 JS/CSS
   → Django 直接 serve 构建产物
@@ -134,25 +183,31 @@ pve-cluster-scan/
 
 ## 开发命令
 
+以下命令均在项目根目录执行，需先激活虚拟环境（`source .venv/bin/activate` 或使用 `.venv/bin/python`）：
+
 ```bash
-# 一键启动（后端 + Vite 前端）
+# 一键启动（后端 + 前端）
 ./dev_start.sh
 
 # 或分别启动
-python manage.py runserver 0.0.0.0:8000    # Django
+source .venv/bin/activate
+python manage.py runserver 0.0.0.0:8066    # Django（dev_start.sh 默认端口）
 cd frontend && npm run dev                  # Vite
 
 # 前端构建
 cd frontend && npm run build
 
 # 创建迁移
-python manage.py makemigrations <app_name>
+.venv/bin/python manage.py makemigrations <app_name>
 
 # 执行迁移
-python manage.py migrate
+.venv/bin/python manage.py migrate
+
+# 生成模拟测试数据（含 SDN，需 Django 服务运行中）
+.venv/bin/python scripts/seed_test_data.py reset
 
 # 运行测试
-python manage.py test apps.agent_api apps.clusters apps.dashboard --verbosity=2
+.venv/bin/python manage.py test apps.agent_api apps.clusters apps.dashboard --verbosity=2
 ```
 
 ## Agent
@@ -200,6 +255,7 @@ Agent 运行中:
     → 收到 update.available → _handle_update() (自动更新，见下方)
   → 扫描循环 (每 300s)
     → 调用 PVE API 采集所有节点
+    → 采集集群级数据（Ceph / HA / SDN）
     → 数据清洗 (bytes→MB/GB, CPU→%)
     → POST /api/agent/scan/upload/
     → 收到 423 → 暂停上传，心跳保持 (deactivated)
@@ -216,6 +272,8 @@ Agent 自动更新 (v0.5.0+):
   安装脚本:
     → install.sh?token=X&platform=Y → 返回 bash 安装脚本（首次安装用）
     → install.sh?agent=1 → 返回 agent.py 源码（自动更新用）
+
+当前最新版本: v0.6.0 — 支持 SDN 虚拟网络数据采集
 
 Agent 版本提示:
   Web 前端 Agent 表格显示 version 列
@@ -292,7 +350,7 @@ POST /api/agent/register/
 **心跳上报（包含版本号）：**
 ```json
 POST /api/agent/heartbeat/
-{"agent_id": "hex-uuid", "status": "online", "current_task": "", "version": "0.5.8"}
+{"agent_id": "hex-uuid", "status": "online", "current_task": "", "version": "0.6.0"}
 → {"ok": true}
 
 // 有新版本时，响应自动附带 update 字段：
@@ -300,9 +358,9 @@ POST /api/agent/heartbeat/
     "ok": true,
     "update": {
       "available": true,
-      "latest_version": "0.5.8",
+      "latest_version": "0.6.0",
       "download_url": "http://platform:8066/api/agent/install.sh?agent=1",
-      "changelog": "v0.5.8: ..."
+      "changelog": "v0.6.0: 支持 SDN 虚拟网络数据采集"
     }
   }
 ```
@@ -318,8 +376,10 @@ POST /api/agent/heartbeat/
 POST /api/agent/scan/upload/
 {
   "agent_id": "hex-uuid", "cluster_id": "int", "scanned_at": "ISO8601", "version": "pve-manager/8.2.4",
-  "nodes": [{ "name": "pve-1", "cpu_load": 35.0, "disk_io_delay_ms": 12.5, "diskstat": [...], "vms": [...], "containers": [...], "storages": [...], "networks": [...] }],
-  "ceph": { "health": "HEALTH_OK", "total_osds": 12, ... }
+  "nodes": [{ "name": "pve-1", ... }],
+  "ceph": { ... },
+  "ha_resources": [...],
+  "sdn": { "zones": [...], "vnets": [...], "subnets": [...] }
 }
 → {"ok": true, "scan_task_id": 1}
 ```
@@ -340,7 +400,7 @@ POST /api/agent/unregister/
 **版本查询：**
 ```
 GET /api/agent/version/
-→ {"latest_version": "0.5.8", "download_url": "/api/agent/install.sh", "changelog": "v0.5.8: ..."}
+→ {"latest_version": "0.6.0", "download_url": "/api/agent/install.sh", "changelog": "v0.6.0: 支持 SDN 虚拟网络数据采集"}
 ```
 
 **安装脚本获取：**
@@ -399,7 +459,7 @@ GET /api/clusters/1/
 {
   "id": 1, "name": "生产集群", "agent_token": "abc123...",
   "agents": [
-    { "hostname": "pve-1", "status": "online", "version": "0.1.0", "total_scans": 58 }
+    { "hostname": "pve-1", "status": "online", "version": "0.6.0", "total_scans": 58 }
   ],
   "install_command": "curl -fsSL 'https://platform:8000/api/agent/install.sh?token=abc123&platform=https://platform:8000' | bash"
 }
@@ -419,6 +479,9 @@ GET /api/clusters/1/
 | GET | `/api/scanner/networks/` | 网络接口列表 | ✅ JWT |
 | GET | `/api/scanner/ceph/` | Ceph 集群状态 | ✅ JWT |
 | GET | `/api/scanner/ha/` | HA 资源组列表 | ✅ JWT |
+| GET | `/api/scanner/sdn/zones/` | SDN 区域列表 | ✅ JWT |
+| GET | `/api/scanner/sdn/vnets/` | SDN 虚拟网络列表 | ✅ JWT |
+| GET | `/api/scanner/sdn/subnets/` | SDN 子网列表 | ✅ JWT |
 
 **节点详情响应：**
 ```json
@@ -466,8 +529,11 @@ GET /api/scanner/containers/1/detail/
 | `/dashboard/storage` | 存储管理 | PVE 存储列表 | ✅ |
 | `/dashboard/networks` | 网络接口 | 网络接口列表 | ✅ |
 | `/dashboard/ceph` | Ceph 存储 | Ceph 集群状态 | ✅ |
-| `/dashboard/alerts` | 告警中心 | 告警记录与处理（待实现） | ✅ |
-| `/dashboard/services` | 运维服务 | 远程运维订阅（待实现） | ✅ |
+| `/dashboard/sdn` | 软件定义网络 | SDN 区域/虚拟网络/子网 (3 Tab 表格) | ✅ |
+| `/dashboard/network-topology` | 网络拓扑 | SVG 节点-网络拓扑图（复杂网络可视化） | ✅ |
+| `/dashboard/alerts` | 告警中心 | 告警记录表格（按集群筛选） | ✅ |
+| `/dashboard/ha` | 高可用管理 | HA 资源统计卡片 + 表格 | ✅ |
+| `/dashboard/services` | 运维服务 | HA 资源状态表格 | ✅ |
 | `/dashboard/settings` | 用户信息 | 编辑资料 + 安全设置（完整界面） | ✅ |
 | `/dashboard/change-password` | 修改密码 | 修改登录密码 | ✅ |
 | `/dashboard/user-logs` | 操作日志 | 用户操作记录（分页表格+筛选） | ✅ |
@@ -501,6 +567,14 @@ GET /api/scanner/containers/1/detail/
 - 相邻组件用交替背景色形成明显分层（`bg-primary` / `bg-secondary`）
 - 侧边栏使用独立渐变背景色（亮色/暗色各一套）
 
+## 全局集群选择器
+
+侧边栏顶部增加全局集群选择框 (`cluster.ts` store)，所有使用集群数据的页面共享同一个选择状态：
+
+- **HA / 运维服务 / 告警中心 / SDN** 等页面不再有独立 `el-select`，统一使用侧边栏的全局选择器
+- 切换集群时，通过 `watch(clusterStore.currentClusterId)` 自动刷新页面数据
+- 使用方式：`useClusterStore()` → `clusterStore.currentClusterId` / `clusterStore.clusterList`
+
 ## 数据模型总览
 
 ### accounts (用户认证)
@@ -525,9 +599,12 @@ GET /api/scanner/containers/1/detail/
 - **NetworkInterface** - 网络接口
 - **CephStatus** - Ceph 集群状态
 - **ScanHistory** - 扫描汇总快照（趋势图表用）
-- **HAResource** - HA 高可用资源
+- **HAResource** - HA 高可用资源（sid/resource_type/vmid/ha_group/ha_status/crm_state）
 - **DetectionRule** - 自动检测规则配置
 - **DetectionResult** - 检测结果
+- **SDNZone** - SDN 区域（zone/zone_type/nodes，原地更新）
+- **SDNVNet** - SDN 虚拟网络（vnet/vnet_type/vlan/zone，原地更新）
+- **SDNSubnet** - SDN 子网（subnet/gateway/dns_server/vnet，原地更新）
 
 > 完整 PVE 数据结构分析文档见 `data-structure/` 目录。
 
@@ -558,6 +635,9 @@ for each node:
   GET /nodes/{node}/lxc/{vmid}/config   → LXC 详细配置
 GET  /cluster/ceph/status        → Ceph 健康状态 (如有)
 GET  /cluster/ha/resources       → HA 资源列表 (如有)
+GET  /cluster/sdn/zones          → SDN 区域列表 (如有)
+GET  /cluster/sdn/vnets          → SDN 虚拟网络列表 (如有)
+GET  /cluster/sdn/subnets        → SDN 子网列表 (如有)
 ```
 
 ### 关键字段映射（PVE API → DB）
@@ -570,6 +650,10 @@ GET  /cluster/ha/resources       → HA 资源列表 (如有)
 | Storage | `/nodes/{node}/storage` | `storage`, `type`, `used/available/total`(bytes→GB), `content`, `shared` |
 | NetworkInterface | `/nodes/{node}/network` | `iface`(→name), `type`, `address`, `speed` |
 | CephStatus | `/cluster/ceph/status` | `health.status`, `osd.nr/up/in`, `pgmap.bytes_*`(bytes→GB) |
+| HAResource | `/cluster/ha/resources` | `sid`, `type`(→resource_type), `status`(→state), `ha.group`, `ha.status`, `ha.crm_state` |
+| SDNZone | `/cluster/sdn/zones` | `zone`, `type`(→zone_type), `nodes` |
+| SDNVNet | `/cluster/sdn/vnets` | `vnet`, `type`(→vnet_type), `vlan`, `zone` |
+| SDNSubnet | `/cluster/sdn/subnets` | `subnet`, `gateway`, `dnsserver`, `dnszoneprefix`, `vnet` |
 
 ### 单位转换规则
 
@@ -595,7 +679,9 @@ POST /api/agent/scan/upload/
   "scanned_at": "2026-06-29T10:30:00Z",
   "version": "pve-manager/8.2.4",
   "nodes": [{ "name": "pve-1", "status": "online", "cpu_load": 0.35, "vms": [...], "containers": [...], "storages": [...], "networks": [...] }],
-  "ceph": { "health": "HEALTH_OK", "total_osds": 12, ... }
+  "ceph": { "health": "HEALTH_OK", "total_osds": 12, ... },
+  "ha_resources": [{ "sid": "vm:100", "type": "vm", ... }],
+  "sdn": { "zones": [...], "vnets": [...], "subnets": [...] }
 }
 ```
 
@@ -603,14 +689,13 @@ POST /api/agent/scan/upload/
 
 ```
 PVE 节点 (Agent) → PVE API (HTTPS :8006) → Agent 数据清洗 → POST /api/agent/scan/upload/
-→ Django 入库 (ClusterNode/VM/LXC/VMConfig/LXCConfig/Storage/NetworkInterface/CephStatus/ScanHistory/HAResource)
-→ 触发自动检测 (DetectionRule → DetectionResult)
+→ Django 入库 (ClusterNode/VM/LXC/VMConfig/LXCConfig/Storage/NetworkInterface/CephStatus/ScanHistory/HAResource/SDNZone/SDNVNet/SDNSubnet)
 → Web API → Vue 前端展示
 ```
 
 ### 存储优化
 
-VM、LXC、VMConfig、LXCConfig 四个模型使用 **原地更新** 策略（`unique_together` 不含 `scanned_at`，写入用 `update_or_create`），每次扫描覆盖最新数据，不产生历史冗余行。
+VM、LXC、VMConfig、LXCConfig、SDNZone、SDNVNet、SDNSubnet 使用 **原地更新** 策略（`unique_together` 不含 `scanned_at`，写入用 `update_or_create`），每次扫描覆盖最新数据，不产生历史冗余行。
 
 | 模型 | unique_together | 策略 | 30天节省 |
 |------|----------------|------|---------|
@@ -618,6 +703,9 @@ VM、LXC、VMConfig、LXCConfig 四个模型使用 **原地更新** 策略（`un
 | LXC | `(node, vmid)` | update_or_create | ~99.9%（720行→1行） |
 | VMConfig | `(vm,)` | update_or_create | ~99.9%（720行→1行） |
 | LXCConfig | `(container,)` | update_or_create | ~99.9%（720行→1行） |
+| SDNZone | `(cluster, zone)` | update_or_create | ~99.9% |
+| SDNVNet | `(cluster, vnet)` | update_or_create | ~99.9% |
+| SDNSubnet | `(cluster, subnet)` | update_or_create | ~99.9% |
 
 其余模型（ClusterNode、Storage、NetworkInterface、CephStatus、ScanHistory、HAResource）仍按时间序保留历史记录，用于趋势分析。
 
@@ -631,6 +719,9 @@ VM、LXC、VMConfig、LXCConfig 四个模型使用 **原地更新** 策略（`un
 | Storage | 7 天 | 存储容量变化慢 |
 | NetworkInterface | 7 天 | 网络配置基本不变 |
 | CephStatus | 7 天 | 健康状态变化不频繁 |
+| SDNZone | 7 天 | SDN 配置基本不变 |
+| SDNVNet | 7 天 | SDN 配置基本不变 |
+| SDNSubnet | 7 天 | SDN 配置基本不变 |
 | ScanHistory | 30 天 | 趋势图核心数据源，需较长历史 |
 | ScanTask | 30 天 | 审计需要 |
 
@@ -651,7 +742,21 @@ VM、LXC、VMConfig、LXCConfig 四个模型使用 **原地更新** 策略（`un
 
 - 用户名: `buladou`
 - 密码: `husongsxx`
-- Django Admin: `http://localhost:8000/admin/`
+- Django Admin: `http://localhost:8066/admin/`
+
+## 模拟测试数据
+
+`scripts/seed_test_data.py` 支持 5 种架构级别的模拟数据生成，可用于开发和演示：
+
+| Level | 架构 | 节点 | VM | 容器 | Ceph | HA | SDN | 网络拓扑 |
+|-------|------|------|-----|------|------|----|-----|---------|
+| 1 | 单节点入门 | 1 | 0 | 3 | ❌ | ❌ | ❌ | vmbr0 |
+| 2 | 双节点小集群 | 2 | 6 | 13 | ❌ | ❌ | ❌ | vmbr0+vmbr1 |
+| 3 | 三节点标准集群 | 3 | ~20 | ~35 | ❌ | ❌ | ✅ | vmbr0+bond0 |
+| 4 | Ceph 三节点 | 3 | ~36 | ~30 | ✅ OK | 2 | ✅ | vmbr0+vmbr1+bond0 |
+| 5 | 企业生产集群 | 5 | ~65 | ~60 | ✅ WARN | 5 | ✅ | vmbr0+vmbr1+bond0 |
+
+使用方式: `python scripts/seed_test_data.py reset`
 
 ## 下一步待实现
 
@@ -668,6 +773,7 @@ VM、LXC、VMConfig、LXCConfig 四个模型使用 **原地更新** 策略（`un
 11. ~~数据保留清理~~ ✅ 已完成（Lazy on-upload 清理，7天/30天阈值）
 12. ~~集群停用/恢复/删除完成链路~~ ✅ 已完成（is_active→423, deleted→410, agent _stop_permanently）
 13. ~~Agent 版本更新提示~~ ✅ 已完成（前端 agent 表格显示「最新」/「可更新」标签）
-14. 自动检测引擎
-15. 仪表盘真实数据进一步接入（告警、趋势数据源）
-16. 各管理页面功能完善（告警/服务/通知等）
+14. ~~SDN 数据采集与展示~~ ✅ 已完成（SDNZone/VNet/Subnet 模型 + Agent 采集 v0.6.0 + 前端 Tab 页面）
+15. ~~网络拓扑可视化~~ ✅ 已完成（SVG 节点-网络连接图 + 图例筛选 + IP 网段图层）
+16. 自动检测引擎
+17. 仪表盘真实数据进一步接入（告警、趋势数据源）

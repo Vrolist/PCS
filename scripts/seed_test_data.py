@@ -412,6 +412,78 @@ def _gen_network(name, ntype, ip, gateway="192.168.1.1", speed=10000, **extra):
     return net
 
 
+def _gen_sdn_data(level):
+    """根据集群层级生成 SDN 数据
+
+    Level 1-2: 无 SDN
+    Level 3: 1 zone + 2 vnets + 2 subnets
+    Level 4: 2 zones + 4 vnets + 4 subnets
+    Level 5: 3 zones + 6 vnets + 6 subnets
+    """
+    if level <= 2:
+        return {"zones": [], "vnets": [], "subnets": []}
+
+    if level == 3:
+        return {
+            "zones": [
+                {"zone": "zone-mgmt", "type": "vlan", "nodes": "pve-1 pve-2 pve-3"},
+            ],
+            "vnets": [
+                {"vnet": "vnet-app", "zone": "zone-mgmt", "type": "vlan", "vlan": 100},
+                {"vnet": "vnet-storage", "zone": "zone-mgmt", "type": "vlan", "vlan": 200},
+            ],
+            "subnets": [
+                {"subnet": "10.100.0.0/24", "vnet": "vnet-app", "gateway": "10.100.0.1", "dnsserver": "8.8.8.8", "dnszoneprefix": "app.internal"},
+                {"subnet": "10.200.0.0/24", "vnet": "vnet-storage", "gateway": "10.200.0.1", "dnsserver": "8.8.8.8", "dnszoneprefix": "storage.internal"},
+            ],
+        }
+
+    if level == 4:
+        return {
+            "zones": [
+                {"zone": "zone-prod", "type": "vlan", "nodes": "ceph-1 ceph-2 ceph-3"},
+                {"zone": "zone-storage", "type": "vxlan", "nodes": "ceph-1 ceph-2 ceph-3"},
+            ],
+            "vnets": [
+                {"vnet": "vnet-k8s", "zone": "zone-prod", "type": "vlan", "vlan": 100},
+                {"vnet": "vnet-db", "zone": "zone-prod", "type": "vlan", "vlan": 110},
+                {"vnet": "vnet-ceph-public", "zone": "zone-storage", "type": "vxlan", "vlan": None},
+                {"vnet": "vnet-ceph-cluster", "zone": "zone-storage", "type": "vxlan", "vlan": None},
+            ],
+            "subnets": [
+                {"subnet": "10.100.0.0/24", "vnet": "vnet-k8s", "gateway": "10.100.0.1", "dnsserver": "8.8.8.8", "dnszoneprefix": "k8s.internal"},
+                {"subnet": "10.110.0.0/24", "vnet": "vnet-db", "gateway": "10.110.0.1", "dnsserver": "8.8.8.8", "dnszoneprefix": "db.internal"},
+                {"subnet": "10.200.0.0/24", "vnet": "vnet-ceph-public", "gateway": "10.200.0.1", "dnsserver": "8.8.8.8", "dnszoneprefix": "ceph-pub.internal"},
+                {"subnet": "172.16.0.0/24", "vnet": "vnet-ceph-cluster", "gateway": "172.16.0.1", "dnsserver": "8.8.8.8", "dnszoneprefix": "ceph-cluster.internal"},
+            ],
+        }
+
+    # Level 5
+    return {
+        "zones": [
+            {"zone": "zone-prod", "type": "vlan", "nodes": "prod-1 prod-2 prod-3 prod-4 prod-5"},
+            {"zone": "zone-storage", "type": "vxlan", "nodes": "prod-1 prod-2 prod-3 prod-4 prod-5"},
+            {"zone": "zone-mgmt", "type": "vlan", "nodes": "prod-1 prod-2 prod-3 prod-4 prod-5"},
+        ],
+        "vnets": [
+            {"vnet": "vnet-k8s-prod", "zone": "zone-prod", "type": "vlan", "vlan": 100},
+            {"vnet": "vnet-db-primary", "zone": "zone-prod", "type": "vlan", "vlan": 110},
+            {"vnet": "vnet-db-replica", "zone": "zone-prod", "type": "vlan", "vlan": 111},
+            {"vnet": "vnet-app-api", "zone": "zone-prod", "type": "vlan", "vlan": 120},
+            {"vnet": "vnet-ceph-public", "zone": "zone-storage", "type": "vxlan", "vlan": None},
+            {"vnet": "vnet-mgmt", "zone": "zone-mgmt", "type": "vlan", "vlan": 1},
+        ],
+        "subnets": [
+            {"subnet": "10.100.0.0/24", "vnet": "vnet-k8s-prod", "gateway": "10.100.0.1", "dnsserver": "8.8.8.8", "dnszoneprefix": "k8s-prod.internal"},
+            {"subnet": "10.110.0.0/24", "vnet": "vnet-db-primary", "gateway": "10.110.0.1", "dnsserver": "8.8.8.8", "dnszoneprefix": "db-prim.internal"},
+            {"subnet": "10.111.0.0/24", "vnet": "vnet-db-replica", "gateway": "10.111.0.1", "dnsserver": "8.8.8.8", "dnszoneprefix": "db-repl.internal"},
+            {"subnet": "10.120.0.0/24", "vnet": "vnet-app-api", "gateway": "10.120.0.1", "dnsserver": "8.8.8.8", "dnszoneprefix": "api.internal"},
+            {"subnet": "10.200.0.0/24", "vnet": "vnet-ceph-public", "gateway": "10.200.0.1", "dnsserver": "8.8.8.8", "dnszoneprefix": "ceph.internal"},
+            {"subnet": "192.168.99.0/24", "vnet": "vnet-mgmt", "gateway": "192.168.99.1", "dnsserver": "8.8.8.8", "dnszoneprefix": "mgmt.internal"},
+        ],
+    }
+
+
 # ============================================================
 # 磁盘设备生成器
 # ============================================================
@@ -1142,7 +1214,7 @@ def do_upload(token, levels=None, num_scans=7):
                 "pve_password": f"fake-password-{node['name']}",
                 "hostname": node["name"],
                 "scan_interval": 300,
-                "version": f"0.5.11",
+                "version": f"0.6.0",
             })
             if reg_status == 201:
                 aid = reg_resp["agent_id"]
@@ -1154,7 +1226,7 @@ def do_upload(token, levels=None, num_scans=7):
         # 3. 发送心跳
         for aid in agent_ids:
             api_request("/api/agent/heartbeat/", "POST", {
-                "agent_id": aid, "status": "online", "version": "0.5.11"
+                "agent_id": aid, "status": "online", "version": "0.6.0"
             })
 
         # 4. 上传扫描数据（多轮，模拟历史趋势）
@@ -1169,7 +1241,7 @@ def do_upload(token, levels=None, num_scans=7):
 
             # 为每轮扫描添加随机波动
             scan_payload = _build_scan_payload(
-                cluster_id, agent_ids, data, scan_time, scan_idx, num_scans
+                cluster_id, agent_ids, data, scan_time, scan_idx, num_scans, level
             )
 
             # 选择第一个 Agent 上传（模拟单 Agent 上报）
@@ -1201,7 +1273,7 @@ def do_upload(token, levels=None, num_scans=7):
     print()
 
 
-def _build_scan_payload(cluster_id, agent_ids, data, scan_time, scan_idx, total_scans):
+def _build_scan_payload(cluster_id, agent_ids, data, scan_time, scan_idx, total_scans, level=1):
     """构建扫描上传 payload，带真实波动模式
 
     波动策略:
@@ -1298,6 +1370,7 @@ def _build_scan_payload(cluster_id, agent_ids, data, scan_time, scan_idx, total_
         "nodes": nodes_out,
         "ceph": data.get("ceph"),
         "ha_resources": data.get("ha_resources", []),
+        "sdn": _gen_sdn_data(level),
     }
     return payload
 

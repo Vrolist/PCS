@@ -211,6 +211,7 @@ class ScanUploadView(APIView):
         nodes_data = d["nodes"]
         ceph_data = d.get("ceph")
         ha_data = d.get("ha_resources", [])
+        sdn_data = d.get("sdn", {})
 
         # 创建扫描任务记录
         # raw_data 需要序列化为 JSON 兼容格式（datetime → str）
@@ -234,6 +235,8 @@ class ScanUploadView(APIView):
                     self._save_ceph(cluster, scan_task, ceph_data, scanned_at)
                 if ha_data:
                     self._save_ha(cluster, scan_task, ha_data, scanned_at)
+                if sdn_data:
+                    self._save_sdn(cluster, scan_task, sdn_data, scanned_at)
                 self._save_scan_history(cluster, scan_task, nodes_data, scanned_at)
                 self._update_cluster_stats(cluster, nodes_data)
 
@@ -283,12 +286,15 @@ class ScanUploadView(APIView):
         cutoff_30d = now - timedelta(days=30)
         total = 0
 
-        # 7 天保留：节点/存储/网络/Ceph 快照
+        # 7 天保留：节点/存储/网络/Ceph/SDN 快照
         for qs in [
             ClusterNode.objects.filter(cluster=cluster, scanned_at__lt=cutoff_7d),
             Storage.objects.filter(node__cluster=cluster, scanned_at__lt=cutoff_7d),
             NetworkInterface.objects.filter(node__cluster=cluster, scanned_at__lt=cutoff_7d),
             CephStatus.objects.filter(cluster=cluster, scanned_at__lt=cutoff_7d),
+            SDNZone.objects.filter(cluster=cluster, scanned_at__lt=cutoff_7d),
+            SDNVNet.objects.filter(cluster=cluster, scanned_at__lt=cutoff_7d),
+            SDNSubnet.objects.filter(cluster=cluster, scanned_at__lt=cutoff_7d),
         ]:
             count, _ = qs.delete()
             total += count
