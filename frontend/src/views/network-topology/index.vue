@@ -29,7 +29,7 @@
           @mousemove="onMouseMove" @mouseup="onMouseUp" @mouseleave="onMouseUp"
           @wheel.prevent="onWheel">
           <!-- 网络段色带 -->
-          <g class="segment-bands">
+          <g v-if="showSegments" class="segment-bands">
             <g v-for="seg in networkSegments" :key="'seg-' + seg.cidr"
               :transform="`translate(${segmentOffsetsX[seg.cidr] || 0}, ${segmentOffsets[seg.cidr] || 0})`"
               style="cursor: grab"
@@ -73,13 +73,31 @@
             <text v-if="iface.address" :x="ifaceWidth / 2" y="41" text-anchor="middle" class="iface-ip">{{ iface.address.split('/')[0] }}</text>
             <circle :cx="ifaceWidth - 8" cy="8" r="4" :fill="iface.status === 'up' ? '#67c23a' : '#f56c6c'" />
           </g>
+          <!-- IP 网段图层 -->
+          <g v-if="showSubnetLayer" class="subnet-bands">
+            <g v-for="sub in subnetSegments" :key="'sub-' + sub.cidr"
+              :transform="`translate(${subnetOffsetsX[sub.cidr] || 0}, ${subnetOffsets[sub.cidr] || 0})`"
+              style="cursor: grab"
+              @mousedown.prevent="onSubnetMouseDown($event, sub.cidr)">
+              <rect :x="sub.bounds.x" :y="sub.bounds.y"
+                :width="sub.bounds.width" :height="sub.bounds.height"
+                :fill="sub.fillColor" :stroke="sub.strokeColor"
+                stroke-width="1" rx="8" stroke-dasharray="6,3" />
+            </g>
+          </g>
           <!-- 段标签（在接口之后渲染，确保不被遮挡） -->
           <g class="segment-labels">
-            <g v-for="seg in networkSegments" :key="'label-' + seg.cidr"
+            <g v-if="showSegments" v-for="seg in networkSegments" :key="'label-' + seg.cidr"
               :transform="`translate(${segmentOffsetsX[seg.cidr] || 0}, ${segmentOffsets[seg.cidr] || 0})`">
               <text :x="seg.bounds.x + seg.bounds.width / 2" :y="seg.bounds.y + 10"
                 text-anchor="middle" class="segment-label" :fill="seg.labelColor">
                 {{ seg.label }}
+              </text>
+            </g>
+            <g v-if="showSubnetLayer" v-for="sub in subnetSegments" :key="'sublabel-' + sub.cidr">
+              <text :x="sub.bounds.x + sub.bounds.width / 2" :y="sub.bounds.y + sub.bounds.height - 6"
+                text-anchor="middle" class="subnet-label" :fill="sub.labelColor">
+                {{ sub.label }}
               </text>
             </g>
           </g>
@@ -91,7 +109,13 @@
     <div class="legend-bar">
       <!-- 左侧：不可隐藏的静态项 -->
       <span class="legend-item legend-static"><span class="legend-dot" style="background:#4f46e5"></span>{{ t('networkTopology.legendNode') }}</span>
-      <span class="legend-item legend-static"><span class="legend-band"></span>{{ t('networkTopology.legendSegment') }}</span>
+      <span class="legend-item" :class="{ 'is-hidden': !showSegments }" @click="showSegments = !showSegments">
+        <span class="legend-band"></span>{{ t('networkTopology.legendSegment') }}
+      </span>
+      <span class="legend-item legend-sep"></span>
+      <span class="legend-item" :class="{ 'is-hidden': !showSubnetLayer }" @click="showSubnetLayer = !showSubnetLayer">
+        <span class="legend-dot" style="background: #f97316"></span>{{ t('networkTopology.legendSubnet') }}
+      </span>
       <span class="legend-item legend-sep"></span>
       <!-- 中间：当前集群存在、可点击过滤 -->
       <template v-for="item in legendItems" :key="item.type">
@@ -124,6 +148,9 @@ const clusterStore = useClusterStore()
 
 const loading = ref(true)
 const topologyData = ref<NetworkInterface[]>([])
+// 网络段分组 / IP 网段图层开关
+const showSegments = ref(true)
+const showSubnetLayer = ref(false)
 // 图例过滤：点击可隐藏/显示某类接口
 const hiddenTypes = ref(new Set<string>())
 const legendItems = computed(() => [
@@ -167,6 +194,9 @@ const segmentDragStartX = ref(0)
 const segmentDragStartY = ref(0)
 const segmentDragBaseOffsetX = ref(0)
 const segmentDragBaseOffset = ref(0)
+// 子网段拖动
+const subnetOffsets = ref<Record<string, number>>({})
+const subnetOffsetsX = ref<Record<string, number>>({})
 
 // 缩放状态
 const scale = ref(1)
@@ -185,7 +215,7 @@ const filteredData = computed(() => {
 })
 
 // 集群切换或图例过滤时重新布局
-watch(filteredData, () => { segmentOffsets.value = {}; segmentOffsetsX.value = {}; initPositions() })
+watch(filteredData, () => { segmentOffsets.value = {}; segmentOffsetsX.value = {}; subnetOffsets.value = {}; subnetOffsetsX.value = {}; initPositions() })
 watch(hiddenTypes, () => { initPositions() }, { deep: true })
 
 const nodeFill = 'var(--bg-card, #fff)'
@@ -507,6 +537,75 @@ const networkSegments = computed<NetworkSegment[]>(() => {
   return segments
 })
 
+// ── IP 网段分组图层 ──
+interface SubnetSegment {
+  cidr: string
+  label: string
+  fillColor: string
+  strokeColor: string
+  labelColor: string
+  bounds: SegmentBounds
+}
+
+/** 网段配色（暖色系，与层级冷色形成对比） */
+const subnetColors: Record<string, { fill: string; stroke: string; label: string }> = {
+  '192.168': { fill: 'rgba(249, 115, 22, 0.06)',  stroke: 'rgba(249, 115, 22, 0.30)',  label: 'rgba(249, 115, 22, 0.85)' },
+  '10':      { fill: 'rgba(236, 72, 153, 0.06)',  stroke: 'rgba(236, 72, 153, 0.30)',  label: 'rgba(236, 72, 153, 0.85)' },
+  '172':     { fill: 'rgba(168, 85, 247, 0.06)',  stroke: 'rgba(168, 85, 247, 0.30)',  label: 'rgba(168, 85, 247, 0.85)' },
+}
+
+const subnetSegments = computed<SubnetSegment[]>(() => {
+  if (!showSubnetLayer.value) return []
+  const allIfaces = interfacePositions.value
+  if (!allIfaces.length) return []
+
+  // 按 CIDR 分组, 使用视觉位置（补偿 segment 偏移）
+  const cidrMap = new Map<string, { iface: IfacePos; vx: number; vy: number }[]>()
+  allIfaces.forEach(iface => {
+    if (!iface.address) return
+    const cidr = toNetworkCidr(iface.address)
+    if (!cidr) return
+    const vx = iface.x + getIfaceSegOffsetX(iface)
+    const vy = iface.y + getIfaceSegOffset(iface)
+    if (!cidrMap.has(cidr)) cidrMap.set(cidr, [])
+    cidrMap.get(cidr)!.push({ iface, vx, vy })
+  })
+
+  const padding = 16
+  const segments: SubnetSegment[] = []
+  let colorIdx = 0
+  const warmColors = Object.values(subnetColors)
+
+  cidrMap.forEach((group, cidr) => {
+    // 只显示跨 ≥2 个节点的网段
+    const nodeNames = new Set(group.map(i => i.iface.node_name))
+    if (nodeNames.size < 2) return
+
+    const minX = Math.min(...group.map(i => i.vx)) - padding
+    const maxX = Math.max(...group.map(i => i.vx)) + ifaceWidth + padding
+    const minY = Math.min(...group.map(i => i.vy)) - padding
+    const maxY = Math.max(...group.map(i => i.vy)) + ifaceHeight + padding
+    const width = maxX - minX
+    const height = maxY - minY
+
+    // 根据网段前缀选色
+    const prefix = cidr.split('.')[0]
+    const colors = subnetColors[prefix] || warmColors[colorIdx % warmColors.length]
+    colorIdx++
+
+    segments.push({
+      cidr,
+      label: cidr,
+      fillColor: colors.fill,
+      strokeColor: colors.stroke,
+      labelColor: colors.label,
+      bounds: { x: minX, y: minY, width, height },
+    })
+  })
+
+  return segments
+})
+
 /** 查找接口所属的 bond 父级名称（模板用） */
 function getIfaceBondOwner(iface: IfacePos): string {
   const owner = interfacePositions.value.find(
@@ -542,6 +641,16 @@ function onCanvasMouseDown(e: MouseEvent) {
   dragOffset.y = e.clientY
 }
 
+// 子网段色带拖动
+function onSubnetMouseDown(e: MouseEvent, cidr: string) {
+  dragType.value = 'segment'
+  draggingId.value = 'sub:' + cidr
+  segmentDragStartX.value = e.clientX
+  segmentDragStartY.value = e.clientY
+  segmentDragBaseOffsetX.value = subnetOffsetsX.value[cidr] || 0
+  segmentDragBaseOffset.value = subnetOffsets.value[cidr] || 0
+}
+
 // 段色带拖动
 function onSegmentMouseDown(e: MouseEvent, segCidr: string) {
   dragType.value = 'segment'
@@ -573,9 +682,15 @@ function onMouseMove(e: MouseEvent) {
   } else if (dragType.value === 'segment') {
     const dx = e.clientX - segmentDragStartX.value
     const dy = e.clientY - segmentDragStartY.value
-    const cidr = draggingId.value as string
-    segmentOffsetsX.value = { ...segmentOffsetsX.value, [cidr]: segmentDragBaseOffsetX.value + dx }
-    segmentOffsets.value = { ...segmentOffsets.value, [cidr]: segmentDragBaseOffset.value + dy }
+    const id = draggingId.value as string
+    if (id.startsWith('sub:')) {
+      const cidr = id.slice(4)
+      subnetOffsetsX.value = { ...subnetOffsetsX.value, [cidr]: segmentDragBaseOffsetX.value + dx }
+      subnetOffsets.value = { ...subnetOffsets.value, [cidr]: segmentDragBaseOffset.value + dy }
+    } else {
+      segmentOffsetsX.value = { ...segmentOffsetsX.value, [id]: segmentDragBaseOffsetX.value + dx }
+      segmentOffsets.value = { ...segmentOffsets.value, [id]: segmentDragBaseOffset.value + dy }
+    }
   }
 }
 
@@ -601,6 +716,8 @@ function zoomOut() {
 function resetView() {
   scale.value = 1
   segmentOffsets.value = {}
+  subnetOffsets.value = {}
+  subnetOffsetsX.value = {}
   initPositions()
 }
 
@@ -735,6 +852,7 @@ watch(() => clusterStore.currentClusterId, () => { initPositions() })
 .legend-item:hover { background: rgba(64,158,255,.06); }
 .legend-item.is-hidden { opacity: .4; }
 .legend-item.is-hidden .legend-dot { background: #c0c4cc !important; }
+.legend-item.is-hidden .legend-band { opacity: .3; }
 .legend-item.is-hidden .legend-dot::after { content: ''; position: absolute; width: 12px; height: 1.5px; background: #c0c4cc; transform: rotate(-45deg); top: 4.25px; left: -1px; }
 .legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; position: relative; transition: all .2s; }
 .legend-sep { width: 1px; height: 16px; background: var(--border-color); padding: 0; cursor: default; }
@@ -747,4 +865,5 @@ watch(() => clusterStore.currentClusterId, () => { initPositions() })
   background: repeating-linear-gradient(45deg, rgba(103,194,58,0.15), rgba(103,194,58,0.15) 2px, rgba(103,194,58,0.3) 2px, rgba(103,194,58,0.3) 4px);
   border: 1px dashed rgba(103,194,58,0.5); }
 .segment-label { font-size: 10px; font-weight: 600; }
+.subnet-label { font-size: 10px; font-weight: 700; }
 </style>

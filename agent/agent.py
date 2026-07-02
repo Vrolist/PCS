@@ -37,7 +37,7 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-VERSION = "0.5.11"
+VERSION = "0.6.0"
 
 # 路径常量
 INSTALL_DIR = Path("/opt/pcs-agent")
@@ -228,6 +228,24 @@ class PVEClient:
         except Exception:
             return []
 
+    def get_sdn_zones(self):
+        try:
+            return self.get("/cluster/sdn/zones")
+        except Exception:
+            return []
+
+    def get_sdn_vnets(self):
+        try:
+            return self.get("/cluster/sdn/vnets")
+        except Exception:
+            return []
+
+    def get_sdn_subnets(self):
+        try:
+            return self.get("/cluster/sdn/subnets")
+        except Exception:
+            return []
+
 
 # ============================================================
 # 数据采集
@@ -260,6 +278,7 @@ def scan_full(pve):
 
     ceph = pve.get_ceph_status()
     ha_resources = _scan_ha(pve)
+    sdn = _scan_sdn(pve)
 
     return {
         "scanned_at": datetime.now(timezone.utc).isoformat(),
@@ -267,6 +286,7 @@ def scan_full(pve):
         "nodes": nodes_data,
         "ceph": ceph,
         "ha_resources": ha_resources,
+        "sdn": sdn,
     }
 
 
@@ -583,6 +603,15 @@ def _scan_ha(pve):
             "raw": r,
         })
     return result
+
+
+def _scan_sdn(pve):
+    """扫描 SDN 虚拟网络"""
+    return {
+        "zones": pve.get_sdn_zones() or [],
+        "vnets": pve.get_sdn_vnets() or [],
+        "subnets": pve.get_sdn_subnets() or [],
+    }
 
 
 # ============================================================

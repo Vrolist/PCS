@@ -13,4 +13,7 @@ urlpatterns = [
     path("networks/", views.NetworkInterfaceListView.as_view(), name="scanner-networks"),
     path("ceph/", views.CephStatusView.as_view(), name="scanner-ceph"),
     path("ha/", views.HAListView.as_view(), name="scanner-ha"),
+    path("sdn/zones/", views.SDNZoneListView.as_view(), name="scanner-sdn-zones"),
+    path("sdn/vnets/", views.SDNVNetListView.as_view(), name="scanner-sdn-vnets"),
+    path("sdn/subnets/", views.SDNSubnetListView.as_view(), name="scanner-sdn-subnets"),
 ]

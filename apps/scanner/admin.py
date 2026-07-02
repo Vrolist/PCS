@@ -1,7 +1,8 @@
 from django.contrib import admin
 
 from .models import (ClusterNode, VM, LXC, Storage, NetworkInterface,
-                     CephStatus, ScanHistory, DetectionRule, DetectionResult)
+                     CephStatus, ScanHistory, DetectionRule, DetectionResult,
+                     SDNZone, SDNVNet, SDNSubnet)
 
 
 @admin.register(ClusterNode)
@@ -63,3 +64,24 @@ class DetectionResultAdmin(admin.ModelAdmin):
     list_display = ['title', 'cluster', 'category', 'severity',
                     'affected_resource', 'is_resolved', 'created_at']
     list_filter = ['category', 'severity', 'is_resolved']
+
+
+@admin.register(SDNZone)
+class SDNZoneAdmin(admin.ModelAdmin):
+    list_display = ['zone', 'zone_type', 'cluster', 'nodes', 'scanned_at']
+    list_filter = ['zone_type']
+    search_fields = ['zone', 'cluster__name']
+
+
+@admin.register(SDNVNet)
+class SDNVNetAdmin(admin.ModelAdmin):
+    list_display = ['vnet', 'vnet_type', 'zone', 'vlan', 'cluster', 'scanned_at']
+    list_filter = ['vnet_type']
+    search_fields = ['vnet', 'zone__zone']
+
+
+@admin.register(SDNSubnet)
+class SDNSubnetAdmin(admin.ModelAdmin):
+    list_display = ['subnet', 'vnet', 'gateway', 'dns_server', 'cluster', 'scanned_at']
+    list_filter = []
+    search_fields = ['subnet', 'vnet__vnet']

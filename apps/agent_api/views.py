@@ -21,6 +21,9 @@ from apps.scanner.models import (
     LXC,
     NetworkInterface,
     ScanHistory,
+    SDNZone,
+    SDNVNet,
+    SDNSubnet,
     Storage,
     VM,
     VMConfig,
@@ -508,6 +511,56 @@ class ScanUploadView(APIView):
                 scanned_at=scanned_at,
             )
 
+    def _save_sdn(self, cluster, scan_task, sdn_data, scanned_at):
+        """保存 SDN 虚拟网络数据"""
+        zone_map = {}
+        for z in sdn_data.get("zones", []):
+            zone, _ = SDNZone.objects.update_or_create(
+                cluster=cluster,
+                zone=z.get("zone", ""),
+                defaults=dict(
+                    scan=scan_task,
+                    zone_type=z.get("type", ""),
+                    nodes=z.get("nodes", ""),
+                    raw_data=z,
+                    scanned_at=scanned_at,
+                ),
+            )
+            zone_map[z.get("zone", "")] = zone
+
+        for v in sdn_data.get("vnets", []):
+            SDNVNet.objects.update_or_create(
+                cluster=cluster,
+                vnet=v.get("vnet", ""),
+                defaults=dict(
+                    scan=scan_task,
+                    zone=zone_map.get(v.get("zone", "")),
+                    vnet_type=v.get("type", ""),
+                    vlan=v.get("vlan"),
+                    zone_name=v.get("zone", ""),
+                    raw_data=v,
+                    scanned_at=scanned_at,
+                ),
+            )
+
+        for s in sdn_data.get("subnets", []):
+            vnet_name = s.get("vnet", "")
+            vnet_obj = SDNVNet.objects.filter(cluster=cluster, vnet=vnet_name).first() if vnet_name else None
+            SDNSubnet.objects.update_or_create(
+                cluster=cluster,
+                subnet=s.get("subnet", ""),
+                defaults=dict(
+                    scan=scan_task,
+                    vnet=vnet_obj,
+                    vnet_name=vnet_name,
+                    gateway=s.get("gateway", ""),
+                    dns_server=s.get("dnsserver", ""),
+                    dns_zone_prefix=s.get("dnszoneprefix", ""),
+                    raw_data=s,
+                    scanned_at=scanned_at,
+                ),
+            )
+
     def _save_scan_history(self, cluster, scan_task, nodes_data, scanned_at):
         """保存扫描历史快照"""
         total_vms = sum(len(n.get("vms", [])) for n in nodes_data)
@@ -579,9 +632,9 @@ class AgentTasksView(APIView):
 # Agent 版本常量（平台侧维护）
 # ============================================================
 
-AGENT_LATEST_VERSION = "0.5.11"
+AGENT_LATEST_VERSION = "0.6.0"
 AGENT_DOWNLOAD_URL = "/api/agent/install.sh"  # 从平台下载
-AGENT_CHANGELOG = "v0.5.11: 测试自动更新流程"
+AGENT_CHANGELOG = "v0.6.0: 支持 SDN 虚拟网络数据采集"
 
 
 class AgentUnregisterView(APIView):

@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.clusters.models import Cluster
-from .models import ClusterNode, VM, LXC, VMConfig, LXCConfig, HAResource, Storage, NetworkInterface, CephStatus
+from .models import ClusterNode, VM, LXC, VMConfig, LXCConfig, HAResource, Storage, NetworkInterface, CephStatus, SDNZone, SDNVNet, SDNSubnet
 
 
 def _user_cluster_ids(user):
@@ -72,6 +72,65 @@ class NodeListView(APIView):
             "is_ha_node": n.is_ha_node,
             "scanned_at": n.scanned_at,
         } for n in nodes]
+        return Response(data)
+
+
+class SDNZoneListView(APIView):
+    """GET /api/scanner/sdn/zones/ — SDN 区域列表"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        cluster_ids = _user_cluster_ids(request.user)
+        zones = SDNZone.objects.filter(cluster_id__in=cluster_ids).select_related("cluster")
+        data = [{
+            "id": z.id,
+            "zone": z.zone,
+            "zone_type": z.zone_type,
+            "nodes": z.nodes,
+            "cluster_name": z.cluster.name,
+            "scanned_at": z.scanned_at,
+        } for z in zones]
+        return Response(data)
+
+
+class SDNVNetListView(APIView):
+    """GET /api/scanner/sdn/vnets/ — SDN 虚拟网络列表"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        cluster_ids = _user_cluster_ids(request.user)
+        vnets = SDNVNet.objects.filter(cluster_id__in=cluster_ids).select_related("cluster", "zone")
+        data = [{
+            "id": v.id,
+            "vnet": v.vnet,
+            "vnet_type": v.vnet_type,
+            "vlan": v.vlan,
+            "zone_name": v.zone_name,
+            "zone": v.zone.zone if v.zone else "",
+            "cluster_name": v.cluster.name,
+            "scanned_at": v.scanned_at,
+        } for v in vnets]
+        return Response(data)
+
+
+class SDNSubnetListView(APIView):
+    """GET /api/scanner/sdn/subnets/ — SDN 子网列表"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        cluster_ids = _user_cluster_ids(request.user)
+        subnets = SDNSubnet.objects.filter(cluster_id__in=cluster_ids).select_related("cluster", "vnet")
+        data = [{
+            "id": s.id,
+            "subnet": s.subnet,
+            "vnet_name": s.vnet_name,
+            "vnet": s.vnet.vnet if s.vnet else "",
+            "gateway": s.gateway,
+            "dns_server": s.dns_server,
+            "dns_zone_prefix": s.dns_zone_prefix,
+            "cluster_name": s.cluster.name,
+            "scanned_at": s.scanned_at,
+        } for s in subnets]
         return Response(data)
 
 

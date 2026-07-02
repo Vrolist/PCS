@@ -374,6 +374,82 @@ class HAResource(models.Model):
         return f"{self.sid} ({self.state})"
 
 
+class SDNZone(models.Model):
+    """SDN 区域"""
+    cluster = models.ForeignKey(Cluster, on_delete=models.CASCADE, verbose_name="所属集群",
+                                related_name="sdn_zones")
+    scan = models.ForeignKey(ScanTask, on_delete=models.SET_NULL, null=True, blank=True)
+
+    zone = models.CharField("区域名", max_length=64, db_index=True)
+    zone_type = models.CharField("类型", max_length=32, blank=True, help_text="vlan / vxlan / qinq / ...")
+    nodes = models.CharField("节点", max_length=256, blank=True, help_text="关联节点列表")
+
+    raw_data = models.JSONField("原始数据", default=dict, blank=True)
+    scanned_at = models.DateTimeField("扫描时间", db_index=True)
+
+    class Meta:
+        verbose_name = "SDN区域"
+        verbose_name_plural = "SDN区域"
+        unique_together = ("cluster", "zone")
+        ordering = ["zone"]
+
+    def __str__(self):
+        return self.zone
+
+
+class SDNVNet(models.Model):
+    """SDN 虚拟网络"""
+    cluster = models.ForeignKey(Cluster, on_delete=models.CASCADE, verbose_name="所属集群",
+                                related_name="sdn_vnets")
+    zone = models.ForeignKey(SDNZone, on_delete=models.SET_NULL, null=True, blank=True,
+                             verbose_name="所属区域", related_name="vnets")
+    scan = models.ForeignKey(ScanTask, on_delete=models.SET_NULL, null=True, blank=True)
+
+    vnet = models.CharField("虚拟网络名", max_length=64, db_index=True)
+    vnet_type = models.CharField("类型", max_length=32, blank=True, help_text="vlan / vxlan / ...")
+    vlan = models.IntegerField("VLAN ID", null=True, blank=True)
+    zone_name = models.CharField("区域名", max_length=64, blank=True)
+
+    raw_data = models.JSONField("原始数据", default=dict, blank=True)
+    scanned_at = models.DateTimeField("扫描时间", db_index=True)
+
+    class Meta:
+        verbose_name = "SDN虚拟网络"
+        verbose_name_plural = "SDN虚拟网络"
+        unique_together = ("cluster", "vnet")
+        ordering = ["vnet"]
+
+    def __str__(self):
+        return self.vnet
+
+
+class SDNSubnet(models.Model):
+    """SDN 子网"""
+    cluster = models.ForeignKey(Cluster, on_delete=models.CASCADE, verbose_name="所属集群",
+                                related_name="sdn_subnets")
+    vnet = models.ForeignKey(SDNVNet, on_delete=models.SET_NULL, null=True, blank=True,
+                             verbose_name="所属虚拟网络", related_name="subnets")
+    scan = models.ForeignKey(ScanTask, on_delete=models.SET_NULL, null=True, blank=True)
+
+    subnet = models.CharField("子网", max_length=64, help_text="10.0.0.0/24")
+    vnet_name = models.CharField("虚拟网络名", max_length=64, blank=True)
+    gateway = models.CharField("网关", max_length=64, blank=True)
+    dns_server = models.CharField("DNS服务器", max_length=128, blank=True)
+    dns_zone_prefix = models.CharField("DNS区域前缀", max_length=128, blank=True)
+
+    raw_data = models.JSONField("原始数据", default=dict, blank=True)
+    scanned_at = models.DateTimeField("扫描时间", db_index=True)
+
+    class Meta:
+        verbose_name = "SDN子网"
+        verbose_name_plural = "SDN子网"
+        unique_together = ("cluster", "subnet")
+        ordering = ["subnet"]
+
+    def __str__(self):
+        return self.subnet
+
+
 class ScanHistory(models.Model):
     """每次扫描的快照汇总（用于趋势图表）"""
     cluster = models.ForeignKey(Cluster, on_delete=models.CASCADE, verbose_name="所属集群",
