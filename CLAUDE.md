@@ -15,8 +15,8 @@ pve-cluster-scan/
 │   │   ├── templatetags/
 │   │   │   └── vite_tags.py       # - vite_asset（生产模式 manifest 查找）
 │   │   └── views.py
-│   ├── accounts/           # 用户认证 & 套餐管理 & 操作日志
-│   │   ├── models.py       #   - User / Plan / UserPlan / PasswordResetCode / UserLog
+│   ├── accounts/           # 用户认证 & 操作日志
+│   │   ├── models.py       #   - User / PasswordResetCode / UserLog
 │   │   ├── serializers.py  #   - Login / Register / User / PasswordReset
 │   │   ├── views.py        #   - 登录 / 注册 / 用户信息 / 密码重置 / 操作日志列表
 │   │   ├── urls.py         #   - /api/auth/ 路由（含 logs/）
@@ -506,8 +506,6 @@ GET /api/scanner/containers/1/detail/
 ### accounts (用户认证)
 - **User** - 自定义用户（继承 AbstractUser，含 phone/company）
 - **PasswordResetCode** - 密码重置验证码（含过期时间、已使用标记）
-- **Plan** - 套餐体系 Free/Pro/Enterprise
-- **UserPlan** - 用户订阅关系
 - **UserLog** - 操作日志（记录用户的登录/注册/CRUD/改密等操作）
 
 ### clusters (集群管理)

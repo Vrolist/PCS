@@ -2,9 +2,7 @@
 
 import django.contrib.auth.models
 import django.contrib.auth.validators
-import django.db.models.deletion
 import django.utils.timezone
-from django.conf import settings
 from django.db import migrations, models
 
 
@@ -17,31 +15,6 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.CreateModel(
-            name='Plan',
-            fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=64, verbose_name='套餐名称')),
-                ('code', models.SlugField(help_text='free / pro / enterprise', unique=True, verbose_name='标识符')),
-                ('price_monthly', models.DecimalField(decimal_places=2, default=0, max_digits=8, verbose_name='月费(元)')),
-                ('price_yearly', models.DecimalField(decimal_places=2, default=0, max_digits=8, verbose_name='年费(元)')),
-                ('max_clusters', models.IntegerField(default=1, verbose_name='最大集群数')),
-                ('max_nodes_per_cluster', models.IntegerField(default=10, verbose_name='每集群最大节点数')),
-                ('scan_interval_minutes', models.IntegerField(default=60, verbose_name='Agent扫描间隔(分钟)')),
-                ('retention_days', models.IntegerField(default=30, verbose_name='数据保留天数')),
-                ('max_agents_per_cluster', models.IntegerField(default=1, verbose_name='每集群最大Agent数')),
-                ('features', models.JSONField(blank=True, default=dict, help_text='{"ceph_monitor": true, "security_scan": false, "auto_repair": false}', verbose_name='功能开关')),
-                ('is_active', models.BooleanField(default=True, verbose_name='启用')),
-                ('sort_order', models.IntegerField(default=0, verbose_name='排序')),
-                ('description', models.TextField(blank=True, verbose_name='描述')),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-            ],
-            options={
-                'verbose_name': '套餐',
-                'verbose_name_plural': '套餐',
-                'ordering': ['sort_order'],
-            },
-        ),
         migrations.CreateModel(
             name='User',
             fields=[
@@ -69,23 +42,5 @@ class Migration(migrations.Migration):
             managers=[
                 ('objects', django.contrib.auth.models.UserManager()),
             ],
-        ),
-        migrations.CreateModel(
-            name='UserPlan',
-            fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('start_date', models.DateField(auto_now_add=True, verbose_name='开始日期')),
-                ('end_date', models.DateField(verbose_name='结束日期')),
-                ('is_active', models.BooleanField(default=True, verbose_name='有效')),
-                ('auto_renew', models.BooleanField(default=False, verbose_name='自动续费')),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('plan', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to='accounts.plan', verbose_name='套餐')),
-                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='plans', to=settings.AUTH_USER_MODEL, verbose_name='用户')),
-            ],
-            options={
-                'verbose_name': '用户订阅',
-                'verbose_name_plural': '用户订阅',
-            },
         ),
     ]
