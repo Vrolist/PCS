@@ -6,11 +6,6 @@
         <p class="page-desc">{{ t('alerts.subtitle') }}</p>
       </div>
     </div>
-    <div class="filter-bar">
-      <el-select v-model="clusterFilter" :placeholder="t('alerts.selectCluster')" clearable style="width: 180px" @change="fetchData">
-        <el-option v-for="c in clusterList" :key="c.id" :label="c.name" :value="c.id" />
-      </el-select>
-    </div>
     <el-card shadow="hover">
       <el-table :data="alerts" style="width: 100%" stripe v-loading="loading">
         <el-table-column prop="title" :label="t('alerts.alertTitle')" min-width="200" />
@@ -35,34 +30,30 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getDashboardAlerts, type DashboardAlert } from '@/api/dashboard'
-import { getClusters, type Cluster } from '@/api/clusters'
+import { useClusterStore } from '@/stores/cluster'
 
 const { t } = useI18n()
+const clusterStore = useClusterStore()
 
 const loading = ref(true)
 const alerts = ref<DashboardAlert[]>([])
-const clusterFilter = ref<number | ''>('')
-const clusterList = ref<Cluster[]>([])
 
 async function fetchData() {
   loading.value = true
   try {
-    alerts.value = await getDashboardAlerts(50, clusterFilter.value || undefined)
+    alerts.value = await getDashboardAlerts(50, clusterStore.currentClusterId || undefined)
   } catch {} finally { loading.value = false }
 }
 
 onMounted(async () => {
-  try {
-    const res = await getClusters()
-    clusterList.value = res.results
-    if (clusterList.value.length) clusterFilter.value = clusterList.value[0].id
-  } catch {} finally {
-    fetchData()
-  }
+  if (!clusterStore.clusterList.length) await clusterStore.fetchClusters()
+  fetchData()
 })
+
+watch(() => clusterStore.currentClusterId, () => { fetchData() })
 
 function formatTime(t: string) {
   if (!t) return '-'
@@ -75,7 +66,6 @@ function formatTime(t: string) {
 .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .page-title { font-size: 24px; font-weight: 700; color: var(--text-heading); margin: 0; }
 .page-desc { font-size: 14px; color: var(--text-muted); margin: 4px 0 0; }
-.filter-bar { margin-bottom: 16px; display: flex; gap: 12px; }
 :deep(.el-table) { background: transparent; --el-table-bg-color: transparent; --el-table-tr-bg-color: transparent; --el-table-header-bg-color: transparent; --el-table-border-color: var(--border-color); --el-table-text-color: var(--text-primary); --el-table-header-text-color: var(--text-secondary); }
 :deep(.el-table::before) { display: none; }
 :deep(.el-table th.el-table__cell) { background: transparent; }
