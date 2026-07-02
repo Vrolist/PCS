@@ -134,6 +134,48 @@
       <template #title><span>Ceph 存储</span></template>
     </el-menu-item>
 
+    <el-menu-item index="/dashboard/ha" class="sidebar-item">
+      <div class="item-icon-wrap">
+        <el-icon><Connection /></el-icon>
+      </div>
+      <template #title><span>HA</span></template>
+    </el-menu-item>
+
+    <el-menu-item index="/dashboard/sdn" class="sidebar-item">
+      <div class="item-icon-wrap">
+        <el-icon><Share /></el-icon>
+      </div>
+      <template #title><span>SDN</span></template>
+    </el-menu-item>
+
+    <el-menu-item index="/dashboard/firewall" class="sidebar-item">
+      <div class="item-icon-wrap">
+        <el-icon><Lock /></el-icon>
+      </div>
+      <template #title><span>Firewall</span></template>
+    </el-menu-item>
+
+    <el-menu-item index="/dashboard/backup" class="sidebar-item">
+      <div class="item-icon-wrap">
+        <el-icon><FolderOpened /></el-icon>
+      </div>
+      <template #title><span>Backup</span></template>
+    </el-menu-item>
+
+    <el-menu-item index="/dashboard/replication" class="sidebar-item">
+      <div class="item-icon-wrap">
+        <el-icon><CopyDocument /></el-icon>
+      </div>
+      <template #title><span>Replication</span></template>
+    </el-menu-item>
+
+    <el-menu-item index="/dashboard/snapshots" class="sidebar-item">
+      <div class="item-icon-wrap">
+        <el-icon><Camera /></el-icon>
+      </div>
+      <template #title><span>Snapshots</span></template>
+    </el-menu-item>
+
     <!-- 运维检测 -->
     <div class="menu-section">
       <span v-if="!appStore.sidebarCollapsed" class="menu-label">运维检测</span>
@@ -187,7 +229,7 @@ import { useRoute } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { useThemeStore } from '@/stores/theme'
 import { useClusterStore } from '@/stores/cluster'
-import { Monitor, Connection, Cpu, Box, Bell, Service, User, Document, Coin, Share } from '@element-plus/icons-vue'
+import { Monitor, Connection, Cpu, Box, Bell, Service, User, Document, Coin, Share, Lock, FolderOpened, CopyDocument, Camera } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const appStore = useAppStore()

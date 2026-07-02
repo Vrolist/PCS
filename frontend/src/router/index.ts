@@ -95,6 +95,42 @@ const routes: RouteRecordRaw[] = [
         meta: { title: 'Ceph 存储', icon: 'Box' },
       },
       {
+        path: 'ha',
+        name: 'HA',
+        component: () => import('@/views/ha/index.vue'),
+        meta: { title: 'HA 高可用', icon: 'Connection' },
+      },
+      {
+        path: 'sdn',
+        name: 'SDN',
+        component: () => import('@/views/sdn/index.vue'),
+        meta: { title: 'SDN', icon: 'Share' },
+      },
+      {
+        path: 'firewall',
+        name: 'Firewall',
+        component: () => import('@/views/firewall/index.vue'),
+        meta: { title: 'Firewall', icon: 'Lock' },
+      },
+      {
+        path: 'backup',
+        name: 'Backup',
+        component: () => import('@/views/backup/index.vue'),
+        meta: { title: 'Backup', icon: 'FolderOpened' },
+      },
+      {
+        path: 'replication',
+        name: 'Replication',
+        component: () => import('@/views/replication/index.vue'),
+        meta: { title: 'Replication', icon: 'CopyDocument' },
+      },
+      {
+        path: 'snapshots',
+        name: 'Snapshots',
+        component: () => import('@/views/snapshots/index.vue'),
+        meta: { title: 'Snapshots', icon: 'Camera' },
+      },
+      {
         path: 'alerts',
         name: 'Alerts',
         component: () => import('@/views/alerts/index.vue'),
