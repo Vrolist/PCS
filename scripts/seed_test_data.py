@@ -36,7 +36,7 @@ PASSWORD = "husongsxx"
 
 TEST_CLUSTER_PREFIX = "[TEST]"
 
-# CPU 型号池
+# CPU 型号池（区分 Intel / AMD，影响 cpu_type 选择）
 CPU_MODELS = [
     "Intel(R) Xeon(R) Platinum 8380 CPU @ 2.30GHz",
     "Intel(R) Xeon(R) Gold 6348 CPU @ 2.60GHz",
@@ -57,6 +57,17 @@ KERNEL_VERSIONS = [
     "6.11.11-1-pve",
     "6.5.13-3-pve",
 ]
+
+# 网络模型池（按常见度加权）
+NET_MODELS_WEIGHTED = ["virtio", "virtio", "virtio", "e1000", "rtl8139"]
+
+# OS 类型池
+OS_TYPES = ["l26", "l26", "l26", "l26", "other"]
+
+# 磁盘槽位候选
+SCSI_DISKS = ["scsi0", "scsi1", "scsi2", "scsi3"]
+IDE_DISKS = ["ide0", "ide1", "ide2", "ide3"]
+VIRTIO_DISKS = ["virtio0", "virtio1", "virtio2"]
 
 
 # ============================================================
@@ -121,16 +132,41 @@ def login():
 
 
 # ============================================================
-# 数据层级定义
+# 数据生成辅助函数
 # ============================================================
 
 def _rand_ip(base, suffix):
     return f"{base}.{suffix}"
 
 
+def _gen_eth(name, speed, ip=None, gateway=None):
+    """生成物理网卡 (eth) 网络接口条目"""
+    net = {
+        "name": name, "type": "eth", "active": True,
+        "method": "static" if ip else "manual",
+        "address": ip or "",
+        "gateway": gateway or "",
+        "speed_mbps": speed,
+        "mtu": 1500,
+    }
+    return net
+
+
+def _gen_mac(base_octets="BC:24:11", offset=0):
+    """基于基数 + 偏移生成 MAC 地址"""
+    o4 = (base_octets.split(":")[-1] if ":" in base_octets else "00")
+    mac_int = int(o4, 16) + offset
+    parts = base_octets.split(":")[:3]
+    parts.append(f"{mac_int:02X}")
+    parts.append(f"{random.randint(0, 255):02X}")
+    parts.append(f"{random.randint(0, 255):02X}")
+    return ":".join(parts)
+
+
 def _gen_node(name, ip_suffix, cpu_model_idx, cpu_cores, cpu_sockets,
               mem_gb, rootfs_gb, swap_gb, ceph_node=False, ha_node=False,
-              disk_devices=None, networks=None):
+              disk_devices=None, networks=None, status="online",
+              uptime_days_min=7, uptime_days_max=90, mac_offset=0):
     """生成单个节点数据"""
     cpu_load = round(random.uniform(5, 75), 1)
     mem_total = mem_gb * 1024
@@ -155,32 +191,45 @@ def _gen_node(name, ip_suffix, cpu_model_idx, cpu_cores, cpu_sockets,
         networks = [
             {"name": "vmbr0", "type": "bridge", "active": True,
              "method": "static", "address": f"192.168.{ip_suffix}.10/24",
-             "gateway": "192.168.1.1", "speed_mbps": 10000,
-             "bridge_ports": "enp0s31f6", "mtu": 1500}
+             "gateway": "192.168.1.1", "speed_mbps": 1000,
+             "bridge_ports": "eno1", "mtu": 1500}
         ]
 
+    # uptime: 在线节点有随机 uptime，离线节点 uptime=0
+    if status == "online":
+        uptime_sec = random.randint(
+            uptime_days_min * 86400, uptime_days_max * 86400
+        )
+    else:
+        uptime_sec = 0
+
     return {
-        "name": name, "status": "online",
+        "name": name, "status": status,
         "pve_version": PVE_VERSIONS[cpu_model_idx % len(PVE_VERSIONS)],
         "kernel_version": KERNEL_VERSIONS[cpu_model_idx % len(KERNEL_VERSIONS)],
         "cpu_model": CPU_MODELS[cpu_model_idx % len(CPU_MODELS)],
         "cpu_cores": cpu_cores, "cpu_sockets": cpu_sockets,
-        "cpu_load": cpu_load,
-        "memory_total_mb": mem_total, "memory_used_mb": mem_used,
-        "memory_free_mb": mem_free, "memory_usage_pct": round(mem_used / mem_total * 100, 1),
+        "cpu_load": cpu_load if status == "online" else 0,
+        "memory_total_mb": mem_total,
+        "memory_used_mb": mem_used if status == "online" else 0,
+        "memory_free_mb": mem_free if status == "online" else mem_total,
+        "memory_usage_pct": round(mem_used / mem_total * 100, 1) if status == "online" else 0.0,
         "rootfs_total_gb": rootfs_total, "rootfs_used_gb": rootfs_used,
         "rootfs_avail_gb": rootfs_avail,
         "swap_total_mb": swap_gb * 1024,
-        "swap_used_mb": random.randint(0, int(swap_gb * 1024 * 0.1)),
-        "disk_io_delay_ms": disk_io_delay, "diskstat": disk_devices,
+        "swap_used_mb": random.randint(0, int(swap_gb * 1024 * 0.1)) if status == "online" else 0,
+        "disk_io_delay_ms": disk_io_delay if status == "online" else 0,
+        "diskstat": disk_devices if status == "online" else [],
         "ip_address": f"192.168.{ip_suffix}.10",
-        "uptime_seconds": random.randint(86400, 86400 * 90),
+        "mac_address": _gen_mac("BC:24:11", mac_offset),
+        "uptime_seconds": uptime_sec,
         "is_ceph_node": ceph_node, "is_ha_node": ha_node,
     }
 
 
 def _gen_vm(vmid, name, cpu_cores, mem_gb, disk_gb, status="running",
-            has_template=False, snapshot_count=0, tags="", description=""):
+            has_template=False, snapshot_count=0, tags="", description="",
+            cpu_model_idx=0):
     """生成 VM 数据"""
     is_running = status == "running"
     return {
@@ -197,25 +246,69 @@ def _gen_vm(vmid, name, cpu_cores, mem_gb, disk_gb, status="running",
         "net_in_bps": random.randint(0, 50000000) if is_running else 0,
         "net_out_bps": random.randint(0, 50000000) if is_running else 0,
         "uptime_seconds": random.randint(86400, 86400 * 60) if is_running else 0,
-        "os_type": random.choice(["l26", "l26", "l26", "other"]),
+        "os_type": random.choice(OS_TYPES),
         "snapshot_count": snapshot_count, "has_template": has_template,
         "tags": tags, "description": description,
     }
 
 
-def _gen_vm_config(vmid, cpu_cores, mem_gb):
-    """生成 VM 配置"""
+def _gen_vm_config(vmid, cpu_cores, mem_gb, cpu_model_idx=0):
+    """生成 VM 配置（根据 CPU 型号选择 cpu_type，磁盘和网卡槽位多样化）"""
+    cpu_model = CPU_MODELS[cpu_model_idx % len(CPU_MODELS)]
+    # Intel 系列用 host / EPYC 系列用 EPYC
+    if "AMD" in cpu_model:
+        cpu_type = random.choice(["host", "EPYC", "qemu64"])
+    else:
+        cpu_type = random.choice(["host", "host", "max", "kvm64"])
+
+    # 主磁盘: scsi0
+    scsi_disks = [{
+        "file": f"local-lvm:vm-{vmid}-disk-0",
+        "size_gb": round(mem_gb * 2, 1),
+    }]
+    # 数据盘: 随机 0~2 块额外 scsi 磁盘
+    num_extra_scsi = random.choices([0, 1, 2], weights=[4, 4, 2])[0]
+    for k in range(1, 1 + num_extra_scsi):
+        scsi_disks.append({
+            "file": f"local-lvm:vm-{vmid}-disk-{k}",
+            "size_gb": round(random.uniform(10, 200), 1),
+        })
+
+    # IDE 光驱: 随机 0~1 个
+    ide_disks = []
+    if random.random() < 0.4:
+        ide_disks.append({"file": "local:iso/ubuntu-22.04-server.iso", "size_gb": 0})
+
+    # 网卡: 1~2 个，模型随机
+    net_devices = [{
+        "model": random.choice(NET_MODELS_WEIGHTED),
+        "bridge": "vmbr0",
+        "mac": _gen_mac("BC:24:11", vmid),
+    }]
+    if random.random() < 0.25:
+        net_devices.append({
+            "model": "virtio",
+            "bridge": "vmbr0" if random.random() < 0.5 else "bond0",
+            "mac": _gen_mac("BC:24:11", vmid + 5000),
+        })
+
+    boot_parts = []
+    if scsi_disks:
+        boot_parts.append("scsi0")
+    if net_devices:
+        boot_parts.append("net0")
+
     return {
-        "cpu_type": random.choice(["host", "max", "kvm64"]),
+        "cpu_type": cpu_type,
         "cpu_cores": cpu_cores, "cpu_sockets": 1,
         "memory_mb": mem_gb * 1024,
         "balloon_min_mb": mem_gb * 512,
         "os_type": "l26",
-        "boot_order": "scsi0,net0",
-        "scsi_disks": [{"file": f"local-lvm:vm-{vmid}-disk-0", "size_gb": round(mem_gb * 2, 1)}],
-        "ide_disks": [],
-        "net_devices": [{"model": "virtio", "bridge": "vmbr0", "mac": f"BC:24:11:AA:{vmid:04X}"}],
-        "agent_enabled": True,
+        "boot_order": ",".join(boot_parts) if boot_parts else "scsi0",
+        "scsi_disks": scsi_disks,
+        "ide_disks": ide_disks,
+        "net_devices": net_devices,
+        "agent_enabled": random.random() < 0.8,
         "description": "", "tags": "",
         "raw_config": {},
     }
@@ -238,16 +331,42 @@ def _gen_lxc(vmid, name, cpu_cores, mem_gb, disk_gb, status="running", tags=""):
     }
 
 
-def _gen_lxc_config(vmid, cpu_cores, mem_gb):
+def _gen_lxc_config(vmid, cpu_cores, mem_gb, subnet_base="192.168.1",
+                     storage_type=None, has_data_mount=False, mount_gb=0):
+    """生成 LXC 配置（rootfs 存储类型多样化，支持数据挂载点）"""
+    if storage_type is None:
+        storage_type = random.choice(["local-lvm", "local-lvm", "local-zfs", "ceph-ssd"])
+
+    # rootfs 存储类型
+    rootfs = {"storage": storage_type, "size_gb": round(random.choice([4, 8, 8, 16, 32]), 1)}
+
+    # 数据挂载点
+    mount_points = []
+    if has_data_mount:
+        mount_points.append({
+            "mp": f"mp{random.randint(0, 3)}",
+            "storage": random.choice(["nfs-data", "ceph-ssd", "local-zfs"]),
+            "size_gb": mount_gb if mount_gb > 0 else round(random.uniform(10, 100), 1),
+        })
+
+    # 网卡 IP：同一子网内分配不同 IP，避免冲突
+    # vmid 的最后两位用于生成 IP 末位，但限制在 10~254 范围内
+    ip_suffix = 10 + (vmid % 200)
+    net_devices = [{
+        "iface": "eth0",
+        "bridge": "vmbr0",
+        "ip": f"{subnet_base}.{ip_suffix}/24",
+    }]
+
     return {
         "hostname": f"ct-{vmid}",
         "cpu_cores": cpu_cores,
         "memory_mb": mem_gb * 1024,
         "swap_mb": int(mem_gb * 512),
         "os_type": random.choice(["alpine", "debian", "ubuntu", "centos"]),
-        "rootfs": {"storage": "local-lvm", "size_gb": 8.0},
-        "mount_points": [],
-        "net_devices": [{"iface": "eth0", "bridge": "vmbr0", "ip": f"192.168.1.{vmid}/24"}],
+        "rootfs": rootfs,
+        "mount_points": mount_points,
+        "net_devices": net_devices,
         "description": "", "tags": "",
         "startup_order": "",
         "raw_config": {},
@@ -278,13 +397,14 @@ def _gen_storage(name, stype, total_gb, used_ratio=None):
 
 
 def _gen_network(name, ntype, ip, gateway="192.168.1.1", speed=10000, **extra):
+    """生成非 eth 类型网络接口（bridge / bond）"""
     net = {
         "name": name, "type": ntype, "active": True,
         "method": "static", "address": ip, "gateway": gateway,
         "speed_mbps": speed,
     }
     if ntype == "bridge":
-        net["bridge_ports"] = extra.get("bridge_ports", "enp0s31f6")
+        net["bridge_ports"] = extra.get("bridge_ports", "eno1")
     elif ntype == "bond":
         net["bond_mode"] = extra.get("bond_mode", "802.3ad")
         net["bond_slaves"] = extra.get("bond_slaves", "enp0s31f6 enp0s17f6")
@@ -293,13 +413,52 @@ def _gen_network(name, ntype, ip, gateway="192.168.1.1", speed=10000, **extra):
 
 
 # ============================================================
+# 磁盘设备生成器
+# ============================================================
+
+def _diskstat_sata(dev, heavy=False):
+    """生成 SATA 磁盘的 diskstat 条目"""
+    base_read = random.randint(10_000_000, 200_000_000_000) if heavy else random.randint(1_000_000, 50_000_000_000)
+    base_write = random.randint(50_000_000, 500_000_000_000) if heavy else random.randint(5_000_000, 100_000_000_000)
+    return {
+        "dev": dev,
+        "read": random.randint(base_read // 2, base_read),
+        "write": random.randint(base_write // 2, base_write),
+        "read_ios": random.randint(1000, 500_000),
+        "write_ios": random.randint(5000, 800_000),
+        "io_ms": round(random.uniform(1.0, 25.0) if not heavy else random.uniform(5.0, 40.0), 1),
+    }
+
+
+def _diskstat_nvme(dev):
+    """生成 NVMe 磁盘的 diskstat 条目（IO 延迟低）"""
+    return {
+        "dev": dev,
+        "read": random.randint(100_000_000, 2_000_000_000_000),
+        "write": random.randint(50_000_000, 1_000_000_000_000),
+        "read_ios": random.randint(50_000, 2_000_000),
+        "write_ios": random.randint(50_000, 2_000_000),
+        "io_ms": round(random.uniform(0.05, 2.0), 2),
+    }
+
+
+# ============================================================
 # 五级架构数据
 # ============================================================
 
 def level_1_single_node():
-    """Level 1 — 单节点入门: 1节点, 无Ceph, 无HA"""
+    """Level 1 — 单节点入门: 1节点, 无Ceph, 无HA
+
+    网络: vmbr0 (bridge) → eno1 (management, 1G)
+    磁盘: sda (SATA OS)
+    """
     node = _gen_node("pve-single", "10", 0, cpu_cores=4, cpu_sockets=1,
-                     mem_gb=16, rootfs_gb=200, swap_gb=4)
+                     mem_gb=16, rootfs_gb=200, swap_gb=4,
+                     uptime_days_min=14, uptime_days_max=180)
+    # L1 磁盘: 仅 SATA 系统盘
+    node["diskstat"] = [_diskstat_sata("sda")]
+    node["disk_io_delay_ms"] = round(sum(d["io_ms"] for d in node["diskstat"]), 1)
+
     node["vms"] = []
     node["containers"] = [
         _gen_lxc(201, "alpine-dns", 1, 0.25, 2, tags="infra"),
@@ -307,17 +466,19 @@ def level_1_single_node():
         _gen_lxc(203, "home-assistant", 2, 1.0, 8, tags="iot"),
     ]
     node["lxc_configs"] = {
-        str(201): _gen_lxc_config(201, 1, 0.25),
-        str(202): _gen_lxc_config(202, 1, 0.5),
-        str(203): _gen_lxc_config(203, 2, 1.0),
+        str(201): _gen_lxc_config(201, 1, 0.25, subnet_base="192.168.10"),
+        str(202): _gen_lxc_config(202, 1, 0.5, subnet_base="192.168.10"),
+        str(203): _gen_lxc_config(203, 2, 1.0, subnet_base="192.168.10"),
     }
     node["storages"] = [
         _gen_storage("local", "dir", 200, 0.22),
         _gen_storage("local-lvm", "lvmthin", 180, 0.35),
     ]
-    node["networks"] = [
-        _gen_network("vmbr0", "bridge", "192.168.10.10/24", bridge_ports="enp0s31f6"),
-    ]
+    # L1 网络: vmbr0 (bridge) → eno1 (1G 管理网)
+    eth_eno1 = _gen_eth("eno1", 1000, ip="192.168.10.10/24", gateway="192.168.10.1")
+    vmbr0 = _gen_network("vmbr0", "bridge", "192.168.10.10/24",
+                         gateway="192.168.10.1", speed=1000, bridge_ports="eno1")
+    node["networks"] = [eth_eno1, vmbr0]
     node["vm_configs"] = {}
     return {
         "name": "单节点入门集群",
@@ -328,11 +489,21 @@ def level_1_single_node():
 
 
 def level_2_dual_node():
-    """Level 2 — 双节点小集群: 2节点, 无Ceph, 无HA"""
+    """Level 2 — 双节点小集群: 2节点, 无Ceph, 无HA
+
+    网络 (每个节点):
+      vmbr0 (bridge) → eno1 (management, 1G)
+      vmbr1 (bridge) → eno2 (storage/NFS, 1G)
+    磁盘: sda (SATA OS) + sdb (SATA data)
+    """
     nodes = []
     # Node 1
     n1 = _gen_node("pve-1", "20", 1, cpu_cores=8, cpu_sockets=1,
-                   mem_gb=32, rootfs_gb=100, swap_gb=8)
+                   mem_gb=32, rootfs_gb=100, swap_gb=8,
+                   uptime_days_min=30, uptime_days_max=120)
+    n1["diskstat"] = [_diskstat_sata("sda"), _diskstat_sata("sdb")]
+    n1["disk_io_delay_ms"] = round(sum(d["io_ms"] for d in n1["diskstat"]), 1)
+
     n1["vms"] = [
         _gen_vm(100, "ubuntu-web", 2, 4, 50, tags="production,web"),
         _gen_vm(101, "centos-db", 4, 16, 200, tags="production,database"),
@@ -340,9 +511,9 @@ def level_2_dual_node():
                 has_template=False, snapshot_count=1),
     ]
     n1["vm_configs"] = {
-        str(100): _gen_vm_config(100, 2, 4),
-        str(101): _gen_vm_config(101, 4, 16),
-        str(102): _gen_vm_config(102, 2, 4),
+        str(100): _gen_vm_config(100, 2, 4, cpu_model_idx=1),
+        str(101): _gen_vm_config(101, 4, 16, cpu_model_idx=1),
+        str(102): _gen_vm_config(102, 2, 4, cpu_model_idx=1),
     }
     n1["containers"] = [
         _gen_lxc(200, "redis-1", 1, 1.0, 4, tags="cache"),
@@ -352,31 +523,40 @@ def level_2_dual_node():
         _gen_lxc(204, "portainer", 1, 0.5, 2, tags="docker"),
     ]
     n1["lxc_configs"] = {
-        str(v): _gen_lxc_config(v, 1, 1) for v in [200, 201, 202, 203, 204]
+        str(v): _gen_lxc_config(v, 1, 1, subnet_base="192.168.20") for v in [200, 201, 202, 203, 204]
     }
     n1["storages"] = [
         _gen_storage("local", "dir", 100, 0.3),
         _gen_storage("local-lvm", "lvmthin", 500, 0.4),
         _gen_storage("nfs-data", "nfs", 2000, 0.25),
     ]
+    # L2 网络: vmbr0→eno1 (管理), vmbr1→eno2 (存储)
     n1["networks"] = [
-        _gen_network("vmbr0", "bridge", "192.168.20.10/24", bridge_ports="enp0s31f6"),
-        _gen_network("vmbr1", "bridge", "10.0.0.10/24", bridge_ports="enp0s17f6"),
+        _gen_eth("eno1", 1000, ip="192.168.20.10/24", gateway="192.168.20.1"),
+        _gen_eth("eno2", 1000, ip="10.0.0.10/24"),
+        _gen_network("vmbr0", "bridge", "192.168.20.10/24",
+                     gateway="192.168.20.1", speed=1000, bridge_ports="eno1"),
+        _gen_network("vmbr1", "bridge", "10.0.0.10/24",
+                     speed=1000, bridge_ports="eno2"),
     ]
     nodes.append(n1)
 
     # Node 2
     n2 = _gen_node("pve-2", "21", 2, cpu_cores=8, cpu_sockets=1,
-                   mem_gb=32, rootfs_gb=100, swap_gb=8)
+                   mem_gb=32, rootfs_gb=100, swap_gb=8,
+                   uptime_days_min=20, uptime_days_max=100)
+    n2["diskstat"] = [_diskstat_sata("sda"), _diskstat_sata("sdb")]
+    n2["disk_io_delay_ms"] = round(sum(d["io_ms"] for d in n2["diskstat"]), 1)
+
     n2["vms"] = [
         _gen_vm(100, "ubuntu-app-1", 2, 4, 50, tags="production,app"),
         _gen_vm(101, "ubuntu-app-2", 2, 4, 50, tags="production,app"),
         _gen_vm(102, "test-runner", 4, 8, 80, status="stopped", tags="ci"),
     ]
     n2["vm_configs"] = {
-        str(v): _gen_vm_config(v, 2, 4) for v in [100, 101]
+        str(v): _gen_vm_config(v, 2, 4, cpu_model_idx=2) for v in [100, 101]
     }
-    n2["vm_configs"]["102"] = _gen_vm_config(102, 4, 8)
+    n2["vm_configs"]["102"] = _gen_vm_config(102, 4, 8, cpu_model_idx=2)
     n2["containers"] = [
         _gen_lxc(200, "redis-2", 1, 1.0, 4, tags="cache"),
         _gen_lxc(201, "nginx-2", 1, 0.5, 2, tags="web"),
@@ -388,16 +568,21 @@ def level_2_dual_node():
         _gen_lxc(207, "gitlab-runner", 2, 2.0, 10, tags="ci"),
     ]
     n2["lxc_configs"] = {
-        str(v): _gen_lxc_config(v, 1, 1) for v in [200, 201, 202, 203, 204, 205, 206, 207]
+        str(v): _gen_lxc_config(v, 1, 1, subnet_base="192.168.21") for v in [200, 201, 202, 203, 204, 205, 206, 207]
     }
     n2["storages"] = [
         _gen_storage("local", "dir", 100, 0.35),
         _gen_storage("local-lvm", "lvmthin", 500, 0.45),
         _gen_storage("nfs-data", "nfs", 2000, 0.30),
     ]
+    # L2 网络: vmbr0→eno1 (管理), vmbr1→eno2 (存储)
     n2["networks"] = [
-        _gen_network("vmbr0", "bridge", "192.168.20.11/24", bridge_ports="enp0s31f6"),
-        _gen_network("vmbr1", "bridge", "10.0.0.11/24", bridge_ports="enp0s17f6"),
+        _gen_eth("eno1", 1000, ip="192.168.21.10/24", gateway="192.168.21.1"),
+        _gen_eth("eno2", 1000, ip="10.0.0.11/24"),
+        _gen_network("vmbr0", "bridge", "192.168.21.10/24",
+                     gateway="192.168.21.1", speed=1000, bridge_ports="eno1"),
+        _gen_network("vmbr1", "bridge", "10.0.0.11/24",
+                     speed=1000, bridge_ports="eno2"),
     ]
     nodes.append(n2)
 
@@ -410,7 +595,13 @@ def level_2_dual_node():
 
 
 def level_3_triple_node():
-    """Level 3 — 三节点标准集群: 3节点, 无Ceph, 无HA, 多存储"""
+    """Level 3 — 三节点标准集群: 3节点, 无Ceph, 无HA, 多存储
+
+    网络 (每个节点):
+      vmbr0 (bridge) → eno1 (management, 1G)
+      bond0 (bond, 802.3ad) → enp0s31f6 + enp0s17f6 (app traffic, 2×10G)
+    磁盘: sda (SATA OS) + sdb (SATA data) + nvme0n1 (NVMe cache)
+    """
     nodes = []
     node_specs = [
         ("pve-1", "30", 0, 16, 2, 64, 120, 16),
@@ -421,7 +612,17 @@ def level_3_triple_node():
     lxc_base = 200
     for i, (name, ip, cpu_idx, cores, sock, mem, rootfs, swap) in enumerate(node_specs):
         n = _gen_node(name, ip, cpu_idx, cpu_cores=cores, cpu_sockets=sock,
-                      mem_gb=mem, rootfs_gb=rootfs, swap_gb=swap)
+                      mem_gb=mem, rootfs_gb=rootfs, swap_gb=swap,
+                      uptime_days_min=7, uptime_days_max=60,
+                      mac_offset=i * 100)
+
+        # L3 磁盘: sda (OS) + sdb (data) + nvme0n1 (cache)
+        n["diskstat"] = [
+            _diskstat_sata("sda"),
+            _diskstat_sata("sdb"),
+            _diskstat_nvme("nvme0n1"),
+        ]
+        n["disk_io_delay_ms"] = round(sum(d["io_ms"] for d in n["diskstat"]), 1)
 
         # 每节点 5~8 个 VM
         n["vms"] = []
@@ -442,27 +643,28 @@ def level_3_triple_node():
             status = "running" if random.random() > 0.1 else "stopped"
             vm = _gen_vm(vid, vname_pattern.format(i + 1), vc, vd, vdsk,
                          status=status, tags=vtags,
-                         snapshot_count=random.randint(0, 3))
+                         snapshot_count=random.randint(0, 3),
+                         cpu_model_idx=cpu_idx)
             n["vms"].append(vm)
-            n["vm_configs"][str(vid)] = _gen_vm_config(vid, vc, vd)
+            n["vm_configs"][str(vid)] = _gen_vm_config(vid, vc, vd, cpu_model_idx=cpu_idx)
 
-        # 每节点 8~15 个 LXC
+        # 每节点 8~13 个 LXC
         n["containers"] = []
         n["lxc_configs"] = {}
         lxc_pool = [
-            ("nginx-{}", 1, 0.5, 2, "web"),
-            ("redis-{}", 1, 1.0, 4, "cache"),
-            ("postgres-{}", 2, 4.0, 30, "database"),
-            ("elasticsearch-{}", 2, 4.0, 40, "search"),
-            ("grafana-{}", 2, 2.0, 10, "monitoring"),
-            ("prometheus-{}", 2, 4.0, 20, "monitoring"),
-            ("portainer-{}", 1, 0.5, 2, "docker"),
-            ("minio-{}", 2, 2.0, 50, "storage"),
-            ("rabbitmq-{}", 1, 2.0, 10, "mq"),
-            ("consul-{}", 1, 1.0, 4, "infra"),
-            ("vault-{}", 1, 1.0, 4, "security"),
-            ("traefik-{}", 1, 0.5, 2, "web"),
-            ("wikijs-{}", 1, 1.0, 8, "docs"),
+            ("nginx-{}", 1, 0.5, 2, "web", False, 0),
+            ("redis-{}", 1, 1.0, 4, "cache", False, 0),
+            ("postgres-{}", 2, 4.0, 30, "database", True, 50),
+            ("elasticsearch-{}", 2, 4.0, 40, "search", True, 80),
+            ("grafana-{}", 2, 2.0, 10, "monitoring", False, 0),
+            ("prometheus-{}", 2, 4.0, 20, "monitoring", True, 30),
+            ("portainer-{}", 1, 0.5, 2, "docker", False, 0),
+            ("minio-{}", 2, 2.0, 50, "storage", True, 100),
+            ("rabbitmq-{}", 1, 2.0, 10, "mq", False, 0),
+            ("consul-{}", 1, 1.0, 4, "infra", False, 0),
+            ("vault-{}", 1, 1.0, 4, "security", False, 0),
+            ("traefik-{}", 1, 0.5, 2, "web", False, 0),
+            ("wikijs-{}", 1, 1.0, 8, "docs", False, 0),
         ]
         num_lxc = random.randint(8, 13)
         for j in range(num_lxc):
@@ -472,7 +674,10 @@ def level_3_triple_node():
             ct = _gen_lxc(cid, tmpl[0].format(i + 1), tmpl[1], tmpl[2], tmpl[3],
                           status=status, tags=tmpl[4])
             n["containers"].append(ct)
-            n["lxc_configs"][str(cid)] = _gen_lxc_config(cid, tmpl[1], tmpl[2])
+            n["lxc_configs"][str(cid)] = _gen_lxc_config(
+                cid, tmpl[1], tmpl[2], subnet_base=f"192.168.{ip}",
+                has_data_mount=tmpl[5], mount_gb=tmpl[6],
+            )
 
         n["storages"] = [
             _gen_storage("local", "dir", 120, 0.3),
@@ -481,10 +686,14 @@ def level_3_triple_node():
             _gen_storage("iscsi-data", "lvmthin", 2000, random.uniform(0.4, 0.7)),
         ]
 
+        # L3 网络: vmbr0→eno1 (1G 管理), bond0→enp0s31f6+enp0s17f6 (2×10G 应用)
         n["networks"] = [
-            _gen_network("vmbr0", "bridge", f"192.168.3{i}.10/24",
-                         bridge_ports="enp0s31f6", speed=10000),
-            _gen_network("bond0", "bond", f"10.0.{i}.10/24", speed=25000,
+            _gen_eth("eno1", 1000, ip=f"192.168.{ip}.10/24", gateway=f"192.168.{ip}.1"),
+            _gen_eth("enp0s31f6", 10000),
+            _gen_eth("enp0s17f6", 10000),
+            _gen_network("vmbr0", "bridge", f"192.168.{ip}.10/24",
+                         gateway=f"192.168.{ip}.1", speed=1000, bridge_ports="eno1"),
+            _gen_network("bond0", "bond", f"10.0.{i}.10/24", speed=20000,
                          bond_mode="802.3ad", bond_slaves="enp0s31f6 enp0s17f6"),
         ]
         vm_base += len(n["vms"])
@@ -500,7 +709,14 @@ def level_3_triple_node():
 
 
 def level_4_ceph_cluster():
-    """Level 4 — 三节点 + Ceph + 基础 HA"""
+    """Level 4 — 三节点 Ceph + 基础 HA
+
+    网络 (每个节点):
+      vmbr0 (bridge) → eno1 (management, 1G)
+      vmbr1 (bridge) → enp0s31f6 (Ceph public network, 10G)
+      bond0 (bond, 802.3ad) → enp3s0f0 + enp3s0f1 (Ceph cluster/replication + VM, 2×25G)
+    磁盘: sda (SATA OS) + sdb+sdc (SATA OSD) + nvme0n1 (NVMe journal)
+    """
     nodes = []
     node_specs = [
         ("ceph-1", "40", 0, 24, 2, 128, 100, 32),
@@ -513,23 +729,17 @@ def level_4_ceph_cluster():
         n = _gen_node(name, ip, cpu_idx, cpu_cores=cores, cpu_sockets=sock,
                       mem_gb=mem, rootfs_gb=rootfs, swap_gb=swap,
                       ceph_node=True, ha_node=True,
-                      disk_devices=[
-                          {"dev": "sda", "read": random.randint(10000000, 50000000000),
-                           "write": random.randint(50000000, 100000000000),
-                           "read_ios": random.randint(5000, 200000),
-                           "write_ios": random.randint(10000, 500000),
-                           "io_ms": round(random.uniform(1, 15), 1)},
-                          {"dev": "sdb", "read": random.randint(50000000, 200000000000),
-                           "write": random.randint(20000000, 80000000000),
-                           "read_ios": random.randint(10000, 500000),
-                           "write_ios": random.randint(50000, 300000),
-                           "io_ms": round(random.uniform(2, 20), 1)},
-                          {"dev": "nvme0n1", "read": random.randint(100000000, 500000000000),
-                           "write": random.randint(50000000, 200000000000),
-                           "read_ios": random.randint(50000, 500000),
-                           "write_ios": random.randint(50000, 500000),
-                           "io_ms": round(random.uniform(0.1, 2), 1)},
-                      ])
+                      uptime_days_min=14, uptime_days_max=90,
+                      mac_offset=1000 + i * 100)
+
+        # L4 磁盘: sda (OS) + sdb+sdc (Ceph OSD) + nvme0n1 (journal)
+        n["diskstat"] = [
+            _diskstat_sata("sda"),
+            _diskstat_sata("sdb", heavy=True),
+            _diskstat_sata("sdc", heavy=True),
+            _diskstat_nvme("nvme0n1"),
+        ]
+        n["disk_io_delay_ms"] = round(sum(d["io_ms"] for d in n["diskstat"]), 1)
 
         n["vms"] = []
         n["vm_configs"] = {}
@@ -552,23 +762,24 @@ def level_4_ceph_cluster():
             status = "running" if random.random() > 0.05 else "stopped"
             vm = _gen_vm(vid, vname_pattern.format(i + 1), vc, vd, vdsk,
                          status=status, tags=vtags,
-                         snapshot_count=random.randint(0, 5))
+                         snapshot_count=random.randint(0, 5),
+                         cpu_model_idx=cpu_idx)
             n["vms"].append(vm)
-            n["vm_configs"][str(vid)] = _gen_vm_config(vid, vc, vd)
+            n["vm_configs"][str(vid)] = _gen_vm_config(vid, vc, vd, cpu_model_idx=cpu_idx)
 
         n["containers"] = []
         n["lxc_configs"] = {}
         lxc_pool = [
-            ("nginx-lb-{}", 1, 0.5, 2, "web,loadbalancer"),
-            ("coredns-{}", 1, 0.5, 2, "infra,dns"),
-            ("cert-manager-{}", 1, 1.0, 4, "security"),
-            ("redis-sidecar-{}", 1, 1.0, 4, "cache"),
-            ("prometheus-node-{}", 1, 1.0, 8, "monitoring"),
-            ("alertmanager-{}", 1, 0.5, 4, "monitoring"),
-            ("loki-{}", 2, 2.0, 20, "monitoring,logging"),
-            ("harbor-registry-{}", 2, 2.0, 50, "docker,registry"),
-            ("argocd-{}", 2, 2.0, 10, "ci,gitops"),
-            ("minio-rgw-{}", 2, 2.0, 30, "storage"),
+            ("nginx-lb-{}", 1, 0.5, 2, "web,loadbalancer", False, 0),
+            ("coredns-{}", 1, 0.5, 2, "infra,dns", False, 0),
+            ("cert-manager-{}", 1, 1.0, 4, "security", False, 0),
+            ("redis-sidecar-{}", 1, 1.0, 4, "cache", False, 0),
+            ("prometheus-node-{}", 1, 1.0, 8, "monitoring", True, 20),
+            ("alertmanager-{}", 1, 0.5, 4, "monitoring", False, 0),
+            ("loki-{}", 2, 2.0, 20, "monitoring,logging", True, 50),
+            ("harbor-registry-{}", 2, 2.0, 50, "docker,registry", True, 100),
+            ("argocd-{}", 2, 2.0, 10, "ci,gitops", False, 0),
+            ("minio-rgw-{}", 2, 2.0, 30, "storage", True, 80),
         ]
         num_lxc = random.randint(8, 10)
         for j in range(num_lxc):
@@ -577,18 +788,29 @@ def level_4_ceph_cluster():
             ct = _gen_lxc(cid, tmpl[0].format(i + 1), tmpl[1], tmpl[2], tmpl[3],
                           tags=tmpl[4])
             n["containers"].append(ct)
-            n["lxc_configs"][str(cid)] = _gen_lxc_config(cid, tmpl[1], tmpl[2])
+            n["lxc_configs"][str(cid)] = _gen_lxc_config(
+                cid, tmpl[1], tmpl[2], subnet_base=f"192.168.{ip}",
+                storage_type="ceph-ssd", has_data_mount=tmpl[5], mount_gb=tmpl[6],
+            )
 
         n["storages"] = [
             _gen_storage("local", "dir", 100, 0.25),
             _gen_storage("ceph-ssd", "rbd", 5000, random.uniform(0.3, 0.5)),
             _gen_storage("ceph-hdd", "rbd", 15000, random.uniform(0.4, 0.6)),
         ]
+        # L4 网络: vmbr0→eno1 (1G), vmbr1→enp0s31f6 (10G Ceph public),
+        #          bond0→enp3s0f0+enp3s0f1 (2×25G Ceph cluster)
         n["networks"] = [
-            _gen_network("vmbr0", "bridge", f"192.168.4{i}.10/24",
-                         bridge_ports="enp0s31f6"),
-            _gen_network("bond0", "bond", f"10.10.{i}.10/24", speed=25000,
-                         bond_mode="802.3ad", bond_slaves="enp0s31f6 enp0s17f6"),
+            _gen_eth("eno1", 1000, ip=f"192.168.{ip}.10/24", gateway=f"192.168.{ip}.1"),
+            _gen_eth("enp0s31f6", 10000),
+            _gen_eth("enp3s0f0", 25000),
+            _gen_eth("enp3s0f1", 25000),
+            _gen_network("vmbr0", "bridge", f"192.168.{ip}.10/24",
+                         gateway=f"192.168.{ip}.1", speed=1000, bridge_ports="eno1"),
+            _gen_network("vmbr1", "bridge", f"10.10.{i}.10/24",
+                         speed=10000, bridge_ports="enp0s31f6"),
+            _gen_network("bond0", "bond", f"172.16.{i}.10/24", speed=50000,
+                         bond_mode="802.3ad", bond_slaves="enp3s0f0 enp3s0f1"),
         ]
         vm_base += len(n["vms"])
         lxc_base += num_lxc
@@ -624,45 +846,52 @@ def level_4_ceph_cluster():
 
 
 def level_5_enterprise():
-    """Level 5 — 多节点企业集群: 5节点 + Ceph WARN + 大规模"""
+    """Level 5 — 多节点企业集群: 5节点 + Ceph WARN + 大规模
+
+    网络 (每个节点):
+      vmbr0 (bridge) → eno1 (management, 1G)
+      vmbr1 (bridge) → enp0s31f6 (Ceph public network, 10G)
+      bond0 (bond, 802.3ad) → enp3s0f0 + enp3s0f1 (VM/应用流量, 2×25G)
+    磁盘: sda (SATA OS) + sdb+sdc (SATA OSD) + nvme0n1+nvme1n1 (NVMe journal/wal)
+    prod-4 离线测试
+    """
     nodes = []
     node_specs = [
-        ("prod-1", "50", 0, 32, 2, 256, 100, 64, True, True),
-        ("prod-2", "51", 3, 32, 2, 256, 100, 64, True, True),
-        ("prod-3", "52", 2, 64, 2, 512, 100, 64, True, True),
-        ("prod-4", "53", 5, 64, 2, 512, 100, 64, True, False),
-        ("prod-5", "54", 4, 48, 2, 384, 100, 64, True, True),
+        ("prod-1", "50", 0, 32, 2, 256, 100, 64, True, True, "online"),
+        ("prod-2", "51", 3, 32, 2, 256, 100, 64, True, True, "online"),
+        ("prod-3", "52", 2, 64, 2, 512, 100, 64, True, True, "online"),
+        ("prod-4", "53", 5, 64, 2, 512, 100, 64, True, False, "offline"),
+        ("prod-5", "54", 4, 48, 2, 384, 100, 64, True, True, "online"),
     ]
     vm_base = 100
     lxc_base = 200
     for i, spec in enumerate(node_specs):
         (name, ip, cpu_idx, cores, sock, mem, rootfs, swap,
-         ceph_node, ha_node) = spec
+         ceph_node, ha_node, node_status) = spec
+
+        # 新节点 uptime 短，老节点长；prod-4 离线所以 uptime=0
+        if node_status == "offline":
+            uptime_min, uptime_max = 1, 1
+        else:
+            uptime_min = random.randint(3, 14)
+            uptime_max = random.randint(30, 180)
+
         n = _gen_node(name, ip, cpu_idx, cpu_cores=cores, cpu_sockets=sock,
                       mem_gb=mem, rootfs_gb=rootfs, swap_gb=swap,
                       ceph_node=ceph_node, ha_node=ha_node,
-                      disk_devices=[
-                          {"dev": "sda", "read": random.randint(50000000, 200000000000),
-                           "write": random.randint(100000000, 500000000000),
-                           "read_ios": random.randint(20000, 800000),
-                           "write_ios": random.randint(50000, 1000000),
-                           "io_ms": round(random.uniform(1, 30), 1)},
-                          {"dev": "sdb", "read": random.randint(100000000, 800000000000),
-                           "write": random.randint(50000000, 300000000000),
-                           "read_ios": random.randint(30000, 1000000),
-                           "write_ios": random.randint(100000, 800000),
-                           "io_ms": round(random.uniform(2, 25), 1)},
-                          {"dev": "nvme0n1", "read": random.randint(500000000, 2000000000000),
-                           "write": random.randint(200000000, 1000000000000),
-                           "read_ios": random.randint(100000, 2000000),
-                           "write_ios": random.randint(100000, 2000000),
-                           "io_ms": round(random.uniform(0.05, 1.5), 2)},
-                          {"dev": "nvme1n1", "read": random.randint(500000000, 2000000000000),
-                           "write": random.randint(200000000, 1000000000000),
-                           "read_ios": random.randint(100000, 2000000),
-                           "write_ios": random.randint(100000, 2000000),
-                           "io_ms": round(random.uniform(0.05, 1.5), 2)},
-                      ])
+                      status=node_status,
+                      uptime_days_min=uptime_min, uptime_days_max=uptime_max,
+                      mac_offset=2000 + i * 100)
+
+        # L5 磁盘: sda (OS) + sdb+sdc (OSD) + nvme0n1+nvme1n1 (journal/wal)
+        n["diskstat"] = [
+            _diskstat_sata("sda"),
+            _diskstat_sata("sdb", heavy=True),
+            _diskstat_sata("sdc", heavy=True),
+            _diskstat_nvme("nvme0n1"),
+            _diskstat_nvme("nvme1n1"),
+        ]
+        n["disk_io_delay_ms"] = round(sum(d["io_ms"] for d in n["diskstat"]), 1)
 
         # 每节点 10~15 个 VM
         n["vms"] = []
@@ -691,28 +920,29 @@ def level_5_enterprise():
             status = "running" if random.random() > 0.03 else "stopped"
             vm = _gen_vm(vid, tmpl[0].format(i + 1), tmpl[1], tmpl[2], tmpl[3],
                          status=status, tags=tmpl[4],
-                         snapshot_count=random.randint(0, 8))
+                         snapshot_count=random.randint(0, 8),
+                         cpu_model_idx=cpu_idx)
             n["vms"].append(vm)
-            n["vm_configs"][str(vid)] = _gen_vm_config(vid, tmpl[1], tmpl[2])
+            n["vm_configs"][str(vid)] = _gen_vm_config(vid, tmpl[1], tmpl[2], cpu_model_idx=cpu_idx)
 
-        # 每节点 10~15 个 LXC
+        # 每节点 10~14 个 LXC
         n["containers"] = []
         n["lxc_configs"] = {}
         lxc_pool = [
-            ("nginx-ingress-{}", 2, 1.0, 2, "web,loadbalancer"),
-            ("coredns-{}", 1, 0.5, 2, "infra,dns"),
-            ("etcd-{}", 2, 4.0, 10, "infra,etcd"),
-            ("harbor-registry-{}", 2, 4.0, 50, "docker,registry"),
-            ("argocd-{}", 2, 2.0, 10, "ci,gitops"),
-            ("prometheus-{}", 2, 4.0, 40, "monitoring"),
-            ("grafana-{}", 2, 2.0, 10, "monitoring"),
-            ("loki-{}", 2, 4.0, 50, "monitoring,logging"),
-            ("minio-{}", 4, 4.0, 100, "storage"),
-            ("vault-{}", 2, 2.0, 4, "security"),
-            ("consul-{}", 1, 1.0, 4, "infra"),
-            ("rabbitmq-{}", 2, 2.0, 10, "mq"),
-            ("cert-manager-{}", 1, 1.0, 4, "security"),
-            ("zabbix-{}", 2, 4.0, 30, "monitoring"),
+            ("nginx-ingress-{}", 2, 1.0, 2, "web,loadbalancer", False, 0),
+            ("coredns-{}", 1, 0.5, 2, "infra,dns", False, 0),
+            ("etcd-{}", 2, 4.0, 10, "infra,etcd", True, 20),
+            ("harbor-registry-{}", 2, 4.0, 50, "docker,registry", True, 100),
+            ("argocd-{}", 2, 2.0, 10, "ci,gitops", False, 0),
+            ("prometheus-{}", 2, 4.0, 40, "monitoring", True, 50),
+            ("grafana-{}", 2, 2.0, 10, "monitoring", False, 0),
+            ("loki-{}", 2, 4.0, 50, "monitoring,logging", True, 80),
+            ("minio-{}", 4, 4.0, 100, "storage", True, 200),
+            ("vault-{}", 2, 2.0, 4, "security", False, 0),
+            ("consul-{}", 1, 1.0, 4, "infra", False, 0),
+            ("rabbitmq-{}", 2, 2.0, 10, "mq", False, 0),
+            ("cert-manager-{}", 1, 1.0, 4, "security", False, 0),
+            ("zabbix-{}", 2, 4.0, 30, "monitoring", True, 30),
         ]
         num_lxc = random.randint(10, 14)
         for j in range(num_lxc):
@@ -721,7 +951,10 @@ def level_5_enterprise():
             ct = _gen_lxc(cid, tmpl[0].format(i + 1), tmpl[1], tmpl[2], tmpl[3],
                           tags=tmpl[4])
             n["containers"].append(ct)
-            n["lxc_configs"][str(cid)] = _gen_lxc_config(cid, tmpl[1], tmpl[2])
+            n["lxc_configs"][str(cid)] = _gen_lxc_config(
+                cid, tmpl[1], tmpl[2], subnet_base=f"192.168.{ip}",
+                storage_type="ceph-ssd", has_data_mount=tmpl[5], mount_gb=tmpl[6],
+            )
 
         n["storages"] = [
             _gen_storage("local", "dir", 100, 0.2),
@@ -729,12 +962,18 @@ def level_5_enterprise():
             _gen_storage("ceph-hdd", "rbd", 40000, random.uniform(0.4, 0.7)),
             _gen_storage("local-zfs", "zfspool", 2000, random.uniform(0.2, 0.5)),
         ]
+        # L5 网络: vmbr0→eno1 (1G), vmbr1→enp0s31f6 (10G Ceph public),
+        #          bond0→enp3s0f0+enp3s0f1 (2×25G 应用)
         n["networks"] = [
-            _gen_network("vmbr0", "bridge", f"192.168.5{i}.10/24",
-                         bridge_ports="enp0s31f6"),
+            _gen_eth("eno1", 1000, ip=f"192.168.{ip}.10/24", gateway=f"192.168.{ip}.1"),
+            _gen_eth("enp0s31f6", 10000),
+            _gen_eth("enp3s0f0", 25000),
+            _gen_eth("enp3s0f1", 25000),
+            _gen_network("vmbr0", "bridge", f"192.168.{ip}.10/24",
+                         gateway=f"192.168.{ip}.1", speed=1000, bridge_ports="eno1"),
             _gen_network("vmbr1", "bridge", f"10.10.0.{10 + i}/24",
-                         bridge_ports="enp0s17f6"),
-            _gen_network("bond0", "bond", f"172.16.{i}.10/24", speed=25000,
+                         speed=10000, bridge_ports="enp0s31f6"),
+            _gen_network("bond0", "bond", f"172.16.{i}.10/24", speed=50000,
                          bond_mode="802.3ad",
                          bond_slaves="enp3s0f0 enp3s0f1"),
         ]
@@ -963,26 +1202,65 @@ def do_upload(token, levels=None, num_scans=7):
 
 
 def _build_scan_payload(cluster_id, agent_ids, data, scan_time, scan_idx, total_scans):
-    """构建扫描上传 payload，带随机波动"""
+    """构建扫描上传 payload，带真实波动模式
+
+    波动策略:
+      - 一天时段模式: 工作时间 (9-18) CPU 更高，夜间更低
+      - 偶发尖刺节点: 随机 1~2 个节点 CPU 冲到 70-95%
+      - 部分 VM 内存压力: 随机 ~20% 的运行中 VM 内存使用 80-95%
+      - 磁盘 I/O 与运行中 VM 数量正相关
+    """
+    # 计算工作时段系数 (基于扫描时间)
+    scan_hour = scan_time.hour
+    if 9 <= scan_hour <= 18:
+        hour_factor = 1.3   # 工作时间负载偏高
+    elif 19 <= scan_hour <= 23:
+        hour_factor = 0.8   # 晚间负载降低
+    else:
+        hour_factor = 0.5   # 深夜负载最低
+
+    # 随机选择 1~2 个节点作为"尖刺"节点
+    spike_nodes = set()
+    if len(data["nodes"]) > 1:
+        num_spikes = random.choices([0, 1, 2], weights=[5, 3, 2])[0]
+        spike_indices = random.sample(range(len(data["nodes"])), min(num_spikes, len(data["nodes"])))
+        spike_nodes = set(spike_indices)
+
     nodes_out = []
     for i, node_template in enumerate(data["nodes"]):
         # 深拷贝节点数据并添加波动
         node = json.loads(json.dumps(node_template))
 
-        # CPU/内存随时间波动
-        drift = random.uniform(-0.15, 0.15)
-        node["cpu_load"] = max(0, min(100,
-            round(node["cpu_load"] + drift * node["cpu_load"], 1)))
-        mem_drift = int(node["memory_total_mb"] * drift * 0.3)
-        node["memory_used_mb"] = max(0,
-            node["memory_used_mb"] + mem_drift)
+        # 跳过离线节点的性能数据波动
+        if node.get("status") != "online":
+            nodes_out.append(node)
+            continue
+
+        # 基础波动 + 工作时段系数
+        base_drift = random.uniform(-0.15, 0.15)
+        effective_drift = base_drift + (hour_factor - 1.0)
+
+        # 尖刺节点: CPU 强制拉高
+        if i in spike_nodes:
+            node["cpu_load"] = round(random.uniform(70, 95), 1)
+        else:
+            node["cpu_load"] = max(1, min(100,
+                round(node["cpu_load"] + effective_drift * node["cpu_load"], 1)))
+
+        # 内存波动
+        mem_drift = int(node["memory_total_mb"] * effective_drift * 0.3)
+        node["memory_used_mb"] = max(0, min(
+            node["memory_total_mb"],
+            node["memory_used_mb"] + mem_drift))
         node["memory_free_mb"] = node["memory_total_mb"] - node["memory_used_mb"]
         node["memory_usage_pct"] = round(
             node["memory_used_mb"] / node["memory_total_mb"] * 100, 1)
 
-        # 磁盘 I/O 波动
+        # 磁盘 I/O: 与运行中 VM 数量相关 + 工作时段系数
+        running_vm_count = len([v for v in node.get("vms", []) if v["status"] == "running"])
+        io_scale = 1.0 + running_vm_count * 0.15 + (hour_factor - 0.5) * 0.5
         for disk in node.get("diskstat", []):
-            disk["io_ms"] = round(max(0, disk["io_ms"] + random.uniform(-3, 3)), 1)
+            disk["io_ms"] = round(max(0, disk["io_ms"] * io_scale + random.uniform(-3, 3)), 1)
         node["disk_io_delay_ms"] = round(
             sum(d["io_ms"] for d in node.get("diskstat", [])), 1)
 
@@ -991,10 +1269,18 @@ def _build_scan_payload(cluster_id, agent_ids, data, scan_time, scan_idx, total_
             if vm["status"] == "running":
                 vm["cpu_usage"] = round(max(0, min(100,
                     vm["cpu_usage"] + random.uniform(-10, 10))), 1)
-                vm["memory_used_mb"] = max(0,
-                    vm["memory_used_mb"] + int(vm["memory_mb"] * random.uniform(-0.1, 0.1)))
-                vm["net_in_bps"] = max(0, vm["net_in_bps"] + random.randint(-5000000, 5000000))
-                vm["net_out_bps"] = max(0, vm["net_out_bps"] + random.randint(-5000000, 5000000))
+
+                # 约 20% 的 VM 内存压力大 (80-95%)
+                if random.random() < 0.20:
+                    vm["memory_used_mb"] = int(vm["memory_mb"] * random.uniform(0.80, 0.95))
+                else:
+                    vm["memory_used_mb"] = max(0, min(vm["memory_mb"],
+                        vm["memory_used_mb"] + int(vm["memory_mb"] * random.uniform(-0.1, 0.1))))
+
+                vm["net_in_bps"] = max(0, vm["net_in_bps"] + int(
+                    vm["net_in_bps"] * effective_drift * 0.3) + random.randint(-5000000, 5000000))
+                vm["net_out_bps"] = max(0, vm["net_out_bps"] + int(
+                    vm["net_out_bps"] * effective_drift * 0.3) + random.randint(-5000000, 5000000))
 
         # LXC 状态微调
         for ct in node.get("containers", []):
