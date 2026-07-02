@@ -327,32 +327,6 @@ function initPositions() {
     })
   })
 
-  // ── 按网段重新排列接口卡片（避免段色带重叠） ──
-  const segPad = 12
-  const segGap = 16
-  const segMinH = ifaceHeight + 32
-  const cidrMap = new Map<string, IfacePos[]>()
-  ifaces.forEach(iface => {
-    if (!iface.address) return
-    const cidr = toNetworkCidr(iface.address)
-    if (!cidr) return
-    if (!cidrMap.has(cidr)) cidrMap.set(cidr, [])
-    cidrMap.get(cidr)!.push(iface)
-  })
-  const sortedCidrs = Array.from(cidrMap.entries())
-    .filter(([, g]) => new Set(g.map(i => i.node_name)).size >= 2)
-    .sort((a, b) => Math.max(...a[1].map(i => i.y)) - Math.max(...b[1].map(i => i.y)))
-  let segY = 100
-  sortedCidrs.forEach(([, group]) => {
-    const minY = Math.min(...group.map(i => i.y))
-    const maxY = Math.max(...group.map(i => i.y))
-    const contentH = maxY - minY + ifaceHeight + segPad
-    const segH = Math.max(contentH, segMinH)
-    const dy = segY - minY + segPad
-    group.forEach(i => { i.y += dy })
-    segY += segH + segGap
-  })
-
   nodePositions.value = nodes
   interfacePositions.value = ifaces
 
@@ -433,10 +407,8 @@ interface NetworkSegment {
   ifaces: IfacePos[]
 }
 
-/** 从 IP 地址提取子网前缀。
- *  支持 "192.168.2.1/24" 和裸 IP "192.168.2.3"（默认 /24） */
+/** 从 IP 地址提取子网前缀。 */
 function toNetworkCidr(address: string): string | null {
-  // 带 CIDR：192.168.2.1/24
   const cidrMatch = address.match(/^(\d+\.\d+\.\d+)\.\d+\/(\d+)$/)
   if (cidrMatch) {
     const prefix = cidrMatch[1]
@@ -445,98 +417,83 @@ function toNetworkCidr(address: string): string | null {
     if (bits >= 16) return `${prefix.split('.')[0]}.${prefix.split('.')[1]}.0.0/16`
     return `${prefix}.0.0.0/8`
   }
-  // 裸 IP：192.168.2.3 → 默认 /24
   const bareMatch = address.match(/^(\d+\.\d+\.\d+)\.\d+$/)
   if (bareMatch) return `${bareMatch[1]}.0/24`
   return null
 }
 
+/** 接口层级 key：bridge/vlan → 管理层, bond → 聚合层, eth/其他 → 物理层 */
+function getIfaceLayerKey(iface: IfacePos): string {
+  if (iface.type === 'bridge' || iface.type === 'vlan') return 'layer-management'
+  if (iface.type === 'bond') return 'layer-bond'
+  return 'layer-physical'
+}
+
 // 获取接口所属段的 Y 偏移（用于段拖动）
 function getIfaceSegOffset(iface: IfacePos): number {
-  const cidr = iface.address ? toNetworkCidr(iface.address) : null
-  return cidr ? (segmentOffsets.value[cidr] || 0) : 0
+  return segmentOffsets.value[getIfaceLayerKey(iface)] || 0
 }
 
 // 获取接口所属段的 X 偏移（用于段拖动）
 function getIfaceSegOffsetX(iface: IfacePos): number {
-  const cidr = iface.address ? toNetworkCidr(iface.address) : null
-  return cidr ? (segmentOffsetsX.value[cidr] || 0) : 0
+  return segmentOffsetsX.value[getIfaceLayerKey(iface)] || 0
 }
 
-const segmentColors = [
-  { fill: 'rgba(103, 194, 58, 0.08)',  stroke: 'rgba(103, 194, 58, 0.35)',  label: 'rgba(103, 194, 58, 0.8)' },  // 绿
-  { fill: 'rgba(230, 162, 60, 0.08)',  stroke: 'rgba(230, 162, 60, 0.35)',  label: 'rgba(230, 162, 60, 0.8)' },  // 橙
-  { fill: 'rgba(64, 158, 255, 0.08)',  stroke: 'rgba(64, 158, 255, 0.35)',  label: 'rgba(64, 158, 255, 0.8)' },  // 蓝
-  { fill: 'rgba(139, 92, 246, 0.08)',  stroke: 'rgba(139, 92, 246, 0.35)',  label: 'rgba(139, 92, 246, 0.8)' },  // 紫
-  { fill: 'rgba(245, 108, 108, 0.08)', stroke: 'rgba(245, 108, 108, 0.35)', label: 'rgba(245, 108, 108, 0.8)' },  // 红
-]
+/** 三层配色：管理(蓝) / 聚合(橙) / 物理(绿) */
+const layerColors: Record<string, { fill: string; stroke: string; label: string }> = {
+  'layer-management': { fill: 'rgba(64, 158, 255, 0.08)',  stroke: 'rgba(64, 158, 255, 0.35)',  label: 'rgba(64, 158, 255, 0.8)' },
+  'layer-bond':       { fill: 'rgba(230, 162, 60, 0.08)',  stroke: 'rgba(230, 162, 60, 0.35)',  label: 'rgba(230, 162, 60, 0.8)' },
+  'layer-physical':   { fill: 'rgba(103, 194, 58, 0.08)',  stroke: 'rgba(103, 194, 58, 0.35)',  label: 'rgba(103, 194, 58, 0.8)' },
+}
 
-/** 按接口类型猜测网段名称 */
-function guessSegmentLabel(ifaces: IfacePos[]): string {
-  const types = new Set(ifaces.map(i => i.type))
-  if (types.has('bridge') && !types.has('bond')) return '管理网段'
-  if (types.has('bond')) {
-    // 检查是否 bridge 下的 bond（业务/VM 网段）或独立 bond
-    return '聚合网段'
-  }
-  return '网络段'
+/** 层级标签 */
+const layerLabels: Record<string, string> = {
+  'layer-management': '管理网段',
+  'layer-bond': '聚合网段',
+  'layer-physical': '物理网卡',
 }
 
 const networkSegments = computed<NetworkSegment[]>(() => {
   const allIfaces = interfacePositions.value
   if (!allIfaces.length) return []
 
-  // 按子网分组
-  const subnetMap = new Map<string, IfacePos[]>()
+  // 按层级分组（所有接口都参与，不管有没有 IP 地址）
+  const layerMap = new Map<string, IfacePos[]>()
   allIfaces.forEach(iface => {
-    if (!iface.address) return
-    const cidr = toNetworkCidr(iface.address)
-    if (!cidr) return
-    if (!subnetMap.has(cidr)) subnetMap.set(cidr, [])
-    subnetMap.get(cidr)!.push(iface)
+    const key = getIfaceLayerKey(iface)
+    if (!layerMap.has(key)) layerMap.set(key, [])
+    layerMap.get(key)!.push(iface)
   })
 
-  // 过滤：至少跨 2 个节点的子网才显示色带
-  const multiNodeSegments = Array.from(subnetMap.entries()).filter(([, group]) => {
+  // 只保留跨 ≥2 个节点的层级
+  const multiNodeLayers = Array.from(layerMap.entries()).filter(([, group]) => {
     const nodeNames = new Set(group.map(i => i.node_name))
     return nodeNames.size >= 2
   })
 
+  // 按层级顺序排列：管理 → 聚合 → 物理
+  const layerOrder = ['layer-management', 'layer-bond', 'layer-physical']
+  multiNodeLayers.sort((a, b) => layerOrder.indexOf(a[0]) - layerOrder.indexOf(b[0]))
+
   const padding = 12
-  const segMinHeight = ifaceHeight + 32 // 色带最小高度：接口卡片 + 上下留白
+  const segMinHeight = ifaceHeight + 32
   const segments: NetworkSegment[] = []
 
-  multiNodeSegments.sort((a, b) => b[1].length - a[1].length) // 接口多的在前
-
-  // 按段内最高接口的 Y 坐标排序，确保从上到下排列
-  multiNodeSegments.sort((a, b) => {
-    const maxYa = Math.max(...a[1].map(i => i.y))
-    const maxYb = Math.max(...b[1].map(i => i.y))
-    return maxYa - maxYb
-  })
-
-  multiNodeSegments.forEach(([cidr, group], idx) => {
+  multiNodeLayers.forEach(([layerKey, group]) => {
     const minX = Math.min(...group.map(i => i.x)) - padding
     const maxX = Math.max(...group.map(i => i.x)) + ifaceWidth + padding
     const width = maxX - minX
     const minY = Math.min(...group.map(i => i.y)) - padding
 
-    // 段高度取：接口实际跨度 vs 最小高度，取较大值
     const contentHeight = Math.max(...group.map(i => i.y)) - Math.min(...group.map(i => i.y)) + ifaceHeight + padding
     const height = Math.max(contentHeight, segMinHeight)
 
-    const colors = segmentColors[idx % segmentColors.length]
-
-    const hasBridge = group.some(i => i.type === 'bridge')
-    const hasBond = group.some(i => i.type === 'bond')
-    const label = hasBridge && !hasBond ? '管理网段'
-      : hasBond && hasBridge ? '管理+业务'
-      : hasBond ? '聚合网段'
-      : guessSegmentLabel(group)
+    const colors = layerColors[layerKey] || layerColors['layer-physical']
+    const label = layerLabels[layerKey] || '网络段'
 
     segments.push({
-      cidr,
-      label: `${label} (${cidr})`,
+      cidr: layerKey,
+      label,
       fillColor: colors.fill,
       strokeColor: colors.stroke,
       labelColor: colors.label,
