@@ -43,7 +43,11 @@
       <template #title><span>集群管理</span></template>
     </el-menu-item>
 
-    <!-- 集群切换 -->
+    <!-- 选择集群 -->
+    <div class="menu-section">
+      <span v-if="!appStore.sidebarCollapsed" class="menu-label">选择集群</span>
+    </div>
+
     <div v-if="!appStore.sidebarCollapsed" class="cluster-switcher">
       <el-select
         :model-value="clusterStore.currentClusterId"
