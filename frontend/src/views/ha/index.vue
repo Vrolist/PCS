@@ -2,7 +2,7 @@
   <div class="page-container">
     <div class="page-header">
       <div>
-        <h2 class="page-title">HA 高可用</h2>
+        <h2 class="page-title">高可用管理</h2>
         <p class="page-desc">高可用资源组管理与状态监控</p>
       </div>
     </div>

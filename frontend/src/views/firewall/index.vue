@@ -2,7 +2,7 @@
   <div class="page-container">
     <div class="page-header">
       <div>
-        <h2 class="page-title">Firewall 防火墙</h2>
+        <h2 class="page-title">防火墙</h2>
         <p class="page-desc">集群与节点防火墙规则管理</p>
       </div>
     </div>

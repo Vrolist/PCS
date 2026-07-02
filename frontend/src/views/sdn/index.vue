@@ -2,7 +2,7 @@
   <div class="page-container">
     <div class="page-header">
       <div>
-        <h2 class="page-title">SDN 软件定义网络</h2>
+        <h2 class="page-title">软件定义网络</h2>
         <p class="page-desc">虚拟网络与子网管理</p>
       </div>
     </div>

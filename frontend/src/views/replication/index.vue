@@ -2,7 +2,7 @@
   <div class="page-container">
     <div class="page-header">
       <div>
-        <h2 class="page-title">Replication 复制</h2>
+        <h2 class="page-title">数据复制</h2>
         <p class="page-desc">跨节点存储复制任务管理</p>
       </div>
     </div>

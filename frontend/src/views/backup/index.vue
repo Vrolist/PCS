@@ -2,7 +2,7 @@
   <div class="page-container">
     <div class="page-header">
       <div>
-        <h2 class="page-title">Backup 备份</h2>
+        <h2 class="page-title">备份管理</h2>
         <p class="page-desc">虚拟机与容器备份任务管理</p>
       </div>
     </div>

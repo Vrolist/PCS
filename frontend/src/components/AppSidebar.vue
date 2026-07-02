@@ -134,27 +134,27 @@
       </el-menu-item>
       <el-menu-item index="/dashboard/ha" class="sidebar-item">
         <div class="item-icon-wrap"><el-icon><Connection /></el-icon></div>
-        <template #title><span>HA</span></template>
+        <template #title><span>高可用管理</span></template>
       </el-menu-item>
       <el-menu-item index="/dashboard/sdn" class="sidebar-item">
         <div class="item-icon-wrap"><el-icon><Share /></el-icon></div>
-        <template #title><span>SDN</span></template>
+        <template #title><span>软件定义网络</span></template>
       </el-menu-item>
       <el-menu-item index="/dashboard/firewall" class="sidebar-item">
         <div class="item-icon-wrap"><el-icon><Lock /></el-icon></div>
-        <template #title><span>Firewall</span></template>
+        <template #title><span>防火墙</span></template>
       </el-menu-item>
       <el-menu-item index="/dashboard/backup" class="sidebar-item">
         <div class="item-icon-wrap"><el-icon><FolderOpened /></el-icon></div>
-        <template #title><span>Backup</span></template>
+        <template #title><span>备份管理</span></template>
       </el-menu-item>
       <el-menu-item index="/dashboard/replication" class="sidebar-item">
         <div class="item-icon-wrap"><el-icon><CopyDocument /></el-icon></div>
-        <template #title><span>Replication</span></template>
+        <template #title><span>数据复制</span></template>
       </el-menu-item>
       <el-menu-item index="/dashboard/snapshots" class="sidebar-item">
         <div class="item-icon-wrap"><el-icon><Camera /></el-icon></div>
-        <template #title><span>Snapshots</span></template>
+        <template #title><span>快照管理</span></template>
       </el-menu-item>
     </template>
 
