@@ -3,12 +3,16 @@ import zhCN from './locales/zh-CN'
 import en from './locales/en'
 import ja from './locales/ja'
 import ko from './locales/ko'
+import de from './locales/de'
+import ru from './locales/ru'
+import fr from './locales/fr'
+import ptBR from './locales/pt-BR'
 
 const i18n = createI18n({
   legacy: false,
   locale: localStorage.getItem('lang') || 'zh-CN',
   fallbackLocale: 'zh-CN',
-  messages: { 'zh-CN': zhCN, en, ja, ko },
+  messages: { 'zh-CN': zhCN, en, ja, ko, de, ru, fr, 'pt-BR': ptBR },
 })
 
 export default i18n

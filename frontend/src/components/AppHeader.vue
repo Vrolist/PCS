@@ -94,6 +94,10 @@ const languages = [
   { value: 'en', label: 'English' },
   { value: 'ja', label: '日本語' },
   { value: 'ko', label: '한국어' },
+  { value: 'de', label: 'Deutsch' },
+  { value: 'ru', label: 'Русский' },
+  { value: 'fr', label: 'Français' },
+  { value: 'pt-BR', label: 'Português' },
 ]
 function handleLangChange(lang: string) {
   setLocale(lang)
