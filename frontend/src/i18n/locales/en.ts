@@ -659,6 +659,9 @@ export default {
       vmName: 'Virtual Machine', vmid: 'VMID', node: 'Node', cluster: 'Cluster',
       noParent: 'None (root)', yes: 'Yes', no: 'No',
       emptyDesc: 'No snapshots found. Deploy an Agent and complete a scan first.',
+      treeView: 'Tree View', tableView: 'Table View',
+      vmCount: 'VM Count', totalSnaps: 'Total Snaps', maxDepth: 'Max Chain',
+      snapCount: 'Snaps', current: 'Current',
     },
   },
 }

@@ -670,9 +670,9 @@ class AgentTasksView(APIView):
 # Agent 版本常量（平台侧维护）
 # ============================================================
 
-AGENT_LATEST_VERSION = "0.6.0"
+AGENT_LATEST_VERSION = "0.7.0"
 AGENT_DOWNLOAD_URL = "/api/agent/install.sh"  # 从平台下载
-AGENT_CHANGELOG = "v0.6.0: 支持 SDN 虚拟网络数据采集"
+AGENT_CHANGELOG = "v0.7.0: 支持 VM 快照数据采集"
 
 
 class AgentUnregisterView(APIView):

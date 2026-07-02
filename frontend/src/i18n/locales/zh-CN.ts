@@ -666,6 +666,9 @@ export default {
       vmName: '虚拟机', vmid: 'VMID', node: '节点', cluster: '集群',
       noParent: '无（根快照）', yes: '是', no: '否',
       emptyDesc: '暂无快照数据，请先部署 Agent 并完成扫描',
+      treeView: '树形视图', tableView: '表格视图',
+      vmCount: '虚拟机数', totalSnaps: '快照总数', maxDepth: '最大链长',
+      snapCount: '快照数', current: '当前',
     },
   },
 }
