@@ -603,6 +603,201 @@ def _gen_replication_data(level, nodes):
     return result
 
 
+def _gen_firewall_data(level, nodes):
+    """根据集群层级生成防火墙数据
+
+    Level 1-2: 基础防火墙（集群开关 + 几条规则）
+    Level 3: 标准防火墙（集群规则 + 节点规则 + 安全组 + IPSet + 别名）
+    Level 4: Ceph 集群防火墙（更多规则 + VM 级防火墙）
+    Level 5: 企业级防火墙（完整配置 + 多安全组 + VM/CT 级防火墙）
+    """
+    node_names = [n["name"] for n in nodes]
+
+    # 集群级选项（所有级别都有）
+    cluster_options = {
+        "enable": 1 if level >= 2 else 0,
+        "policy_in": "DROP" if level >= 4 else "ACCEPT",
+        "policy_out": "ACCEPT",
+        "log_level_in": "info" if level >= 3 else "nolog",
+        "log_level_out": "nolog",
+        "dhcp": 0,
+        "ipfilter": 0,
+        "ndp": 0,
+        "macfilter": 1 if level >= 3 else 0,
+    }
+
+    # 集群级规则
+    cluster_rules = [
+        {"pos": 0, "action": "ACCEPT", "direction": "in", "proto": "tcp", "dport": "22",
+         "source": "", "dest": "", "comment": "SSH 访问", "enabled": True, "log": "", "macro": ""},
+        {"pos": 1, "action": "ACCEPT", "direction": "in", "proto": "tcp", "dport": "8006",
+         "source": "", "dest": "", "comment": "PVE Web UI", "enabled": True, "log": "", "macro": ""},
+        {"pos": 2, "action": "ACCEPT", "direction": "in", "proto": "icmp",
+         "source": "", "dest": "", "dport": "", "comment": "ICMP Ping", "enabled": True, "log": "", "macro": ""},
+    ]
+    if level >= 3:
+        cluster_rules.extend([
+            {"pos": 3, "action": "ACCEPT", "direction": "in", "proto": "tcp", "dport": "5900-5999",
+             "source": "10.0.0.0/8", "dest": "", "comment": "VNC 内网访问", "enabled": True, "log": "", "macro": ""},
+            {"pos": 4, "action": "ACCEPT", "direction": "in", "proto": "tcp", "dport": "3128",
+             "source": "", "dest": "", "comment": "SPICE proxy", "enabled": True, "log": "", "macro": ""},
+            {"pos": 5, "action": "DROP", "direction": "in", "proto": "", "dport": "",
+             "source": "", "dest": "", "comment": "默认拒绝入站", "enabled": True, "log": "info", "macro": ""},
+        ])
+    if level >= 4:
+        cluster_rules.extend([
+            {"pos": 6, "action": "ACCEPT", "direction": "in", "proto": "tcp", "dport": "6789,3300",
+             "source": "", "dest": "", "comment": "Ceph MON/MGR", "enabled": True, "log": "", "macro": ""},
+            {"pos": 7, "action": "ACCEPT", "direction": "in", "proto": "tcp", "dport": "6800-7300",
+             "source": "", "dest": "", "comment": "Ceph OSD/MDS", "enabled": True, "log": "", "macro": ""},
+        ])
+
+    # 安全组
+    security_groups = {}
+    if level >= 3:
+        security_groups["web-servers"] = [
+            {"pos": 0, "action": "ACCEPT", "direction": "in", "proto": "tcp", "dport": "80",
+             "source": "", "dest": "", "comment": "HTTP", "enabled": True, "log": "", "macro": ""},
+            {"pos": 1, "action": "ACCEPT", "direction": "in", "proto": "tcp", "dport": "443",
+             "source": "", "dest": "", "comment": "HTTPS", "enabled": True, "log": "", "macro": ""},
+            {"pos": 2, "action": "DROP", "direction": "in", "proto": "", "dport": "",
+             "source": "", "dest": "", "comment": "拒绝其他", "enabled": True, "log": "warning", "macro": ""},
+        ]
+        security_groups["db-servers"] = [
+            {"pos": 0, "action": "ACCEPT", "direction": "in", "proto": "tcp", "dport": "3306",
+             "source": "10.0.0.0/8", "dest": "", "comment": "MySQL 内网", "enabled": True, "log": "", "macro": ""},
+            {"pos": 1, "action": "ACCEPT", "direction": "in", "proto": "tcp", "dport": "5432",
+             "source": "10.0.0.0/8", "dest": "", "comment": "PostgreSQL 内网", "enabled": True, "log": "", "macro": ""},
+            {"pos": 2, "action": "DROP", "direction": "in", "proto": "", "dport": "",
+             "source": "", "dest": "", "comment": "拒绝其他", "enabled": True, "log": "", "macro": ""},
+        ]
+    if level >= 5:
+        security_groups["monitoring"] = [
+            {"pos": 0, "action": "ACCEPT", "direction": "in", "proto": "tcp", "dport": "9090",
+             "source": "192.168.0.0/16", "dest": "", "comment": "Prometheus", "enabled": True, "log": "", "macro": ""},
+            {"pos": 1, "action": "ACCEPT", "direction": "in", "proto": "tcp", "dport": "3000",
+             "source": "192.168.0.0/16", "dest": "", "comment": "Grafana", "enabled": True, "log": "", "macro": ""},
+        ]
+
+    # IPSet
+    ipsets = {}
+    if level >= 3:
+        ipsets["management"] = {
+            "name": "management",
+            "comment": "管理 IP 白名单",
+            "entries": [
+                {"cidr": "192.168.1.0/24", "comment": "运维网段", "nomatch": False},
+                {"cidr": "10.0.0.1", "comment": "网关", "nomatch": False},
+            ],
+        }
+    if level >= 4:
+        ipsets["monitoring-agents"] = {
+            "name": "monitoring-agents",
+            "comment": "监控 Agent IP",
+            "entries": [
+                {"cidr": "10.200.0.10", "comment": "Zabbix Server", "nomatch": False},
+                {"cidr": "10.200.0.11", "comment": "Prometheus", "nomatch": False},
+                {"cidr": "10.200.0.12", "comment": "Grafana", "nomatch": False},
+            ],
+        }
+    if level >= 5:
+        ipsets["blacklist"] = {
+            "name": "blacklist",
+            "comment": "IP 黑名单",
+            "entries": [
+                {"cidr": "203.0.113.0/24", "comment": "已知攻击源段", "nomatch": False},
+                {"cidr": "198.51.100.0/24", "comment": "恶意扫描段", "nomatch": False},
+            ],
+        }
+
+    # 别名
+    aliases = []
+    if level >= 3:
+        aliases.extend([
+            {"name": "internal_net", "cidr": "10.0.0.0/8", "alias_type": "net", "comment": "内网网段"},
+            {"name": "pve_api", "cidr": "192.168.10.10", "alias_type": "ip", "comment": "PVE API 地址"},
+        ])
+    if level >= 4:
+        aliases.extend([
+            {"name": "ceph_public", "cidr": "10.200.0.0/24", "alias_type": "net", "comment": "Ceph 公网网段"},
+            {"name": "ceph_cluster", "cidr": "172.16.0.0/24", "alias_type": "net", "comment": "Ceph 集群网段"},
+        ])
+    if level >= 5:
+        aliases.extend([
+            {"name": "ops_team", "cidr": "192.168.1.0/24", "alias_type": "net", "comment": "运维团队网段"},
+            {"name": "backup_server", "cidr": "10.0.0.50", "alias_type": "ip", "comment": "备份服务器"},
+        ])
+
+    # 节点级防火墙
+    nodes_fw = {}
+    for n in nodes:
+        nname = n["name"]
+        node_opts = {
+            "enable": 1 if level >= 3 else 0,
+            "policy_in": "ACCEPT",
+            "policy_out": "ACCEPT",
+            "log_level_in": "nolog",
+            "log_level_out": "nolog",
+            "macfilter": 1 if level >= 3 else 0,
+        }
+        node_rules = []
+        if level >= 3:
+            node_rules = [
+                {"pos": 0, "action": "ACCEPT", "direction": "in", "proto": "tcp", "dport": "8006",
+                 "source": "management", "dest": "", "comment": "PVE Web UI (管理IP)", "enabled": True, "log": "", "macro": ""},
+                {"pos": 1, "action": "ACCEPT", "direction": "in", "proto": "tcp", "dport": "22",
+                 "source": "management", "dest": "", "comment": "SSH (管理IP)", "enabled": True, "log": "", "macro": ""},
+            ]
+
+        # VM 级防火墙（Level 4+ 为部分 VM 开启）
+        vms_fw = {}
+        if level >= 4:
+            vms = n.get("vms", [])
+            for vm in vms[:2]:  # 为前 2 个 VM 开启防火墙
+                vmid = str(vm["vmid"])
+                vms_fw[vmid] = {
+                    "options": {"enable": 1, "policy_in": "DROP", "policy_out": "ACCEPT",
+                                "dhcp": 0, "ipfilter": 1, "macfilter": 1},
+                    "rules": [
+                        {"pos": 0, "action": "ACCEPT", "direction": "in", "proto": "tcp", "dport": "22",
+                         "source": "", "dest": "", "comment": "SSH", "enabled": True, "log": "", "macro": ""},
+                        {"pos": 1, "action": "ACCEPT", "direction": "in", "proto": "tcp", "dport": "80,443",
+                         "source": "", "dest": "", "comment": "HTTP/HTTPS", "enabled": True, "log": "", "macro": ""},
+                    ],
+                }
+
+        # 容器级防火墙（Level 5 为部分 CT 开启）
+        cts_fw = {}
+        if level >= 5:
+            cts = n.get("containers", [])
+            for ct in cts[:1]:  # 为第 1 个容器开启防火墙
+                vmid = str(ct["vmid"])
+                cts_fw[vmid] = {
+                    "options": {"enable": 1, "policy_in": "ACCEPT", "policy_out": "ACCEPT",
+                                "dhcp": 0, "ipfilter": 0, "macfilter": 0},
+                    "rules": [
+                        {"pos": 0, "action": "ACCEPT", "direction": "in", "proto": "tcp", "dport": "80,443",
+                         "source": "", "dest": "", "comment": "Web 服务", "enabled": True, "log": "", "macro": ""},
+                    ],
+                }
+
+        nodes_fw[nname] = {
+            "options": node_opts,
+            "rules": node_rules,
+            "vms": vms_fw,
+            "cts": cts_fw,
+        }
+
+    return {
+        "cluster_options": cluster_options,
+        "cluster_rules": cluster_rules,
+        "security_groups": security_groups,
+        "ipsets": ipsets,
+        "aliases": aliases,
+        "nodes": nodes_fw,
+    }
+
+
 # ============================================================
 # 磁盘设备生成器
 # ============================================================
@@ -1491,6 +1686,7 @@ def _build_scan_payload(cluster_id, agent_ids, data, scan_time, scan_idx, total_
         "ha_resources": data.get("ha_resources", []),
         "sdn": _gen_sdn_data(level),
         "replication": _gen_replication_data(level, nodes_out),
+        "firewall": _gen_firewall_data(level, nodes_out),
     }
     return payload
 

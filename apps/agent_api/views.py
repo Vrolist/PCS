@@ -6,6 +6,14 @@ import uuid
 from datetime import timedelta
 from pathlib import Path
 
+
+def _version_tuple(v: str) -> tuple:
+    """将版本号字符串转为可比较的元组，如 '0.10.0' → (0, 10, 0)"""
+    try:
+        return tuple(int(x) for x in v.strip().split("."))
+    except (ValueError, AttributeError):
+        return (0,)
+
 from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
@@ -170,9 +178,9 @@ class AgentHeartbeatView(APIView):
         # 构建响应
         response = {"ok": True}
 
-        # 检测是否有新版本
+        # 检测是否有新版本（使用元组比较，避免 "0.9.0" > "0.10.0" 的字符串比较问题）
         agent_version = agent.version or "0.0.0"
-        if agent_version < AGENT_LATEST_VERSION:
+        if _version_tuple(agent_version) < _version_tuple(AGENT_LATEST_VERSION):
             request_host = request.get_host()
             scheme = "https" if request.is_secure() else "http"
             download_url = f"{scheme}://{request_host}{AGENT_DOWNLOAD_URL}?agent=1"

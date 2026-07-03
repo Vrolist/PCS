@@ -46,6 +46,7 @@ class ScanUploadSerializer(serializers.Serializer):
     sdn = serializers.DictField(required=False, default=dict, help_text="SDN 虚拟网络数据")
     backups = serializers.DictField(required=False, default=dict, help_text="备份数据")
     replication = serializers.ListField(required=False, default=list, help_text="复制任务列表")
+    firewall = serializers.DictField(required=False, default=dict, help_text="防火墙配置数据")
 
 
 class AgentTaskSerializer(serializers.ModelSerializer):
