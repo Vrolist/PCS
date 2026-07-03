@@ -23,6 +23,7 @@ from apps.scanner.models import (
     ClusterNode,
     LXC,
     NetworkInterface,
+    ReplicationJob,
     ScanHistory,
     SDNZone,
     SDNVNet,
@@ -221,6 +222,7 @@ class ScanUploadView(APIView):
         ha_data = d.get("ha_resources", [])
         sdn_data = d.get("sdn", {})
         backups_data = d.get("backups", {})
+        replication_data = d.get("replication", [])
 
         # 创建扫描任务记录
         # raw_data 需要序列化为 JSON 兼容格式（datetime → str）
@@ -248,6 +250,8 @@ class ScanUploadView(APIView):
                     self._save_sdn(cluster, scan_task, sdn_data, scanned_at)
                 if backups_data:
                     self._save_backups(cluster, scan_task, backups_data, scanned_at)
+                if replication_data:
+                    self._save_replications(cluster, scan_task, replication_data, scanned_at)
                 self._save_scan_history(cluster, scan_task, nodes_data, scanned_at)
                 self._update_cluster_stats(cluster, nodes_data)
 
@@ -715,6 +719,44 @@ class ScanUploadView(APIView):
                 scanned_at=scanned_at,
             )
 
+    def _save_replications(self, cluster, scan_task, replication_data, scanned_at):
+        """保存复制任务数据"""
+        for r in replication_data:
+            job_id = r.get("job_id", "")
+            if not job_id:
+                continue
+            last_sync = r.get("last_sync")
+            last_try = r.get("last_try")
+            if isinstance(last_sync, str):
+                from django.utils.dateparse import parse_datetime
+                last_sync = parse_datetime(last_sync)
+            if isinstance(last_try, str):
+                from django.utils.dateparse import parse_datetime
+                last_try = parse_datetime(last_try)
+            ReplicationJob.objects.update_or_create(
+                cluster=cluster,
+                job_id=job_id,
+                defaults=dict(
+                    scan=scan_task,
+                    vmid=r.get("vmid"),
+                    resource_type=r.get("resource_type", ""),
+                    source_node=r.get("source_node", ""),
+                    target_node=r.get("target_node", ""),
+                    schedule=r.get("schedule", ""),
+                    rate_limit=r.get("rate_limit"),
+                    comment=r.get("comment", ""),
+                    enabled=r.get("enabled", True),
+                    state=r.get("state", ""),
+                    last_sync=last_sync,
+                    last_try=last_try,
+                    last_duration=r.get("last_duration"),
+                    error_message=r.get("error_message", ""),
+                    sync_count=r.get("sync_count", 0),
+                    raw_data=r.get("raw", {}),
+                    scanned_at=scanned_at,
+                ),
+            )
+
     def _save_scan_history(self, cluster, scan_task, nodes_data, scanned_at):
         """保存扫描历史快照"""
         total_vms = sum(len(n.get("vms", [])) for n in nodes_data)
@@ -786,9 +828,9 @@ class AgentTasksView(APIView):
 # Agent 版本常量（平台侧维护）
 # ============================================================
 
-AGENT_LATEST_VERSION = "0.8.0"
+AGENT_LATEST_VERSION = "0.9.0"
 AGENT_DOWNLOAD_URL = "/api/agent/install.sh"  # 从平台下载
-AGENT_CHANGELOG = "v0.8.0: 支持备份数据采集"
+AGENT_CHANGELOG = "v0.9.0: 支持存储复制任务数据采集"
 
 
 class AgentUnregisterView(APIView):

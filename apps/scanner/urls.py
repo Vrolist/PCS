@@ -21,4 +21,5 @@ urlpatterns = [
     path("backup/jobs/", views.BackupJobListView.as_view(), name="scanner-backup-jobs"),
     path("backup/history/", views.BackupHistoryListView.as_view(), name="scanner-backup-history"),
     path("backup/stats/", views.BackupStatsView.as_view(), name="scanner-backup-stats"),
+    path("replication/", views.ReplicationJobListView.as_view(), name="scanner-replication"),
 ]

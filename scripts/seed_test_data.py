@@ -513,6 +513,96 @@ def _gen_sdn_data(level):
     }
 
 
+def _gen_replication_data(level, nodes):
+    """根据集群层级生成复制任务数据
+
+    Level 1-2: 无复制
+    Level 3: 2 个复制任务 (节点间)
+    Level 4: 3 个复制任务 (含 Ceph 节点)
+    Level 5: 5 个复制任务 (企业级)
+    """
+    if level <= 2:
+        return []
+
+    node_names = [n["name"] for n in nodes]
+    if len(node_names) < 2:
+        return []
+
+    now = datetime.now(timezone.utc)
+    schedules = ["*/15", "*/30", "hourly", "*/5", "*/60"]
+    states = ["active", "active", "active", "active", "disabled"]
+
+    if level == 3:
+        vms = [v for n in nodes for v in n.get("vms", [])[:2]]
+        vmids = [v["vmid"] for v in vms[:2]] or [100, 101]
+        return [{
+            "job_id": f"{i+1}-0",
+            "vmid": vmids[i] if i < len(vmids) else 100 + i,
+            "resource_type": "vm",
+            "source_node": node_names[0],
+            "target_node": node_names[min(i + 1, len(node_names) - 1)],
+            "schedule": schedules[i % len(schedules)],
+            "rate_limit": random.choice([None, 100, 500]),
+            "comment": f"VM {vmids[i] if i < len(vmids) else 100 + i} replication",
+            "enabled": True,
+            "state": states[i % len(states)],
+            "last_sync": (now - timedelta(minutes=random.randint(5, 120))).isoformat(),
+            "last_try": (now - timedelta(minutes=random.randint(1, 5))).isoformat(),
+            "last_duration": random.randint(10, 300),
+            "error_message": "",
+            "sync_count": random.randint(50, 500),
+            "raw": {},
+        } for i in range(2)]
+
+    if level == 4:
+        vms = [v for n in nodes for v in n.get("vms", [])[:2]]
+        vmids = [v["vmid"] for v in vms[:3]] or [100, 101, 102]
+        return [{
+            "job_id": f"{i+1}-0",
+            "vmid": vmids[i] if i < len(vmids) else 100 + i,
+            "resource_type": "vm",
+            "source_node": node_names[i % len(node_names)],
+            "target_node": node_names[(i + 1) % len(node_names)],
+            "schedule": schedules[i % len(schedules)],
+            "rate_limit": random.choice([None, 100, 500, 1000]),
+            "comment": f"VM {vmids[i] if i < len(vmids) else 100 + i} HA replication",
+            "enabled": True,
+            "state": "active",
+            "last_sync": (now - timedelta(minutes=random.randint(5, 60))).isoformat(),
+            "last_try": (now - timedelta(minutes=random.randint(1, 5))).isoformat(),
+            "last_duration": random.randint(10, 200),
+            "error_message": "",
+            "sync_count": random.randint(100, 1000),
+            "raw": {},
+        } for i in range(3)]
+
+    # Level 5
+    vms = [v for n in nodes for v in n.get("vms", [])[:2]]
+    vmids = [v["vmid"] for v in vms[:5]] or [100, 101, 102, 103, 104]
+    result = []
+    for i in range(5):
+        has_error = i == 3
+        result.append({
+            "job_id": f"{i+1}-0",
+            "vmid": vmids[i] if i < len(vmids) else 100 + i,
+            "resource_type": "vm",
+            "source_node": node_names[i % len(node_names)],
+            "target_node": node_names[(i + 2) % len(node_names)],
+            "schedule": schedules[i % len(schedules)],
+            "rate_limit": random.choice([None, 100, 500, 1000]),
+            "comment": f"VM {vmids[i] if i < len(vmids) else 100 + i} production replication",
+            "enabled": not has_error,
+            "state": "error" if has_error else "active",
+            "last_sync": (now - timedelta(minutes=random.randint(5, 60))).isoformat() if not has_error else None,
+            "last_try": (now - timedelta(minutes=random.randint(1, 10))).isoformat(),
+            "last_duration": random.randint(10, 300) if not has_error else None,
+            "error_message": "ZFS send/receive failed: I/O error" if has_error else "",
+            "sync_count": random.randint(200, 2000) if not has_error else random.randint(0, 50),
+            "raw": {},
+        })
+    return result
+
+
 # ============================================================
 # 磁盘设备生成器
 # ============================================================
@@ -1400,6 +1490,7 @@ def _build_scan_payload(cluster_id, agent_ids, data, scan_time, scan_idx, total_
         "ceph": data.get("ceph"),
         "ha_resources": data.get("ha_resources", []),
         "sdn": _gen_sdn_data(level),
+        "replication": _gen_replication_data(level, nodes_out),
     }
     return payload
 

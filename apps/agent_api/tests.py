@@ -864,7 +864,8 @@ class AgentVersionAPITest(TestCase):
 
     def test_version_has_current(self):
         resp = self.client.get(self.url)
-        self.assertEqual(resp.data["latest_version"], "0.7.0")
+        from apps.agent_api.views import AGENT_LATEST_VERSION
+        self.assertEqual(resp.data["latest_version"], AGENT_LATEST_VERSION)
 
 
 # ============================================================

@@ -37,7 +37,7 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-VERSION = "0.8.0"
+VERSION = "0.9.0"
 
 # 路径常量
 INSTALL_DIR = Path("/opt/pcs-agent")
@@ -273,6 +273,13 @@ class PVEClient:
         except Exception:
             return []
 
+    def get_node_replication(self, node):
+        """获取节点的复制任务列表"""
+        try:
+            return self.get(f"/nodes/{node}/replication")
+        except Exception:
+            return []
+
 
 # ============================================================
 # 数据采集
@@ -306,6 +313,7 @@ def scan_full(pve):
     ceph = pve.get_ceph_status()
     ha_resources = _scan_ha(pve)
     sdn = _scan_sdn(pve)
+    replication = _scan_replication(pve, nodes_data)
 
     backups = {}
     try:
@@ -324,6 +332,7 @@ def scan_full(pve):
         "ceph": ceph,
         "ha_resources": ha_resources,
         "sdn": sdn,
+        "replication": replication,
         "backups": backups,
     }
 
@@ -683,6 +692,58 @@ def _scan_sdn(pve):
         "vnets": pve.get_sdn_vnets() or [],
         "subnets": pve.get_sdn_subnets() or [],
     }
+
+
+def _scan_replication(pve, nodes_data):
+    """扫描所有节点的复制任务"""
+    jobs = []
+    for nd in nodes_data:
+        if nd.get("status") == "offline" or nd.get("error"):
+            continue
+        name = nd["name"]
+        try:
+            node_jobs = pve.get_node_replication(name)
+            for job in node_jobs:
+                job_id = str(job.get("id", ""))
+                guest = job.get("guest", 0)
+                rtype = "vm" if job.get("type", "") == "local" else "ct"
+                # 从 guest 字段推断类型: < 1000 通常为 VM，>= 1000 可能为 CT
+                # PVE replication type 字段: local 表示同集群复制
+                last_sync_ts = job.get("last_sync", 0)
+                last_try_ts = job.get("last_try", 0)
+                last_sync = None
+                last_try = None
+                if last_sync_ts and last_sync_ts > 0:
+                    try:
+                        last_sync = datetime.fromtimestamp(last_sync_ts, tz=timezone.utc).isoformat()
+                    except Exception:
+                        pass
+                if last_try_ts and last_try_ts > 0:
+                    try:
+                        last_try = datetime.fromtimestamp(last_try_ts, tz=timezone.utc).isoformat()
+                    except Exception:
+                        pass
+                jobs.append({
+                    "job_id": job_id,
+                    "vmid": guest,
+                    "resource_type": rtype,
+                    "source_node": name,
+                    "target_node": job.get("target", ""),
+                    "schedule": job.get("schedule", ""),
+                    "rate_limit": job.get("rate"),
+                    "comment": job.get("comment", ""),
+                    "enabled": not bool(job.get("disable", 0)),
+                    "state": job.get("state", ""),
+                    "last_sync": last_sync,
+                    "last_try": last_try,
+                    "last_duration": job.get("duration"),
+                    "error_message": job.get("error", ""),
+                    "sync_count": job.get("sync_count", 0),
+                    "raw": job,
+                })
+        except Exception as e:
+            logger.warning(f"扫描节点 {name} 复制任务失败: {e}")
+    return jobs
 
 
 def _scan_backups(pve, node):

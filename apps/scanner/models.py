@@ -481,6 +481,52 @@ class SDNSubnet(models.Model):
         return self.subnet
 
 
+class ReplicationJob(models.Model):
+    """PVE 存储复制任务"""
+    class Status(models.TextChoices):
+        ACTIVE = "active", "活跃"
+        DISABLED = "disabled", "禁用"
+        ERROR = "error", "错误"
+        SYNCING = "syncing", "同步中"
+
+    cluster = models.ForeignKey(Cluster, on_delete=models.CASCADE, verbose_name="所属集群",
+                                related_name="replication_jobs")
+    scan = models.ForeignKey(ScanTask, on_delete=models.SET_NULL, null=True, blank=True)
+
+    job_id = models.CharField("任务ID", max_length=128, db_index=True,
+                              help_text="PVE 复制任务标识，如 1-0")
+    vmid = models.IntegerField("VM/CT ID", null=True, blank=True)
+    resource_type = models.CharField("资源类型", max_length=16, blank=True,
+                                     help_text="vm / ct")
+    source_node = models.CharField("源节点", max_length=128, blank=True)
+    target_node = models.CharField("目标节点", max_length=128, blank=True)
+    schedule = models.CharField("调度规则", max_length=128, blank=True,
+                                help_text="如 */15 (每15分钟)")
+    rate_limit = models.IntegerField("速率限制(MB/s)", null=True, blank=True)
+    comment = models.TextField("备注", blank=True)
+    enabled = models.BooleanField("启用", default=True)
+
+    state = models.CharField("状态", max_length=32, blank=True,
+                             help_text="active / disabled / error / syncing")
+    last_sync = models.DateTimeField("上次同步时间", null=True, blank=True)
+    last_try = models.DateTimeField("上次尝试时间", null=True, blank=True)
+    last_duration = models.IntegerField("上次同步耗时(秒)", null=True, blank=True)
+    error_message = models.TextField("错误信息", blank=True)
+    sync_count = models.IntegerField("成功同步次数", default=0)
+
+    raw_data = models.JSONField("原始数据", default=dict, blank=True)
+    scanned_at = models.DateTimeField("扫描时间", db_index=True)
+
+    class Meta:
+        verbose_name = "复制任务"
+        verbose_name_plural = "复制任务"
+        unique_together = ("cluster", "job_id")
+        ordering = ["cluster", "job_id"]
+
+    def __str__(self):
+        return f"{self.job_id} (VMID {self.vmid})"
+
+
 class ScanHistory(models.Model):
     """每次扫描的快照汇总（用于趋势图表）"""
     cluster = models.ForeignKey(Cluster, on_delete=models.CASCADE, verbose_name="所属集群",

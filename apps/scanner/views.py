@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.clusters.models import Cluster
-from .models import ClusterNode, VM, LXC, VMConfig, LXCConfig, VMSnapshot, HAResource, Storage, NetworkInterface, CephStatus, SDNZone, SDNVNet, SDNSubnet, BackupStorage, BackupJob, BackupHistory
+from .models import ClusterNode, VM, LXC, VMConfig, LXCConfig, VMSnapshot, HAResource, Storage, NetworkInterface, CephStatus, SDNZone, SDNVNet, SDNSubnet, BackupStorage, BackupJob, BackupHistory, ReplicationJob
 
 
 def _user_cluster_ids(user):
@@ -1042,3 +1042,71 @@ class BackupStatsView(APIView):
             "success_rate": round(success_backups / total_backups * 100, 1) if total_backups > 0 else 0,
             "total_backup_size_gb": round(total_backup_size / 1073741824, 2),
         })
+
+
+class ReplicationJobListView(APIView):
+    """GET /api/scanner/replication/ — 存储复制任务列表"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        cluster_filter = request.query_params.get("cluster_id")
+        status_filter = request.query_params.get("status")
+        search = request.query_params.get("search", "").strip()
+
+        cluster_ids = _user_cluster_ids(request.user)
+        qs = ReplicationJob.objects.filter(cluster_id__in=cluster_ids).select_related("cluster")
+        if cluster_filter:
+            qs = qs.filter(cluster_id=cluster_filter)
+        if status_filter:
+            qs = qs.filter(state=status_filter)
+        if search:
+            qs = qs.filter(
+                Q(job_id__icontains=search) | Q(source_node__icontains=search) |
+                Q(target_node__icontains=search) | Q(comment__icontains=search)
+            )
+
+        # Only latest per (cluster, job_id)
+        latest = (
+            qs.values("cluster_id", "job_id")
+            .annotate(last_scan=Max("scanned_at"))
+        )
+        q = Q()
+        for item in latest:
+            q |= Q(cluster_id=item["cluster_id"], job_id=item["job_id"],
+                    scanned_at=item["last_scan"])
+        if q:
+            qs = ReplicationJob.objects.filter(q, cluster_id__in=cluster_ids).select_related("cluster")
+        else:
+            qs = ReplicationJob.objects.none()
+        if cluster_filter:
+            qs = qs.filter(cluster_id=cluster_filter)
+        if status_filter:
+            qs = qs.filter(state=status_filter)
+        if search:
+            qs = qs.filter(
+                Q(job_id__icontains=search) | Q(source_node__icontains=search) |
+                Q(target_node__icontains=search) | Q(comment__icontains=search)
+            )
+
+        data = [{
+            "id": j.id,
+            "cluster_id": j.cluster_id,
+            "cluster_name": j.cluster.name,
+            "job_id": j.job_id,
+            "vmid": j.vmid,
+            "resource_type": j.resource_type,
+            "source_node": j.source_node,
+            "target_node": j.target_node,
+            "schedule": j.schedule,
+            "rate_limit": j.rate_limit,
+            "comment": j.comment,
+            "enabled": j.enabled,
+            "state": j.state,
+            "last_sync": j.last_sync,
+            "last_try": j.last_try,
+            "last_duration": j.last_duration,
+            "error_message": j.error_message,
+            "sync_count": j.sync_count,
+            "scanned_at": j.scanned_at,
+        } for j in qs]
+        return Response(data)
