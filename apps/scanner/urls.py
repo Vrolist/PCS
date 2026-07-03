@@ -22,4 +22,10 @@ urlpatterns = [
     path("backup/history/", views.BackupHistoryListView.as_view(), name="scanner-backup-history"),
     path("backup/stats/", views.BackupStatsView.as_view(), name="scanner-backup-stats"),
     path("replication/", views.ReplicationJobListView.as_view(), name="scanner-replication"),
+    path("firewall/summary/", views.FirewallSummaryView.as_view(), name="scanner-firewall-summary"),
+    path("firewall/rules/", views.FirewallRulesView.as_view(), name="scanner-firewall-rules"),
+    path("firewall/ipsets/", views.FirewallIPSetsView.as_view(), name="scanner-firewall-ipsets"),
+    path("firewall/aliases/", views.FirewallAliasesView.as_view(), name="scanner-firewall-aliases"),
+    path("firewall/options/", views.FirewallOptionsView.as_view(), name="scanner-firewall-options"),
+    path("firewall/security-groups/", views.FirewallSecurityGroupsView.as_view(), name="scanner-firewall-security-groups"),
 ]

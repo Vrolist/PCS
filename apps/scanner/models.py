@@ -728,3 +728,156 @@ class BackupHistory(models.Model):
 
     def __str__(self):
         return f"VMID {self.vmid} - {self.status} ({self.started_at})"
+
+
+class FirewallOptions(models.Model):
+    """防火墙选项（集群/节点/VM/CT 各一条，原地更新）"""
+    cluster = models.ForeignKey(Cluster, on_delete=models.CASCADE, verbose_name="所属集群",
+                                related_name="firewall_options")
+    scan = models.ForeignKey(ScanTask, on_delete=models.SET_NULL, null=True, blank=True)
+
+    scope = models.CharField("作用域", max_length=16,
+                             help_text="cluster / node / vm / ct")
+    node_name = models.CharField("节点名称", max_length=128, blank=True)
+    vmid = models.IntegerField("VM/CT ID", null=True, blank=True)
+
+    enabled = models.BooleanField("启用防火墙", default=False)
+    policy_in = models.CharField("入站策略", max_length=16, default="ACCEPT",
+                                 help_text="ACCEPT / DROP / REJECT")
+    policy_out = models.CharField("出站策略", max_length=16, default="ACCEPT")
+    policy_forward = models.CharField("转发策略", max_length=16, default="ACCEPT",
+                                      help_text="仅 nftables 支持 forward 规则")
+    log_level_in = models.CharField("入站日志级别", max_length=16, blank=True,
+                                    help_text="nolog / info / warning / err / crit")
+    log_level_out = models.CharField("出站日志级别", max_length=16, blank=True)
+    dhcp = models.BooleanField("DHCP", default=False)
+    ipfilter = models.BooleanField("IP过滤", default=False)
+    ndp = models.BooleanField("NDP", default=False)
+    macfilter = models.BooleanField("MAC过滤", default=False)
+    raw_options = models.JSONField("原始选项", default=dict, blank=True)
+    scanned_at = models.DateTimeField("扫描时间", db_index=True)
+
+    class Meta:
+        verbose_name = "防火墙选项"
+        verbose_name_plural = "防火墙选项"
+        unique_together = ("cluster", "scope", "node_name", "vmid")
+        ordering = ["scope", "node_name", "vmid"]
+
+    def __str__(self):
+        if self.scope == "cluster":
+            return f"{self.cluster.name} - 集群防火墙"
+        if self.scope == "node":
+            return f"节点 {self.node_name} 防火墙"
+        return f"{self.scope.upper()} {self.vmid} 防火墙"
+
+
+class FirewallRule(models.Model):
+    """防火墙规则"""
+    cluster = models.ForeignKey(Cluster, on_delete=models.CASCADE, verbose_name="所属集群",
+                                related_name="firewall_rules")
+    scan = models.ForeignKey(ScanTask, on_delete=models.SET_NULL, null=True, blank=True)
+
+    scope = models.CharField("作用域", max_length=16,
+                             help_text="cluster / node / vm / ct / group")
+    group_name = models.CharField("安全组名", max_length=64, blank=True)
+    node_name = models.CharField("节点名称", max_length=128, blank=True)
+    vmid = models.IntegerField("VM/CT ID", null=True, blank=True)
+
+    pos = models.IntegerField("规则位置", default=0)
+    action = models.CharField("动作", max_length=16, help_text="ACCEPT / DROP / REJECT")
+    direction = models.CharField("方向", max_length=8, help_text="in / out / forward")
+    proto = models.CharField("协议", max_length=16, blank=True, help_text="tcp / udp / icmp")
+    source = models.CharField("源地址", max_length=128, blank=True)
+    dest = models.CharField("目标地址", max_length=128, blank=True)
+    dport = models.CharField("目标端口", max_length=128, blank=True)
+    sport = models.CharField("源端口", max_length=128, blank=True)
+    comment = models.CharField("备注", max_length=256, blank=True)
+    enabled = models.BooleanField("启用", default=True)
+    log = models.CharField("日志", max_length=16, blank=True,
+                           help_text="nolog / info / warning / err / crit")
+    iface = models.CharField("接口", max_length=32, blank=True)
+    macro = models.CharField("宏", max_length=64, blank=True)
+    raw_rule = models.JSONField("原始规则", default=dict, blank=True)
+    scanned_at = models.DateTimeField("扫描时间", db_index=True)
+
+    class Meta:
+        verbose_name = "防火墙规则"
+        verbose_name_plural = "防火墙规则"
+        unique_together = ("cluster", "scope", "node_name", "vmid", "group_name", "pos")
+        ordering = ["scope", "node_name", "vmid", "pos"]
+
+    def __str__(self):
+        prefix = f"[{self.direction.upper()}] {self.action}"
+        if self.dport:
+            prefix += f" :{self.dport}"
+        return f"{prefix} ({self.scope})"
+
+
+class FirewallIPSet(models.Model):
+    """防火墙 IPSet 地址池"""
+    cluster = models.ForeignKey(Cluster, on_delete=models.CASCADE, verbose_name="所属集群",
+                                related_name="firewall_ipsets")
+    scan = models.ForeignKey(ScanTask, on_delete=models.SET_NULL, null=True, blank=True)
+
+    scope = models.CharField("作用域", max_length=16, help_text="cluster / vm")
+    vmid = models.IntegerField("VM/CT ID", null=True, blank=True)
+    name = models.CharField("IPSet名称", max_length=64, help_text="如 management / blacklist")
+    comment = models.CharField("备注", max_length=256, blank=True)
+    raw_data = models.JSONField("原始数据", default=dict, blank=True)
+    scanned_at = models.DateTimeField("扫描时间", db_index=True)
+
+    class Meta:
+        verbose_name = "防火墙IPSet"
+        verbose_name_plural = "防火墙IPSet"
+        unique_together = ("cluster", "scope", "vmid", "name")
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.scope})"
+
+
+class FirewallIPSetEntry(models.Model):
+    """防火墙 IPSet 条目"""
+    ipset = models.ForeignKey(FirewallIPSet, on_delete=models.CASCADE,
+                              verbose_name="所属IPSet", related_name="entries")
+
+    cidr = models.CharField("IP/CIDR", max_length=64, help_text="如 192.168.1.0/24")
+    comment = models.CharField("备注", max_length=256, blank=True)
+    nomatch = models.BooleanField("反向匹配", default=False)
+    raw_data = models.JSONField("原始数据", default=dict, blank=True)
+    scanned_at = models.DateTimeField("扫描时间", db_index=True)
+
+    class Meta:
+        verbose_name = "IPSet条目"
+        verbose_name_plural = "IPSet条目"
+        unique_together = ("ipset", "cidr")
+        ordering = ["cidr"]
+
+    def __str__(self):
+        return f"{self.cidr} ({self.ipset.name})"
+
+
+class FirewallAlias(models.Model):
+    """防火墙别名"""
+    cluster = models.ForeignKey(Cluster, on_delete=models.CASCADE, verbose_name="所属集群",
+                                related_name="firewall_aliases")
+    scan = models.ForeignKey(ScanTask, on_delete=models.SET_NULL, null=True, blank=True)
+
+    scope = models.CharField("作用域", max_length=16, help_text="cluster / vm")
+    vmid = models.IntegerField("VM/CT ID", null=True, blank=True)
+    name = models.CharField("别名", max_length=64)
+    cidr = models.CharField("IP/CIDR", max_length=128, blank=True,
+                            help_text="如 192.168.1.0/24 或 10.0.0.1")
+    alias_type = models.CharField("类型", max_length=16, help_text="ip / net / mac")
+    comment = models.CharField("备注", max_length=256, blank=True)
+    raw_data = models.JSONField("原始数据", default=dict, blank=True)
+    scanned_at = models.DateTimeField("扫描时间", db_index=True)
+
+    class Meta:
+        verbose_name = "防火墙别名"
+        verbose_name_plural = "防火墙别名"
+        unique_together = ("cluster", "scope", "vmid", "name")
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.name} = {self.cidr}"

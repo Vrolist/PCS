@@ -4,7 +4,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.clusters.models import Cluster
-from .models import ClusterNode, VM, LXC, VMConfig, LXCConfig, VMSnapshot, HAResource, Storage, NetworkInterface, CephStatus, SDNZone, SDNVNet, SDNSubnet, BackupStorage, BackupJob, BackupHistory, ReplicationJob
+from .models import (ClusterNode, VM, LXC, VMConfig, LXCConfig, VMSnapshot, HAResource,
+                     Storage, NetworkInterface, CephStatus, SDNZone, SDNVNet, SDNSubnet,
+                     BackupStorage, BackupJob, BackupHistory, ReplicationJob,
+                     FirewallOptions, FirewallRule, FirewallIPSet, FirewallIPSetEntry, FirewallAlias)
 
 
 def _user_cluster_ids(user):
@@ -1110,3 +1113,316 @@ class ReplicationJobListView(APIView):
             "scanned_at": j.scanned_at,
         } for j in qs]
         return Response(data)
+
+
+# ============================================================
+# 防火墙 API（只读）
+# ============================================================
+
+class FirewallSummaryView(APIView):
+    """GET /api/scanner/firewall/summary/ — 防火墙总览"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        cluster_filter = request.query_params.get("cluster_id")
+        cluster_ids = _user_cluster_ids(request.user)
+
+        opts = FirewallOptions.objects.filter(cluster_id__in=cluster_ids)
+        rules = FirewallRule.objects.filter(cluster_id__in=cluster_ids)
+        ipsets = FirewallIPSet.objects.filter(cluster_id__in=cluster_ids)
+        aliases = FirewallAlias.objects.filter(cluster_id__in=cluster_ids)
+        if cluster_filter:
+            opts = opts.filter(cluster_id=cluster_filter)
+            rules = rules.filter(cluster_id=cluster_filter)
+            ipsets = ipsets.filter(cluster_id=cluster_filter)
+            aliases = aliases.filter(cluster_id=cluster_filter)
+
+        # 集群级选项（取最新）
+        cluster_opts = opts.filter(scope="cluster").order_by("-scanned_at").first()
+
+        return Response({
+            "cluster_enabled": cluster_opts.enabled if cluster_opts else False,
+            "policy_in": cluster_opts.policy_in if cluster_opts else "ACCEPT",
+            "policy_out": cluster_opts.policy_out if cluster_opts else "ACCEPT",
+            "policy_forward": cluster_opts.policy_forward if cluster_opts else "ACCEPT",
+            "total_rules": rules.count(),
+            "total_security_groups": rules.filter(scope="group").values("group_name").distinct().count(),
+            "total_ipsets": ipsets.count(),
+            "total_aliases": aliases.count(),
+            "cluster_rules": rules.filter(scope="cluster").count(),
+            "node_rules": rules.filter(scope="node").count(),
+            "vm_rules": rules.filter(scope="vm").count(),
+            "ct_rules": rules.filter(scope="ct").count(),
+            "group_rules": rules.filter(scope="group").count(),
+            "scanned_at": cluster_opts.scanned_at if cluster_opts else None,
+        })
+
+
+class FirewallRulesView(APIView):
+    """GET /api/scanner/firewall/rules/ — 防火墙规则列表"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        cluster_filter = request.query_params.get("cluster_id")
+        scope_filter = request.query_params.get("scope")
+        group_filter = request.query_params.get("group")
+        search = request.query_params.get("search", "").strip()
+
+        cluster_ids = _user_cluster_ids(request.user)
+        qs = FirewallRule.objects.filter(cluster_id__in=cluster_ids).select_related("cluster")
+
+        if cluster_filter:
+            qs = qs.filter(cluster_id=cluster_filter)
+        if scope_filter:
+            qs = qs.filter(scope=scope_filter)
+        if group_filter:
+            qs = qs.filter(group_name=group_filter)
+        if search:
+            qs = qs.filter(
+                Q(source__icontains=search) | Q(dest__icontains=search) |
+                Q(dport__icontains=search) | Q(comment__icontains=search) |
+                Q(proto__icontains=search)
+            )
+
+        # 只取每个 (scope, node_name, vmid, group_name, pos) 的最新记录
+        latest = (
+            qs.values("cluster_id", "scope", "node_name", "vmid", "group_name", "pos")
+            .annotate(last_scan=Max("scanned_at"))
+        )
+        q = Q()
+        for item in latest:
+            q |= Q(
+                cluster_id=item["cluster_id"], scope=item["scope"],
+                node_name=item["node_name"], vmid=item["vmid"],
+                group_name=item["group_name"], pos=item["pos"],
+                scanned_at=item["last_scan"],
+            )
+        if q:
+            rules = FirewallRule.objects.filter(q).select_related("cluster")
+            if cluster_filter:
+                rules = rules.filter(cluster_id=cluster_filter)
+            if scope_filter:
+                rules = rules.filter(scope=scope_filter)
+            if group_filter:
+                rules = rules.filter(group_name=group_filter)
+            if search:
+                rules = rules.filter(
+                    Q(source__icontains=search) | Q(dest__icontains=search) |
+                    Q(dport__icontains=search) | Q(comment__icontains=search) |
+                    Q(proto__icontains=search)
+                )
+        else:
+            rules = FirewallRule.objects.none()
+
+        data = [{
+            "id": r.id,
+            "cluster_id": r.cluster_id,
+            "cluster_name": r.cluster.name,
+            "scope": r.scope,
+            "scope_display": dict(FirewallRule._meta.get_field("scope").choices or {}).get(r.scope, r.scope),
+            "group_name": r.group_name,
+            "node_name": r.node_name,
+            "vmid": r.vmid,
+            "pos": r.pos,
+            "action": r.action,
+            "direction": r.direction,
+            "proto": r.proto,
+            "source": r.source,
+            "dest": r.dest,
+            "dport": r.dport,
+            "sport": r.sport,
+            "comment": r.comment,
+            "enabled": r.enabled,
+            "log": r.log,
+            "iface": r.iface,
+            "macro": r.macro,
+            "scanned_at": r.scanned_at,
+        } for r in rules]
+        return Response(data)
+
+
+class FirewallIPSetsView(APIView):
+    """GET /api/scanner/firewall/ipsets/ — 防火墙 IPSet 列表"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        cluster_filter = request.query_params.get("cluster_id")
+        cluster_ids = _user_cluster_ids(request.user)
+
+        qs = FirewallIPSet.objects.filter(cluster_id__in=cluster_ids).select_related("cluster")
+        if cluster_filter:
+            qs = qs.filter(cluster_id=cluster_filter)
+
+        # 只取每个 (cluster, name) 的最新记录
+        latest = qs.values("cluster_id", "name").annotate(last_scan=Max("scanned_at"))
+        q = Q()
+        for item in latest:
+            q |= Q(cluster_id=item["cluster_id"], name=item["name"], scanned_at=item["last_scan"])
+        if q:
+            ipsets = FirewallIPSet.objects.filter(q).select_related("cluster")
+            if cluster_filter:
+                ipsets = ipsets.filter(cluster_id=cluster_filter)
+        else:
+            ipsets = FirewallIPSet.objects.none()
+
+        data = []
+        for ip in ipsets:
+            entries = ip.entries.all().values("id", "cidr", "comment", "nomatch")
+            data.append({
+                "id": ip.id,
+                "cluster_id": ip.cluster_id,
+                "cluster_name": ip.cluster.name,
+                "scope": ip.scope,
+                "name": ip.name,
+                "comment": ip.comment,
+                "entry_count": len(entries),
+                "entries": list(entries),
+                "scanned_at": ip.scanned_at,
+            })
+        return Response(data)
+
+
+class FirewallAliasesView(APIView):
+    """GET /api/scanner/firewall/aliases/ — 防火墙别名列表"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        cluster_filter = request.query_params.get("cluster_id")
+        cluster_ids = _user_cluster_ids(request.user)
+
+        qs = FirewallAlias.objects.filter(cluster_id__in=cluster_ids).select_related("cluster")
+        if cluster_filter:
+            qs = qs.filter(cluster_id=cluster_filter)
+
+        # 只取每个 (cluster, name) 的最新记录
+        latest = qs.values("cluster_id", "name").annotate(last_scan=Max("scanned_at"))
+        q = Q()
+        for item in latest:
+            q |= Q(cluster_id=item["cluster_id"], name=item["name"], scanned_at=item["last_scan"])
+        if q:
+            aliases = FirewallAlias.objects.filter(q).select_related("cluster")
+            if cluster_filter:
+                aliases = aliases.filter(cluster_id=cluster_filter)
+        else:
+            aliases = FirewallAlias.objects.none()
+
+        data = [{
+            "id": a.id,
+            "cluster_id": a.cluster_id,
+            "cluster_name": a.cluster.name,
+            "scope": a.scope,
+            "name": a.name,
+            "cidr": a.cidr,
+            "alias_type": a.alias_type,
+            "comment": a.comment,
+            "scanned_at": a.scanned_at,
+        } for a in aliases]
+        return Response(data)
+
+
+class FirewallOptionsView(APIView):
+    """GET /api/scanner/firewall/options/ — 防火墙选项列表"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        cluster_filter = request.query_params.get("cluster_id")
+        cluster_ids = _user_cluster_ids(request.user)
+
+        qs = FirewallOptions.objects.filter(cluster_id__in=cluster_ids).select_related("cluster")
+        if cluster_filter:
+            qs = qs.filter(cluster_id=cluster_filter)
+
+        # 只取每个 (scope, node_name, vmid) 的最新记录
+        latest = qs.values("cluster_id", "scope", "node_name", "vmid").annotate(last_scan=Max("scanned_at"))
+        q = Q()
+        for item in latest:
+            q |= Q(
+                cluster_id=item["cluster_id"], scope=item["scope"],
+                node_name=item["node_name"], vmid=item["vmid"],
+                scanned_at=item["last_scan"],
+            )
+        if q:
+            opts = FirewallOptions.objects.filter(q).select_related("cluster")
+            if cluster_filter:
+                opts = opts.filter(cluster_id=cluster_filter)
+        else:
+            opts = FirewallOptions.objects.none()
+
+        data = [{
+            "id": o.id,
+            "cluster_id": o.cluster_id,
+            "cluster_name": o.cluster.name,
+            "scope": o.scope,
+            "node_name": o.node_name,
+            "vmid": o.vmid,
+            "enabled": o.enabled,
+            "policy_in": o.policy_in,
+            "policy_out": o.policy_out,
+            "policy_forward": o.policy_forward,
+            "log_level_in": o.log_level_in,
+            "log_level_out": o.log_level_out,
+            "dhcp": o.dhcp,
+            "ipfilter": o.ipfilter,
+            "ndp": o.ndp,
+            "macfilter": o.macfilter,
+            "scanned_at": o.scanned_at,
+        } for o in opts]
+        return Response(data)
+
+
+class FirewallSecurityGroupsView(APIView):
+    """GET /api/scanner/firewall/security-groups/ — 防火墙安全组列表"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        cluster_filter = request.query_params.get("cluster_id")
+        cluster_ids = _user_cluster_ids(request.user)
+
+        qs = FirewallRule.objects.filter(cluster_id__in=cluster_ids, scope="group")
+        if cluster_filter:
+            qs = qs.filter(cluster_id=cluster_filter)
+
+        # 只取每个 (cluster, group_name, pos) 的最新记录
+        latest = qs.values("cluster_id", "group_name", "pos").annotate(last_scan=Max("scanned_at"))
+        q = Q()
+        for item in latest:
+            q |= Q(
+                cluster_id=item["cluster_id"], group_name=item["group_name"],
+                pos=item["pos"], scanned_at=item["last_scan"],
+            )
+        if q:
+            rules = FirewallRule.objects.filter(q, scope="group").select_related("cluster")
+            if cluster_filter:
+                rules = rules.filter(cluster_id=cluster_filter)
+        else:
+            rules = FirewallRule.objects.none()
+
+        # 按安全组分组
+        groups = {}
+        for r in rules:
+            gname = r.group_name
+            if gname not in groups:
+                groups[gname] = {
+                    "name": gname,
+                    "cluster_id": r.cluster_id,
+                    "cluster_name": r.cluster.name,
+                    "rules": [],
+                    "scanned_at": r.scanned_at,
+                }
+            groups[gname]["rules"].append({
+                "id": r.id,
+                "pos": r.pos,
+                "action": r.action,
+                "direction": r.direction,
+                "proto": r.proto,
+                "source": r.source,
+                "dest": r.dest,
+                "dport": r.dport,
+                "sport": r.sport,
+                "comment": r.comment,
+                "enabled": r.enabled,
+                "log": r.log,
+                "macro": r.macro,
+            })
+
+        return Response(list(groups.values()))

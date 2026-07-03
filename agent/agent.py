@@ -37,7 +37,7 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-VERSION = "0.9.0"
+VERSION = "0.10.0"
 
 # 路径常量
 INSTALL_DIR = Path("/opt/pcs-agent")
@@ -280,6 +280,85 @@ class PVEClient:
         except Exception:
             return []
 
+    # ---- 防火墙 API ----
+    def get_cluster_fw_options(self):
+        try:
+            return self.get("/cluster/firewall/options")
+        except Exception:
+            return {}
+
+    def get_cluster_fw_rules(self):
+        try:
+            return self.get("/cluster/firewall/rules")
+        except Exception:
+            return []
+
+    def get_cluster_fw_groups(self):
+        try:
+            return self.get("/cluster/firewall/groups")
+        except Exception:
+            return []
+
+    def get_cluster_fw_group_rules(self, group):
+        try:
+            return self.get(f"/cluster/firewall/groups/{group}")
+        except Exception:
+            return []
+
+    def get_cluster_fw_ipsets(self):
+        try:
+            return self.get("/cluster/firewall/ipset")
+        except Exception:
+            return []
+
+    def get_cluster_fw_ipset(self, name):
+        try:
+            return self.get(f"/cluster/firewall/ipset/{name}")
+        except Exception:
+            return []
+
+    def get_cluster_fw_aliases(self):
+        try:
+            return self.get("/cluster/firewall/aliases")
+        except Exception:
+            return []
+
+    def get_node_fw_options(self, node):
+        try:
+            return self.get(f"/nodes/{node}/firewall/options")
+        except Exception:
+            return {}
+
+    def get_node_fw_rules(self, node):
+        try:
+            return self.get(f"/nodes/{node}/firewall/rules")
+        except Exception:
+            return []
+
+    def get_vm_fw_options(self, node, vmid):
+        try:
+            return self.get(f"/nodes/{node}/qemu/{vmid}/firewall/options")
+        except Exception:
+            return {}
+
+    def get_vm_fw_rules(self, node, vmid):
+        try:
+            return self.get(f"/nodes/{node}/qemu/{vmid}/firewall/rules")
+        except Exception:
+            return []
+
+    def get_ct_fw_options(self, node, vmid):
+        try:
+            return self.get(f"/nodes/{node}/lxc/{vmid}/firewall/options")
+        except Exception:
+            return {}
+
+    def get_ct_fw_rules(self, node, vmid):
+        try:
+            return self.get(f"/nodes/{node}/lxc/{vmid}/firewall/rules")
+        except Exception:
+            return []
+
 
 # ============================================================
 # 数据采集
@@ -314,6 +393,7 @@ def scan_full(pve):
     ha_resources = _scan_ha(pve)
     sdn = _scan_sdn(pve)
     replication = _scan_replication(pve, nodes_data)
+    firewall = _scan_firewall(pve, nodes_data)
 
     backups = {}
     try:
@@ -334,6 +414,7 @@ def scan_full(pve):
         "sdn": sdn,
         "replication": replication,
         "backups": backups,
+        "firewall": firewall,
     }
 
 
@@ -744,6 +825,135 @@ def _scan_replication(pve, nodes_data):
         except Exception as e:
             logger.warning(f"扫描节点 {name} 复制任务失败: {e}")
     return jobs
+
+
+def _parse_fw_rules(rules):
+    """解析防火墙规则列表，提取结构化字段"""
+    result = []
+    for i, r in enumerate(rules):
+        if not isinstance(r, dict):
+            continue
+        result.append({
+            "pos": r.get("pos", i),
+            "action": r.get("action", ""),
+            "type": r.get("type", ""),
+            "direction": r.get("direction", r.get("type", "")),
+            "proto": r.get("proto", ""),
+            "source": r.get("source", ""),
+            "dest": r.get("dest", ""),
+            "dport": r.get("dport", ""),
+            "sport": r.get("sport", ""),
+            "comment": r.get("comment", ""),
+            "enabled": not bool(r.get("disable", 0)),
+            "log": r.get("log", ""),
+            "iface": r.get("iface", ""),
+            "macro": r.get("macro", ""),
+            "raw": r,
+        })
+    return result
+
+
+def _scan_firewall(pve, nodes_data):
+    """扫描集群级 + 节点级 + VM/CT 级防火墙配置"""
+    fw = {
+        "cluster_options": {},
+        "cluster_rules": [],
+        "security_groups": {},
+        "ipsets": {},
+        "aliases": [],
+        "nodes": {},
+    }
+
+    try:
+        # 集群级选项
+        fw["cluster_options"] = pve.get_cluster_fw_options()
+
+        # 集群级规则
+        fw["cluster_rules"] = _parse_fw_rules(pve.get_cluster_fw_rules())
+
+        # 安全组
+        groups = pve.get_cluster_fw_groups()
+        for g in groups:
+            gname = g.get("name", g) if isinstance(g, dict) else str(g)
+            group_rules = pve.get_cluster_fw_group_rules(gname)
+            fw["security_groups"][gname] = _parse_fw_rules(group_rules)
+
+        # IPSet
+        ipset_list = pve.get_cluster_fw_ipsets()
+        for ip in ipset_list:
+            ipname = ip.get("name", ip) if isinstance(ip, dict) else str(ip)
+            entries = pve.get_cluster_fw_ipset(ipname)
+            fw["ipsets"][ipname] = {
+                "name": ipname,
+                "comment": ip.get("comment", "") if isinstance(ip, dict) else "",
+                "entries": [{
+                    "cidr": e.get("cidr", ""),
+                    "comment": e.get("comment", ""),
+                    "nomatch": bool(e.get("nomatch", 0)),
+                    "raw": e,
+                } for e in entries if isinstance(e, dict)],
+            }
+
+        # 别名
+        aliases = pve.get_cluster_fw_aliases()
+        fw["aliases"] = [{
+            "name": a.get("name", ""),
+            "cidr": a.get("cidr", ""),
+            "alias_type": a.get("type", ""),
+            "comment": a.get("comment", ""),
+            "raw": a,
+        } for a in aliases if isinstance(a, dict)]
+
+        # 节点级 + VM/CT 级
+        for nd in nodes_data:
+            if nd.get("status") == "offline" or nd.get("error"):
+                continue
+            node_name = nd["name"]
+            try:
+                node_opts = pve.get_node_fw_options(node_name)
+                node_rules = pve.get_node_fw_rules(node_name)
+                node_fw = {
+                    "options": node_opts,
+                    "rules": _parse_fw_rules(node_rules),
+                    "vms": {},
+                    "cts": {},
+                }
+
+                # VM 防火墙
+                for vm in nd.get("vms", []):
+                    vmid = vm.get("vmid")
+                    if not vmid:
+                        continue
+                    vm_opts = pve.get_vm_fw_options(node_name, vmid)
+                    # 只采集启用防火墙的 VM
+                    if vm_opts.get("enable"):
+                        vm_rules = pve.get_vm_fw_rules(node_name, vmid)
+                        node_fw["vms"][str(vmid)] = {
+                            "options": vm_opts,
+                            "rules": _parse_fw_rules(vm_rules),
+                        }
+
+                # 容器防火墙
+                for ct in nd.get("containers", []):
+                    vmid = ct.get("vmid")
+                    if not vmid:
+                        continue
+                    ct_opts = pve.get_ct_fw_options(node_name, vmid)
+                    if ct_opts.get("enable"):
+                        ct_rules = pve.get_ct_fw_rules(node_name, vmid)
+                        node_fw["cts"][str(vmid)] = {
+                            "options": ct_opts,
+                            "rules": _parse_fw_rules(ct_rules),
+                        }
+
+                fw["nodes"][node_name] = node_fw
+            except Exception as e:
+                logger.warning(f"扫描节点 {node_name} 防火墙失败: {e}")
+
+    except Exception as e:
+        logger.error(f"扫描防火墙数据失败: {e}")
+
+    return fw
 
 
 def _scan_backups(pve, node):

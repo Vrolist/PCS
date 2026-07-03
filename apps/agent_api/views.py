@@ -21,6 +21,11 @@ from apps.scanner.models import (
     BackupStorage,
     CephStatus,
     ClusterNode,
+    FirewallAlias,
+    FirewallIPSet,
+    FirewallIPSetEntry,
+    FirewallOptions,
+    FirewallRule,
     LXC,
     NetworkInterface,
     ReplicationJob,
@@ -223,6 +228,7 @@ class ScanUploadView(APIView):
         sdn_data = d.get("sdn", {})
         backups_data = d.get("backups", {})
         replication_data = d.get("replication", [])
+        firewall_data = d.get("firewall", {})
 
         # 创建扫描任务记录
         # raw_data 需要序列化为 JSON 兼容格式（datetime → str）
@@ -252,6 +258,8 @@ class ScanUploadView(APIView):
                     self._save_backups(cluster, scan_task, backups_data, scanned_at)
                 if replication_data:
                     self._save_replications(cluster, scan_task, replication_data, scanned_at)
+                if firewall_data:
+                    self._save_firewall(cluster, scan_task, firewall_data, scanned_at)
                 self._save_scan_history(cluster, scan_task, nodes_data, scanned_at)
                 self._update_cluster_stats(cluster, nodes_data)
 
@@ -757,6 +765,259 @@ class ScanUploadView(APIView):
                 ),
             )
 
+    def _save_firewall(self, cluster, scan_task, firewall_data, scanned_at):
+        """保存防火墙配置数据"""
+        # 集群级选项
+        cluster_opts = firewall_data.get("cluster_options", {})
+        if cluster_opts:
+            FirewallOptions.objects.update_or_create(
+                cluster=cluster, scope="cluster", node_name="", vmid=None,
+                defaults=dict(
+                    scan=scan_task,
+                    enabled=bool(cluster_opts.get("enable", 0)),
+                    policy_in=cluster_opts.get("policy_in", "ACCEPT"),
+                    policy_out=cluster_opts.get("policy_out", "ACCEPT"),
+                    policy_forward=cluster_opts.get("policy_forward", "ACCEPT"),
+                    log_level_in=cluster_opts.get("log_level_in", ""),
+                    log_level_out=cluster_opts.get("log_level_out", ""),
+                    dhcp=bool(cluster_opts.get("dhcp", 0)),
+                    ipfilter=bool(cluster_opts.get("ipfilter", 0)),
+                    ndp=bool(cluster_opts.get("ndp", 0)),
+                    macfilter=bool(cluster_opts.get("macfilter", 0)),
+                    raw_options=cluster_opts,
+                    scanned_at=scanned_at,
+                ),
+            )
+
+        # 集群级规则
+        for r in firewall_data.get("cluster_rules", []):
+            FirewallRule.objects.update_or_create(
+                cluster=cluster, scope="cluster", node_name="", vmid=None,
+                group_name="", pos=r.get("pos", 0),
+                defaults=dict(
+                    scan=scan_task,
+                    action=r.get("action", ""),
+                    direction=r.get("direction", ""),
+                    proto=r.get("proto", ""),
+                    source=r.get("source", ""),
+                    dest=r.get("dest", ""),
+                    dport=r.get("dport", ""),
+                    sport=r.get("sport", ""),
+                    comment=r.get("comment", ""),
+                    enabled=r.get("enabled", True),
+                    log=r.get("log", ""),
+                    iface=r.get("iface", ""),
+                    macro=r.get("macro", ""),
+                    raw_rule=r.get("raw", {}),
+                    scanned_at=scanned_at,
+                ),
+            )
+
+        # 安全组及其规则
+        for gname, rules in firewall_data.get("security_groups", {}).items():
+            for r in rules:
+                FirewallRule.objects.update_or_create(
+                    cluster=cluster, scope="group", group_name=gname,
+                    node_name="", vmid=None, pos=r.get("pos", 0),
+                    defaults=dict(
+                        scan=scan_task,
+                        action=r.get("action", ""),
+                        direction=r.get("direction", ""),
+                        proto=r.get("proto", ""),
+                        source=r.get("source", ""),
+                        dest=r.get("dest", ""),
+                        dport=r.get("dport", ""),
+                        sport=r.get("sport", ""),
+                        comment=r.get("comment", ""),
+                        enabled=r.get("enabled", True),
+                        log=r.get("log", ""),
+                        iface=r.get("iface", ""),
+                        macro=r.get("macro", ""),
+                        raw_rule=r.get("raw", {}),
+                        scanned_at=scanned_at,
+                    ),
+                )
+
+        # IPSet + 条目
+        for ipname, ipdata in firewall_data.get("ipsets", {}).items():
+            ipset_obj, _ = FirewallIPSet.objects.update_or_create(
+                cluster=cluster, scope="cluster", vmid=None, name=ipname,
+                defaults=dict(
+                    scan=scan_task,
+                    comment=ipdata.get("comment", ""),
+                    raw_data=ipdata,
+                    scanned_at=scanned_at,
+                ),
+            )
+            for entry in ipdata.get("entries", []):
+                cidr = entry.get("cidr", "")
+                if not cidr:
+                    continue
+                FirewallIPSetEntry.objects.update_or_create(
+                    ipset=ipset_obj, cidr=cidr,
+                    defaults=dict(
+                        comment=entry.get("comment", ""),
+                        nomatch=entry.get("nomatch", False),
+                        raw_data=entry.get("raw", {}),
+                        scanned_at=scanned_at,
+                    ),
+                )
+
+        # 别名
+        for a in firewall_data.get("aliases", []):
+            name = a.get("name", "")
+            if not name:
+                continue
+            FirewallAlias.objects.update_or_create(
+                cluster=cluster, scope="cluster", vmid=None, name=name,
+                defaults=dict(
+                    scan=scan_task,
+                    cidr=a.get("cidr", ""),
+                    alias_type=a.get("alias_type", "ip"),
+                    comment=a.get("comment", ""),
+                    raw_data=a.get("raw", {}),
+                    scanned_at=scanned_at,
+                ),
+            )
+
+        # 节点级 + VM/CT 级
+        for node_name, node_fw in firewall_data.get("nodes", {}).items():
+            # 节点级选项
+            node_opts = node_fw.get("options", {})
+            if node_opts:
+                FirewallOptions.objects.update_or_create(
+                    cluster=cluster, scope="node", node_name=node_name, vmid=None,
+                    defaults=dict(
+                        scan=scan_task,
+                        enabled=bool(node_opts.get("enable", 0)),
+                        policy_in=node_opts.get("policy_in", "ACCEPT"),
+                        policy_out=node_opts.get("policy_out", "ACCEPT"),
+                        policy_forward=node_opts.get("policy_forward", "ACCEPT"),
+                        log_level_in=node_opts.get("log_level_in", ""),
+                        log_level_out=node_opts.get("log_level_out", ""),
+                        dhcp=bool(node_opts.get("dhcp", 0)),
+                        ipfilter=bool(node_opts.get("ipfilter", 0)),
+                        ndp=bool(node_opts.get("ndp", 0)),
+                        macfilter=bool(node_opts.get("macfilter", 0)),
+                        raw_options=node_opts,
+                        scanned_at=scanned_at,
+                    ),
+                )
+
+            # 节点级规则
+            for r in node_fw.get("rules", []):
+                FirewallRule.objects.update_or_create(
+                    cluster=cluster, scope="node", node_name=node_name,
+                    vmid=None, group_name="", pos=r.get("pos", 0),
+                    defaults=dict(
+                        scan=scan_task,
+                        action=r.get("action", ""),
+                        direction=r.get("direction", ""),
+                        proto=r.get("proto", ""),
+                        source=r.get("source", ""),
+                        dest=r.get("dest", ""),
+                        dport=r.get("dport", ""),
+                        sport=r.get("sport", ""),
+                        comment=r.get("comment", ""),
+                        enabled=r.get("enabled", True),
+                        log=r.get("log", ""),
+                        iface=r.get("iface", ""),
+                        macro=r.get("macro", ""),
+                        raw_rule=r.get("raw", {}),
+                        scanned_at=scanned_at,
+                    ),
+                )
+
+            # VM 防火墙
+            for vmid_str, vm_fw in node_fw.get("vms", {}).items():
+                vm_opts = vm_fw.get("options", {})
+                FirewallOptions.objects.update_or_create(
+                    cluster=cluster, scope="vm", node_name=node_name,
+                    vmid=int(vmid_str),
+                    defaults=dict(
+                        scan=scan_task,
+                        enabled=bool(vm_opts.get("enable", 0)),
+                        policy_in=vm_opts.get("policy_in", "ACCEPT"),
+                        policy_out=vm_opts.get("policy_out", "ACCEPT"),
+                        policy_forward=vm_opts.get("policy_forward", "ACCEPT"),
+                        log_level_in=vm_opts.get("log_level_in", ""),
+                        log_level_out=vm_opts.get("log_level_out", ""),
+                        dhcp=bool(vm_opts.get("dhcp", 0)),
+                        ipfilter=bool(vm_opts.get("ipfilter", 0)),
+                        ndp=bool(vm_opts.get("ndp", 0)),
+                        macfilter=bool(vm_opts.get("macfilter", 0)),
+                        raw_options=vm_opts,
+                        scanned_at=scanned_at,
+                    ),
+                )
+                for r in vm_fw.get("rules", []):
+                    FirewallRule.objects.update_or_create(
+                        cluster=cluster, scope="vm", node_name=node_name,
+                        vmid=int(vmid_str), group_name="", pos=r.get("pos", 0),
+                        defaults=dict(
+                            scan=scan_task,
+                            action=r.get("action", ""),
+                            direction=r.get("direction", ""),
+                            proto=r.get("proto", ""),
+                            source=r.get("source", ""),
+                            dest=r.get("dest", ""),
+                            dport=r.get("dport", ""),
+                            sport=r.get("sport", ""),
+                            comment=r.get("comment", ""),
+                            enabled=r.get("enabled", True),
+                            log=r.get("log", ""),
+                            iface=r.get("iface", ""),
+                            macro=r.get("macro", ""),
+                            raw_rule=r.get("raw", {}),
+                            scanned_at=scanned_at,
+                        ),
+                    )
+
+            # 容器防火墙
+            for vmid_str, ct_fw in node_fw.get("cts", {}).items():
+                ct_opts = ct_fw.get("options", {})
+                FirewallOptions.objects.update_or_create(
+                    cluster=cluster, scope="ct", node_name=node_name,
+                    vmid=int(vmid_str),
+                    defaults=dict(
+                        scan=scan_task,
+                        enabled=bool(ct_opts.get("enable", 0)),
+                        policy_in=ct_opts.get("policy_in", "ACCEPT"),
+                        policy_out=ct_opts.get("policy_out", "ACCEPT"),
+                        policy_forward=ct_opts.get("policy_forward", "ACCEPT"),
+                        log_level_in=ct_opts.get("log_level_in", ""),
+                        log_level_out=ct_opts.get("log_level_out", ""),
+                        dhcp=bool(ct_opts.get("dhcp", 0)),
+                        ipfilter=bool(ct_opts.get("ipfilter", 0)),
+                        ndp=bool(ct_opts.get("ndp", 0)),
+                        macfilter=bool(ct_opts.get("macfilter", 0)),
+                        raw_options=ct_opts,
+                        scanned_at=scanned_at,
+                    ),
+                )
+                for r in ct_fw.get("rules", []):
+                    FirewallRule.objects.update_or_create(
+                        cluster=cluster, scope="ct", node_name=node_name,
+                        vmid=int(vmid_str), group_name="", pos=r.get("pos", 0),
+                        defaults=dict(
+                            scan=scan_task,
+                            action=r.get("action", ""),
+                            direction=r.get("direction", ""),
+                            proto=r.get("proto", ""),
+                            source=r.get("source", ""),
+                            dest=r.get("dest", ""),
+                            dport=r.get("dport", ""),
+                            sport=r.get("sport", ""),
+                            comment=r.get("comment", ""),
+                            enabled=r.get("enabled", True),
+                            log=r.get("log", ""),
+                            iface=r.get("iface", ""),
+                            macro=r.get("macro", ""),
+                            raw_rule=r.get("raw", {}),
+                            scanned_at=scanned_at,
+                        ),
+                    )
+
     def _save_scan_history(self, cluster, scan_task, nodes_data, scanned_at):
         """保存扫描历史快照"""
         total_vms = sum(len(n.get("vms", [])) for n in nodes_data)
@@ -828,9 +1089,9 @@ class AgentTasksView(APIView):
 # Agent 版本常量（平台侧维护）
 # ============================================================
 
-AGENT_LATEST_VERSION = "0.9.0"
+AGENT_LATEST_VERSION = "0.10.0"
 AGENT_DOWNLOAD_URL = "/api/agent/install.sh"  # 从平台下载
-AGENT_CHANGELOG = "v0.9.0: 支持存储复制任务数据采集"
+AGENT_CHANGELOG = "v0.10.0: 支持防火墙配置数据采集（集群/节点/VM/CT 规则、安全组、IPSet、别名）"
 
 
 class AgentUnregisterView(APIView):
