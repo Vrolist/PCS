@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.clusters.models import Cluster
-from .models import ClusterNode, VM, LXC, VMConfig, LXCConfig, VMSnapshot, HAResource, Storage, NetworkInterface, CephStatus, SDNZone, SDNVNet, SDNSubnet
+from .models import ClusterNode, VM, LXC, VMConfig, LXCConfig, VMSnapshot, HAResource, Storage, NetworkInterface, CephStatus, SDNZone, SDNVNet, SDNSubnet, BackupStorage, BackupJob, BackupHistory
 
 
 def _user_cluster_ids(user):
@@ -836,3 +836,209 @@ class SnapshotListView(APIView):
             "scanned_at": s.scanned_at,
         } for s in snaps]
         return Response(data)
+
+
+class BackupStorageListView(APIView):
+    """GET /api/scanner/backup/storages/ — 备份存储列表"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        cluster_filter = request.query_params.get("cluster_id")
+        cluster_ids = _user_cluster_ids(request.user)
+        qs = BackupStorage.objects.filter(cluster_id__in=cluster_ids).select_related("cluster", "node")
+        if cluster_filter:
+            qs = qs.filter(cluster_id=cluster_filter)
+        # Only latest per (cluster, storage_name)
+        latest = (
+            qs.values("cluster_id", "storage_name")
+            .annotate(last_scan=Max("scanned_at"))
+        )
+        q = Q()
+        for item in latest:
+            q |= Q(cluster_id=item["cluster_id"], storage_name=item["storage_name"],
+                    scanned_at=item["last_scan"])
+        if q:
+            qs = BackupStorage.objects.filter(q, cluster_id__in=cluster_ids).select_related("cluster", "node")
+        else:
+            qs = BackupStorage.objects.none()
+        if cluster_filter:
+            qs = qs.filter(cluster_id=cluster_filter)
+        data = [{
+            "id": s.id,
+            "cluster_id": s.cluster_id,
+            "cluster_name": s.cluster.name,
+            "node_name": s.node.node_name if s.node else "",
+            "storage_name": s.storage_name,
+            "storage_type": s.storage_type,
+            "path": s.path,
+            "content_types": s.content_types,
+            "active": s.active,
+            "shared": s.shared,
+            "total_gb": s.total_gb,
+            "used_gb": s.used_gb,
+            "avail_gb": s.avail_gb,
+            "used_fraction": s.used_fraction,
+            "scanned_at": s.scanned_at,
+        } for s in qs]
+        return Response(data)
+
+
+class BackupJobListView(APIView):
+    """GET /api/scanner/backup/jobs/ — 备份任务列表"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        cluster_filter = request.query_params.get("cluster_id")
+        status_filter = request.query_params.get("status")
+        cluster_ids = _user_cluster_ids(request.user)
+        qs = BackupJob.objects.filter(cluster_id__in=cluster_ids).select_related("cluster")
+        if cluster_filter:
+            qs = qs.filter(cluster_id=cluster_filter)
+        # Only latest per (cluster, job_id)
+        latest = (
+            qs.values("cluster_id", "job_id")
+            .annotate(last_scan=Max("scanned_at"))
+        )
+        q = Q()
+        for item in latest:
+            q |= Q(cluster_id=item["cluster_id"], job_id=item["job_id"],
+                    scanned_at=item["last_scan"])
+        if q:
+            qs = BackupJob.objects.filter(q, cluster_id__in=cluster_ids).select_related("cluster")
+        else:
+            qs = BackupJob.objects.none()
+        if cluster_filter:
+            qs = qs.filter(cluster_id=cluster_filter)
+        if status_filter:
+            qs = qs.filter(last_status=status_filter)
+        data = [{
+            "id": j.id,
+            "cluster_id": j.cluster_id,
+            "cluster_name": j.cluster.name,
+            "job_id": j.job_id,
+            "vmid": j.vmid,
+            "resource_type": j.resource_type,
+            "node_name": j.node_name,
+            "storage_name": j.storage_name,
+            "mode": j.mode,
+            "schedule": j.schedule,
+            "retention": j.retention,
+            "enabled": j.enabled,
+            "compress": j.compress,
+            "notes": j.notes,
+            "last_run": j.last_run,
+            "last_status": j.last_status,
+            "next_run": j.next_run,
+            "scanned_at": j.scanned_at,
+        } for j in qs]
+        return Response(data)
+
+
+class BackupHistoryListView(APIView):
+    """GET /api/scanner/backup/history/ — 备份历史列表"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        cluster_filter = request.query_params.get("cluster_id")
+        status_filter = request.query_params.get("status")
+        vmid_filter = request.query_params.get("vmid")
+        search = request.query_params.get("search", "").strip()
+        page = int(request.query_params.get("page", 1))
+        page_size = int(request.query_params.get("page_size", 20))
+
+        cluster_ids = _user_cluster_ids(request.user)
+        qs = BackupHistory.objects.filter(cluster_id__in=cluster_ids).select_related("cluster")
+        if cluster_filter:
+            qs = qs.filter(cluster_id=cluster_filter)
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        if vmid_filter:
+            qs = qs.filter(vmid=vmid_filter)
+        if search:
+            qs = qs.filter(
+                Q(task_id__icontains=search) | Q(filename__icontains=search) |
+                Q(node_name__icontains=search) | Q(error_message__icontains=search)
+            )
+
+        total = qs.count()
+        qs = qs.order_by("-started_at")[(page - 1) * page_size: page * page_size]
+
+        data = [{
+            "id": h.id,
+            "cluster_id": h.cluster_id,
+            "cluster_name": h.cluster.name,
+            "task_id": h.task_id,
+            "vmid": h.vmid,
+            "resource_type": h.resource_type,
+            "node_name": h.node_name,
+            "storage_name": h.storage_name,
+            "mode": h.mode,
+            "status": h.status,
+            "started_at": h.started_at,
+            "finished_at": h.finished_at,
+            "duration_seconds": h.duration_seconds,
+            "size_bytes": h.size_bytes,
+            "filename": h.filename,
+            "error_message": h.error_message,
+            "scanned_at": h.scanned_at,
+        } for h in qs]
+        return Response({"count": total, "results": data})
+
+
+class BackupStatsView(APIView):
+    """GET /api/scanner/backup/stats/ — 备份统计概览"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        cluster_filter = request.query_params.get("cluster_id")
+        cluster_ids = _user_cluster_ids(request.user)
+
+        storages_qs = BackupStorage.objects.filter(cluster_id__in=cluster_ids)
+        jobs_qs = BackupJob.objects.filter(cluster_id__in=cluster_ids)
+        history_qs = BackupHistory.objects.filter(cluster_id__in=cluster_ids)
+
+        if cluster_filter:
+            storages_qs = storages_qs.filter(cluster_id=cluster_filter)
+            jobs_qs = jobs_qs.filter(cluster_id=cluster_filter)
+            history_qs = history_qs.filter(cluster_id=cluster_filter)
+
+        # Deduplicate storages
+        storages_latest = storages_qs.values("cluster_id", "storage_name").annotate(last_scan=Max("scanned_at"))
+        q = Q()
+        for item in storages_latest:
+            q |= Q(cluster_id=item["cluster_id"], storage_name=item["storage_name"],
+                    scanned_at=item["last_scan"])
+        storages = BackupStorage.objects.filter(q) if q else BackupStorage.objects.none()
+
+        # Deduplicate jobs
+        jobs_latest = jobs_qs.values("cluster_id", "job_id").annotate(last_scan=Max("scanned_at"))
+        jq = Q()
+        for item in jobs_latest:
+            jq |= Q(cluster_id=item["cluster_id"], job_id=item["job_id"],
+                     scanned_at=item["last_scan"])
+        jobs = BackupJob.objects.filter(jq) if jq else BackupJob.objects.none()
+
+        total_storage = storages.count()
+        total_storages_gb = sum(s.total_gb or 0 for s in storages)
+        used_storages_gb = sum(s.used_gb or 0 for s in storages)
+
+        total_jobs = jobs.count()
+        enabled_jobs = jobs.filter(enabled=True).count()
+
+        total_backups = history_qs.count()
+        success_backups = history_qs.filter(status="ok").count()
+        failed_backups = history_qs.filter(status="error").count()
+        total_backup_size = sum(h.size_bytes or 0 for h in history_qs)
+
+        return Response({
+            "total_storages": total_storage,
+            "total_storages_gb": total_storages_gb,
+            "used_storages_gb": used_storages_gb,
+            "total_jobs": total_jobs,
+            "enabled_jobs": enabled_jobs,
+            "total_backups": total_backups,
+            "success_backups": success_backups,
+            "failed_backups": failed_backups,
+            "success_rate": round(success_backups / total_backups * 100, 1) if total_backups > 0 else 0,
+            "total_backup_size_gb": round(total_backup_size / 1073741824, 2),
+        })

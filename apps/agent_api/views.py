@@ -16,6 +16,9 @@ from rest_framework.views import APIView
 
 from apps.clusters.models import Cluster
 from apps.scanner.models import (
+    BackupHistory,
+    BackupJob,
+    BackupStorage,
     CephStatus,
     ClusterNode,
     LXC,
@@ -217,6 +220,7 @@ class ScanUploadView(APIView):
         ceph_data = d.get("ceph")
         ha_data = d.get("ha_resources", [])
         sdn_data = d.get("sdn", {})
+        backups_data = d.get("backups", {})
 
         # 创建扫描任务记录
         # raw_data 需要序列化为 JSON 兼容格式（datetime → str）
@@ -242,6 +246,8 @@ class ScanUploadView(APIView):
                     self._save_ha(cluster, scan_task, ha_data, scanned_at)
                 if sdn_data:
                     self._save_sdn(cluster, scan_task, sdn_data, scanned_at)
+                if backups_data:
+                    self._save_backups(cluster, scan_task, backups_data, scanned_at)
                 self._save_scan_history(cluster, scan_task, nodes_data, scanned_at)
                 self._update_cluster_stats(cluster, nodes_data)
 
@@ -291,7 +297,7 @@ class ScanUploadView(APIView):
         cutoff_30d = now - timedelta(days=30)
         total = 0
 
-        # 7 天保留：节点/存储/网络/Ceph/SDN 快照
+        # 7 天保留：节点/存储/网络/Ceph/SDN/备份存储/备份任务 快照
         for qs in [
             ClusterNode.objects.filter(cluster=cluster, scanned_at__lt=cutoff_7d),
             Storage.objects.filter(node__cluster=cluster, scanned_at__lt=cutoff_7d),
@@ -301,14 +307,17 @@ class ScanUploadView(APIView):
             SDNVNet.objects.filter(cluster=cluster, scanned_at__lt=cutoff_7d),
             SDNSubnet.objects.filter(cluster=cluster, scanned_at__lt=cutoff_7d),
             VMSnapshot.objects.filter(vm__node__cluster=cluster, scanned_at__lt=cutoff_7d),
+            BackupStorage.objects.filter(cluster=cluster, scanned_at__lt=cutoff_7d),
+            BackupJob.objects.filter(cluster=cluster, scanned_at__lt=cutoff_7d),
         ]:
             count, _ = qs.delete()
             total += count
 
-        # 30 天保留：扫描历史/任务记录
+        # 30 天保留：扫描历史/任务记录/备份历史
         for qs in [
             ScanHistory.objects.filter(cluster=cluster, scanned_at__lt=cutoff_30d),
             ScanTask.objects.filter(cluster=cluster, started_at__lt=cutoff_30d),
+            BackupHistory.objects.filter(cluster=cluster, scanned_at__lt=cutoff_30d),
         ]:
             count, _ = qs.delete()
             total += count
@@ -599,6 +608,113 @@ class ScanUploadView(APIView):
                 ),
             )
 
+    def _save_backups(self, cluster, scan_task, backups_data, scanned_at):
+        """保存备份数据（存储/任务/历史）"""
+        # 备份存储
+        for s in backups_data.get("backup_storages", []):
+            node_name = s.get("node_name", "")
+            node_obj = ClusterNode.objects.filter(
+                cluster=cluster, node_name=node_name
+            ).order_by("-scanned_at").first() if node_name else None
+            BackupStorage.objects.update_or_create(
+                cluster=cluster,
+                storage_name=s.get("storage_name", ""),
+                defaults=dict(
+                    scan=scan_task,
+                    node=node_obj,
+                    storage_type=s.get("storage_type", ""),
+                    path=s.get("path", ""),
+                    content_types=s.get("content_types", ""),
+                    active=s.get("active", True),
+                    shared=s.get("shared", False),
+                    total_gb=s.get("total_gb"),
+                    used_gb=s.get("used_gb"),
+                    avail_gb=s.get("avail_gb"),
+                    used_fraction=s.get("used_fraction"),
+                    raw_data=s,
+                    scanned_at=scanned_at,
+                ),
+            )
+
+        # 备份任务
+        for j in backups_data.get("backup_jobs", []):
+            job_id = j.get("job_id", "")
+            if not job_id:
+                continue
+            node_name = j.get("node_name", "")
+            node_obj = ClusterNode.objects.filter(
+                cluster=cluster, node_name=node_name
+            ).order_by("-scanned_at").first() if node_name else None
+            last_run = j.get("last_run")
+            if isinstance(last_run, (int, float)) and last_run > 0:
+                from datetime import datetime, timezone
+                last_run = datetime.fromtimestamp(last_run, tz=timezone.utc)
+            elif isinstance(last_run, str):
+                from django.utils.dateparse import parse_datetime
+                last_run = parse_datetime(last_run)
+            else:
+                last_run = None
+            BackupJob.objects.update_or_create(
+                cluster=cluster,
+                job_id=job_id,
+                defaults=dict(
+                    scan=scan_task,
+                    node=node_obj,
+                    vmid=j.get("vmid"),
+                    resource_type=j.get("resource_type", ""),
+                    node_name=node_name,
+                    storage_name=j.get("storage_name", ""),
+                    mode=j.get("mode", ""),
+                    schedule=j.get("schedule", ""),
+                    retention=j.get("retention", ""),
+                    enabled=j.get("enabled", True),
+                    compress=j.get("compress", ""),
+                    notes=j.get("notes", ""),
+                    last_run=last_run,
+                    last_status=j.get("last_status", ""),
+                    raw_data=j.get("raw", {}),
+                    scanned_at=scanned_at,
+                ),
+            )
+
+        # 备份历史
+        for h in backups_data.get("backup_history", []):
+            task_id = h.get("task_id", "")
+            if not task_id:
+                continue
+            node_name = h.get("node_name", "")
+            node_obj = ClusterNode.objects.filter(
+                cluster=cluster, node_name=node_name
+            ).order_by("-scanned_at").first() if node_name else None
+            started_at = h.get("started_at")
+            finished_at = h.get("finished_at")
+            if isinstance(started_at, str):
+                from django.utils.dateparse import parse_datetime
+                started_at = parse_datetime(started_at)
+            if isinstance(finished_at, str):
+                from django.utils.dateparse import parse_datetime
+                finished_at = parse_datetime(finished_at)
+            BackupHistory.objects.create(
+                cluster=cluster,
+                scan=scan_task,
+                node=node_obj,
+                task_id=task_id,
+                vmid=h.get("vmid"),
+                resource_type=h.get("resource_type", ""),
+                node_name=node_name,
+                storage_name=h.get("storage_name", ""),
+                mode=h.get("mode", ""),
+                status=h.get("status", ""),
+                started_at=started_at,
+                finished_at=finished_at,
+                duration_seconds=h.get("duration_seconds"),
+                size_bytes=h.get("size_bytes"),
+                filename=h.get("filename", ""),
+                error_message=h.get("error_message", ""),
+                raw_data=h.get("raw", {}),
+                scanned_at=scanned_at,
+            )
+
     def _save_scan_history(self, cluster, scan_task, nodes_data, scanned_at):
         """保存扫描历史快照"""
         total_vms = sum(len(n.get("vms", [])) for n in nodes_data)
@@ -670,9 +786,9 @@ class AgentTasksView(APIView):
 # Agent 版本常量（平台侧维护）
 # ============================================================
 
-AGENT_LATEST_VERSION = "0.7.0"
+AGENT_LATEST_VERSION = "0.8.0"
 AGENT_DOWNLOAD_URL = "/api/agent/install.sh"  # 从平台下载
-AGENT_CHANGELOG = "v0.7.0: 支持 VM 快照数据采集"
+AGENT_CHANGELOG = "v0.8.0: 支持备份数据采集"
 
 
 class AgentUnregisterView(APIView):

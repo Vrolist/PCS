@@ -567,3 +567,118 @@ class DetectionResult(models.Model):
 
     def __str__(self):
         return f"[{self.severity.upper()}] {self.title}"
+
+
+class BackupStorage(models.Model):
+    """备份存储"""
+    cluster = models.ForeignKey(Cluster, on_delete=models.CASCADE, verbose_name="所属集群",
+                                related_name="backup_storages")
+    node = models.ForeignKey(ClusterNode, on_delete=models.CASCADE, verbose_name="所属节点",
+                             related_name="backup_storages", null=True, blank=True)
+    scan = models.ForeignKey(ScanTask, on_delete=models.SET_NULL, null=True, blank=True)
+
+    storage_name = models.CharField("存储名称", max_length=128)
+    storage_type = models.CharField("类型", max_length=32, blank=True,
+                                    help_text="local / nfs / cifs / pbs / ...")
+    path = models.CharField("路径", max_length=512, blank=True)
+    content_types = models.CharField("内容类型", max_length=256, blank=True)
+    active = models.BooleanField("活跃", default=True)
+    shared = models.BooleanField("共享", default=False)
+
+    total_gb = models.BigIntegerField("总容量(GB)", null=True, blank=True)
+    used_gb = models.BigIntegerField("已用(GB)", null=True, blank=True)
+    avail_gb = models.BigIntegerField("可用(GB)", null=True, blank=True)
+    used_fraction = models.FloatField("使用率", null=True, blank=True)
+
+    raw_data = models.JSONField("原始数据", default=dict, blank=True)
+    scanned_at = models.DateTimeField("扫描时间", db_index=True)
+
+    class Meta:
+        verbose_name = "备份存储"
+        verbose_name_plural = "备份存储"
+        ordering = ["cluster", "storage_name"]
+
+    def __str__(self):
+        return f"{self.storage_name} ({self.storage_type})"
+
+
+class BackupJob(models.Model):
+    """备份任务（从 PVE vzdump 配置获取）"""
+    cluster = models.ForeignKey(Cluster, on_delete=models.CASCADE, verbose_name="所属集群",
+                                related_name="backup_jobs")
+    node = models.ForeignKey(ClusterNode, on_delete=models.CASCADE, verbose_name="所在节点",
+                             related_name="backup_jobs", null=True, blank=True)
+    scan = models.ForeignKey(ScanTask, on_delete=models.SET_NULL, null=True, blank=True)
+
+    job_id = models.CharField("任务ID", max_length=128, db_index=True,
+                              help_text="PVE 备份任务标识，如 vzdump-100-xxx")
+    vmid = models.IntegerField("VM/CT ID", null=True, blank=True)
+    resource_type = models.CharField("资源类型", max_length=16, blank=True,
+                                     help_text="vm / ct / all")
+    node_name = models.CharField("所在节点", max_length=128, blank=True)
+    storage_name = models.CharField("备份存储", max_length=128, blank=True)
+    mode = models.CharField("模式", max_length=32, blank=True,
+                            help_text="snapshot / suspend / stop")
+    schedule = models.CharField("调度规则", max_length=128, blank=True,
+                                help_text="cron 表达式，如 '02:00'")
+    retention = models.CharField("保留策略", max_length=64, blank=True,
+                                 help_text="keep-last=3, keep-daily=7, ...")
+    enabled = models.BooleanField("启用", default=True)
+    compress = models.CharField("压缩", max_length=32, blank=True,
+                                help_text="zstd / lzo / gzip / 0")
+    notes = models.TextField("备注", blank=True)
+
+    last_run = models.DateTimeField("上次执行", null=True, blank=True)
+    last_status = models.CharField("上次状态", max_length=32, blank=True,
+                                   help_text="ok / error")
+    next_run = models.DateTimeField("下次执行", null=True, blank=True)
+
+    raw_data = models.JSONField("原始数据", default=dict, blank=True)
+    scanned_at = models.DateTimeField("扫描时间", db_index=True)
+
+    class Meta:
+        verbose_name = "备份任务"
+        verbose_name_plural = "备份任务"
+        unique_together = ("cluster", "job_id")
+        ordering = ["cluster", "job_id"]
+
+    def __str__(self):
+        return f"{self.job_id} (VMID {self.vmid})"
+
+
+class BackupHistory(models.Model):
+    """备份执行历史（从 PVE 任务历史获取）"""
+    cluster = models.ForeignKey(Cluster, on_delete=models.CASCADE, verbose_name="所属集群",
+                                related_name="backup_histories")
+    node = models.ForeignKey(ClusterNode, on_delete=models.CASCADE, verbose_name="所在节点",
+                             related_name="backup_histories", null=True, blank=True)
+    scan = models.ForeignKey(ScanTask, on_delete=models.SET_NULL, null=True, blank=True)
+
+    task_id = models.CharField("任务ID", max_length=128, db_index=True, blank=True,
+                               help_text="PVE 任务 UPID")
+    vmid = models.IntegerField("VM/CT ID", null=True, blank=True)
+    resource_type = models.CharField("资源类型", max_length=16, blank=True,
+                                     help_text="vm / ct")
+    node_name = models.CharField("所在节点", max_length=128, blank=True)
+    storage_name = models.CharField("备份存储", max_length=128, blank=True)
+    mode = models.CharField("模式", max_length=32, blank=True,
+                            help_text="snapshot / suspend / stop")
+
+    status = models.CharField("状态", max_length=32, help_text="ok / error / running")
+    started_at = models.DateTimeField("开始时间", null=True, blank=True)
+    finished_at = models.DateTimeField("完成时间", null=True, blank=True)
+    duration_seconds = models.IntegerField("耗时(秒)", null=True, blank=True)
+    size_bytes = models.BigIntegerField("备份大小(字节)", null=True, blank=True)
+    filename = models.CharField("文件名", max_length=512, blank=True)
+    error_message = models.TextField("错误信息", blank=True)
+
+    raw_data = models.JSONField("原始数据", default=dict, blank=True)
+    scanned_at = models.DateTimeField("扫描时间", db_index=True)
+
+    class Meta:
+        verbose_name = "备份历史"
+        verbose_name_plural = "备份历史"
+        ordering = ["-started_at"]
+
+    def __str__(self):
+        return f"VMID {self.vmid} - {self.status} ({self.started_at})"

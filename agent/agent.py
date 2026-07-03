@@ -37,7 +37,7 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-VERSION = "0.7.0"
+VERSION = "0.8.0"
 
 # 路径常量
 INSTALL_DIR = Path("/opt/pcs-agent")
@@ -252,6 +252,27 @@ class PVEClient:
         except Exception:
             return []
 
+    def get_backup_jobs(self, node):
+        """获取节点备份任务配置"""
+        try:
+            return self.get(f"/nodes/{node}/vzdump")
+        except Exception:
+            return []
+
+    def get_backup_history(self, node, limit=50):
+        """获取备份历史任务"""
+        try:
+            return self.get(f"/nodes/{node}/tasks?limit={limit}&typefilter=vzdump")
+        except Exception:
+            return []
+
+    def get_backup_content(self, node, storage):
+        """获取备份存储内容"""
+        try:
+            return self.get(f"/nodes/{node}/storage/{storage}/content?content=backup")
+        except Exception:
+            return []
+
 
 # ============================================================
 # 数据采集
@@ -286,6 +307,16 @@ def scan_full(pve):
     ha_resources = _scan_ha(pve)
     sdn = _scan_sdn(pve)
 
+    backups = {}
+    try:
+        # Collect backup data from first node that has data
+        for nd in nodes_data:
+            if nd.get("status") != "offline" and not nd.get("error"):
+                backups = _scan_backups(pve, nd["name"])
+                break
+    except Exception as e:
+        logger.error(f"扫描备份数据失败: {e}")
+
     return {
         "scanned_at": datetime.now(timezone.utc).isoformat(),
         "version": version,
@@ -293,6 +324,7 @@ def scan_full(pve):
         "ceph": ceph,
         "ha_resources": ha_resources,
         "sdn": sdn,
+        "backups": backups,
     }
 
 
@@ -650,6 +682,119 @@ def _scan_sdn(pve):
         "zones": pve.get_sdn_zones() or [],
         "vnets": pve.get_sdn_vnets() or [],
         "subnets": pve.get_sdn_subnets() or [],
+    }
+
+
+def _scan_backups(pve, node):
+    """扫描节点备份数据"""
+    jobs = pve.get_backup_jobs(node)
+    history = pve.get_backup_history(node)
+
+    # Find backup storages
+    backup_storages = []
+    try:
+        all_storages = pve.get_node_storage(node)
+        for st in all_storages:
+            content = st.get("content", "")
+            if "backup" in content:
+                backup_storages.append({
+                    "storage_name": st.get("storage", ""),
+                    "storage_type": st.get("type", ""),
+                    "path": st.get("path", ""),
+                    "content_types": content,
+                    "active": bool(st.get("active", 0)),
+                    "shared": bool(st.get("shared", 0)),
+                    "total_gb": _bytes_to_gb(st.get("total", 0)),
+                    "used_gb": _bytes_to_gb(st.get("used", 0)),
+                    "avail_gb": _bytes_to_gb(st.get("available", 0)),
+                    "used_fraction": st.get("used_fraction"),
+                })
+    except Exception:
+        pass
+
+    # Parse backup jobs
+    parsed_jobs = []
+    for job in jobs:
+        vmid_val = job.get("vmid")
+        if isinstance(vmid_val, list):
+            vmid_val = ",".join(str(v) for v in vmid_val)
+        storage_val = job.get("storage", "")
+        if isinstance(storage_val, list):
+            storage_val = ",".join(str(v) for v in storage_val)
+        parsed_jobs.append({
+            "job_id": job.get("id", ""),
+            "vmid": job.get("vmid") if isinstance(job.get("vmid"), int) else None,
+            "resource_type": "vm" if str(job.get("vmid", "")).isdigit() else "all",
+            "storage_name": storage_val if isinstance(storage_val, str) else "",
+            "mode": job.get("mode", ""),
+            "schedule": job.get("schedule", ""),
+            "retention": job.get("retention", "") or job.get("keep-all", ""),
+            "enabled": not bool(job.get("disabled", 0)),
+            "compress": job.get("compress", ""),
+            "notes": job.get("notes", ""),
+            "last_run": job.get("last-run"),
+            "last_status": "ok" if job.get("last-status") == "OK" else job.get("last-status", ""),
+            "raw": job,
+        })
+
+    # Parse backup history (from tasks)
+    parsed_history = []
+    for task in history:
+        upid = task.get("upid", "")
+        status = task.get("status", "")
+        if isinstance(status, str) and status.startswith("OK"):
+            status = "ok"
+        elif status:
+            status = "error"
+        else:
+            status = "running"
+
+        start_ts = task.get("starttime", 0)
+        end_ts = task.get("endtime", 0)
+        start_time = None
+        end_time = None
+        duration = None
+        if start_ts:
+            try:
+                start_time = datetime.fromtimestamp(start_ts, tz=timezone.utc).isoformat()
+            except Exception:
+                pass
+        if end_ts and start_ts:
+            try:
+                end_time = datetime.fromtimestamp(end_ts, tz=timezone.utc).isoformat()
+                duration = int(end_ts - start_ts)
+            except Exception:
+                pass
+
+        # Extract vmid from UPID: "UPID:node:PID:TYPE:VMID:..."
+        type_val = task.get("type", "")
+        vmid = None
+        rtype = ""
+        if type_val == "vzdump":
+            # Parse from description or type
+            desc = task.get("description", "")
+            # Try to extract VMID from description like "VM 100"
+            import re
+            m = re.search(r'(?:VM|CT)\s+(\d+)', desc)
+            if m:
+                vmid = int(m.group(1))
+                rtype = "vm" if "VM" in desc else "ct"
+
+        parsed_history.append({
+            "task_id": upid,
+            "vmid": vmid,
+            "resource_type": rtype,
+            "status": status,
+            "started_at": start_time,
+            "finished_at": end_time,
+            "duration_seconds": duration,
+            "raw": task,
+        })
+
+    return {
+        "backup_storages": backup_storages,
+        "backup_jobs": parsed_jobs,
+        "backup_history": parsed_history,
     }
 
 

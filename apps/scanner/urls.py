@@ -17,4 +17,8 @@ urlpatterns = [
     path("sdn/vnets/", views.SDNVNetListView.as_view(), name="scanner-sdn-vnets"),
     path("sdn/subnets/", views.SDNSubnetListView.as_view(), name="scanner-sdn-subnets"),
     path("snapshots/", views.SnapshotListView.as_view(), name="scanner-snapshots"),
+    path("backup/storages/", views.BackupStorageListView.as_view(), name="scanner-backup-storages"),
+    path("backup/jobs/", views.BackupJobListView.as_view(), name="scanner-backup-jobs"),
+    path("backup/history/", views.BackupHistoryListView.as_view(), name="scanner-backup-history"),
+    path("backup/stats/", views.BackupStatsView.as_view(), name="scanner-backup-stats"),
 ]
