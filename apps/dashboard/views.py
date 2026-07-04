@@ -94,23 +94,50 @@ class TrendsView(APIView):
             qs = qs.filter(cluster_id=cluster_filter)
         histories = qs.order_by("scanned_at")
 
-        # 按日期分组，计算每日平均值
-        daily = defaultdict(lambda: {"cpu_sum": 0.0, "mem_sum": 0.0, "count": 0})
+        # 根据时间范围选择聚合粒度
+        # Agent 每 5分钟上报一次，一天约 288 条记录
+        if days <= 1:
+            fmt = "%m-%d %H:%M"
+            bucket_minutes = 10
+        elif days <= 3:
+            fmt = "%m-%d %H:%M"
+            bucket_minutes = 30
+        elif days <= 7:
+            fmt = "%m-%d %H:00"
+            bucket_minutes = 60
+        elif days <= 14:
+            fmt = "%m-%d %H:00"
+            bucket_minutes = 120
+        else:
+            fmt = "%m-%d %H:00"
+            bucket_minutes = 360
+
+        # 按时间桶聚合
+        # avg_cpu_usage 已是百分比值（35.0 表示 35%），avg_memory_usage 是 0~1 值
+        buckets = defaultdict(lambda: {"cpu_sum": 0.0, "mem_sum": 0.0, "count": 0})
         for h in histories:
-            date_key = h.scanned_at.strftime("%m.%d")
+            # 将时间对齐到桶
+            if bucket_minutes > 60:
+                hour = (h.scanned_at.hour // (bucket_minutes // 60)) * (bucket_minutes // 60)
+                dt = h.scanned_at.replace(hour=hour, minute=0, second=0, microsecond=0)
+            else:
+                minute = (h.scanned_at.minute // bucket_minutes) * bucket_minutes
+                dt = h.scanned_at.replace(minute=minute, second=0, microsecond=0)
+
+            date_key = dt.strftime(fmt)
             snapshot = h.snapshot_data or {}
             cpu = snapshot.get("avg_cpu_usage")
             mem = snapshot.get("avg_memory_usage")
             if cpu is not None or mem is not None:
-                daily[date_key]["cpu_sum"] += float(cpu or 0) * 100
-                daily[date_key]["mem_sum"] += float(mem or 0) * 100
-                daily[date_key]["count"] += 1
+                buckets[date_key]["cpu_sum"] += float(cpu or 0)
+                buckets[date_key]["mem_sum"] += float(mem or 0) * 100
+                buckets[date_key]["count"] += 1
 
         dates = []
         cpu_avg = []
         memory_avg = []
-        for date_key in sorted(daily.keys()):
-            entry = daily[date_key]
+        for date_key in sorted(buckets.keys()):
+            entry = buckets[date_key]
             if entry["count"] > 0:
                 dates.append(date_key)
                 cpu_avg.append(round(entry["cpu_sum"] / entry["count"], 1))

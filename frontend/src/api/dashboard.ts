@@ -97,3 +97,63 @@ export function getPredictions(clusterId?: number, days = 30) {
   if (clusterId) params.cluster_id = clusterId
   return request.get<any, Predictions>('/dashboard/predictions/', { params })
 }
+
+// === 健康报告 ===
+export interface HealthReportIssue {
+  type: string
+  severity: 'critical' | 'warning' | 'info'
+  resource: string
+  detail: string
+}
+
+export interface HealthReportScore {
+  score: number
+  weight: number
+}
+
+export interface HealthReportData {
+  overall_score: number
+  scores: {
+    node: HealthReportScore
+    resource: HealthReportScore
+    alert: HealthReportScore
+    backup: HealthReportScore
+    completeness: HealthReportScore
+  }
+  issues: HealthReportIssue[]
+  trends: {
+    dates: string[]
+    cpu: number[]
+    memory: number[]
+  }
+  assets: {
+    total_nodes: number
+    online_nodes: number
+    total_vms: number
+    running_vms: number
+    total_lxc: number
+    running_lxc: number
+    total_storage_gb: number
+    used_storage_gb: number
+  }
+  summary: {
+    days: number
+    actual_days: number
+    data_adequacy: 'sufficient' | 'moderate' | 'limited' | 'insufficient'
+    scan_count: number
+    node_count: number
+    avg_cpu: number
+    avg_mem: number
+    total_alerts: number
+    unresolved_alerts: number
+    backup_total: number
+    backup_enabled: number
+    storage_issue_count: number
+  }
+}
+
+export function getHealthReport(clusterId?: number, days = 0) {
+  const params: Record<string, any> = { days }
+  if (clusterId) params.cluster_id = clusterId
+  return request.get<any, HealthReportData>('/dashboard/health-report/', { params })
+}

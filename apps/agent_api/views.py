@@ -504,6 +504,44 @@ class ScanUploadView(APIView):
                         },
                     )
 
+            # 清理历史遗留的 VM 和 LXC（由于 ClusterNode 是历史表，需要清理旧节点关联的记录）
+            # 删除该节点名下所有非当前节点关联的 VM/LXC
+            old_vms = VM.objects.filter(
+                node__cluster=cluster,
+                node__node_name=node.node_name
+            ).exclude(node=node)
+            if old_vms.exists():
+                deleted_count = old_vms.count()
+                old_vms.delete()
+                logger.info(f"节点 {node.node_name} 清理了 {deleted_count} 个历史遗留 VM")
+
+            old_lxcs = LXC.objects.filter(
+                node__cluster=cluster,
+                node__node_name=node.node_name
+            ).exclude(node=node)
+            if old_lxcs.exists():
+                deleted_count = old_lxcs.count()
+                old_lxcs.delete()
+                logger.info(f"节点 {node.node_name} 清理了 {deleted_count} 个历史遗留 LXC")
+
+            # 清理本次扫描中不存在的 VM 和 LXC（原地更新策略，删除已移除的资源）
+            scanned_vmids = {v["vmid"] for v in node_data.get("vms", [])}
+            scanned_lxcids = {c["vmid"] for c in node_data.get("containers", [])}
+
+            # 删除不在本次扫描中的 VM
+            existing_vms = VM.objects.filter(node=node).exclude(vmid__in=scanned_vmids)
+            if existing_vms.exists():
+                deleted_count = existing_vms.count()
+                existing_vms.delete()
+                logger.info(f"节点 {node.node_name} 清理了 {deleted_count} 个已移除的 VM")
+
+            # 删除不在本次扫描中的 LXC
+            existing_lxcs = LXC.objects.filter(node=node).exclude(vmid__in=scanned_lxcids)
+            if existing_lxcs.exists():
+                deleted_count = existing_lxcs.count()
+                existing_lxcs.delete()
+                logger.info(f"节点 {node.node_name} 清理了 {deleted_count} 个已移除的 LXC")
+
             # Storage
             for st_data in node_data.get("storages", []):
                 Storage.objects.create(

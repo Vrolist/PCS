@@ -645,7 +645,21 @@ export default {
   // Report Center
   reportCenter: {
     complianceReport: { title: 'Compliance Audit Report', subtitle: 'Generate compliance audit reports by node/cluster', comingSoon: 'Compliance report coming soon' },
-    healthReport: { title: 'Periodic Health Report', subtitle: 'Auto-generate weekly/monthly reports with resource trends and risk alerts', comingSoon: 'Health report coming soon' },
+    healthReport: { title: 'Periodic Health Report', subtitle: 'Auto-generate weekly/monthly reports with resource trends and risk alerts' },
+  },
+
+  healthReport: {
+    auto: 'Auto', last3Days: 'Last 3 Days', last7Days: 'Last 7 Days', last14Days: 'Last 14 Days', last30Days: 'Last 30 Days',
+    overallScore: 'Overall Score', gradeExcellent: 'Healthy', gradeGood: 'Good', gradeFair: 'Fair', gradePoor: 'Critical',
+    dimNode: 'Node Health', dimResource: 'Resource Usage', dimAlert: 'Alert Status', dimBackup: 'Backup Status', dimCompleteness: 'Data Completeness',
+    assetOverview: 'Asset Overview', onlineNodes: 'Online Nodes', runningVMs: 'Running VMs', runningContainers: 'Running Containers', storageUsage: 'Storage Usage',
+    resourceTrend: 'Resource Trend', memory: 'Memory', noTrendData: 'Not enough data points for trend chart',
+    riskAlerts: 'Risk Alerts', severity: 'Severity', critical: 'Critical', warning: 'Warning', resource: 'Resource', detail: 'Detail', noIssues: 'No risk items',
+    reportSummary: 'Report Summary', reportPeriod: 'Report Period', scanCount: 'Scan Count', avgCPU: 'Avg CPU', avgMemory: 'Avg Memory',
+    totalAlerts: 'Total Alerts', unresolvedAlerts: 'Unresolved Alerts', backupJobs: 'Backup Jobs', storageIssues: 'Storage Issues',
+    adequacyInsufficient: 'Insufficient Data', adequacyInsufficientDesc: 'No scan history available. Report is based on current snapshot only.',
+    adequacyLimited: 'Limited Data', adequacyLimitedDesc: 'Only {days} days of data. Recommend 7+ days for full report.',
+    adequacyModerate: 'Moderate Data', adequacyModerateDesc: '{days} days of data. 14+ days recommended for accurate prediction.',
   },
 
   // Páginas placeholder para informações avançadas

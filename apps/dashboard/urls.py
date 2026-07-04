@@ -2,6 +2,7 @@ from django.urls import path
 
 from . import views
 from .predictions import PredictionsView
+from .health_report import HealthReportView
 
 urlpatterns = [
     path("stats/", views.StatsView.as_view(), name="dashboard-stats"),
@@ -9,4 +10,5 @@ urlpatterns = [
     path("trends/", views.TrendsView.as_view(), name="dashboard-trends"),
     path("nodes/", views.NodesView.as_view(), name="dashboard-nodes"),
     path("predictions/", PredictionsView.as_view(), name="dashboard-predictions"),
+    path("health-report/", HealthReportView.as_view(), name="dashboard-health-report"),
 ]
