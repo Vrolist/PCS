@@ -198,10 +198,6 @@
         <div class="item-icon-wrap"><el-icon><Delete /></el-icon></div>
         <template #title><span>{{ t('nav.resourceReclamation') }}</span></template>
       </el-menu-item>
-      <el-menu-item index="/dashboard/dr-score" class="sidebar-item">
-        <div class="item-icon-wrap"><el-icon><Trophy /></el-icon></div>
-        <template #title><span>{{ t('nav.drScore') }}</span></template>
-      </el-menu-item>
       <el-menu-item index="/dashboard/performance-correlation" class="sidebar-item">
         <div class="item-icon-wrap"><el-icon><Histogram /></el-icon></div>
         <template #title><span>{{ t('nav.performanceCorrelation') }}</span></template>
@@ -228,6 +224,10 @@
       <el-menu-item index="/dashboard/health-report" class="sidebar-item">
         <div class="item-icon-wrap"><el-icon><Document /></el-icon></div>
         <template #title><span>{{ t('nav.healthReport') }}</span></template>
+      </el-menu-item>
+      <el-menu-item index="/dashboard/dr-score" class="sidebar-item">
+        <div class="item-icon-wrap"><el-icon><Trophy /></el-icon></div>
+        <template #title><span>{{ t('nav.drScore') }}</span></template>
       </el-menu-item>
     </template>
 
@@ -291,8 +291,8 @@ const sectionRoutes: Record<string, string[]> = {
   basic: ['/dashboard/nodes', '/dashboard/vms', '/dashboard/containers', '/dashboard/storage', '/dashboard/networks'],
   advanced: ['/dashboard/network-topology', '/dashboard/ceph', '/dashboard/ha', '/dashboard/sdn', '/dashboard/firewall', '/dashboard/backup', '/dashboard/replication', '/dashboard/snapshots'],
   ops: ['/dashboard/alerts', '/dashboard/services'],
-  smart: ['/dashboard/capacity-planning', '/dashboard/change-tracking', '/dashboard/resource-reclamation', '/dashboard/dr-score', '/dashboard/performance-correlation', '/dashboard/dependency-mapping'],
-  report: ['/dashboard/compliance-report', '/dashboard/health-report'],
+  smart: ['/dashboard/capacity-planning', '/dashboard/change-tracking', '/dashboard/resource-reclamation', '/dashboard/performance-correlation', '/dashboard/dependency-mapping'],
+  report: ['/dashboard/compliance-report', '/dashboard/health-report', '/dashboard/dr-score'],
   user: ['/dashboard/settings', '/dashboard/user-logs', '/dashboard/user-notifications'],
 }
 

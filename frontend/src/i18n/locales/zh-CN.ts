@@ -77,7 +77,7 @@ export default {
     capacityPlanning: '容量规划',
     changeTracking: '变更追踪',
     resourceReclamation: '资源回收',
-    drScore: '灾备评分',
+    drScore: '灾备评分报告',
     performanceCorrelation: '性能关联',
     dependencyMapping: '依赖链路',
     reportCenter: '报告中心',
