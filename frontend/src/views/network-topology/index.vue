@@ -198,6 +198,9 @@ function buildGraph(data: NetworkInterface[]) {
     ifaces.forEach(iface => {
       if (hiddenTypes.value.has(iface.type === 'eth' ? 'eth' : iface.type)) return
 
+      // 接口半径按网络层级区分：bridge(20) > bond(16) > 其他(13)
+      const ifaceRadius = iface.type === 'bridge' ? 20 : iface.type === 'bond' ? 16 : 13
+
       const ifaceNode: GraphNode = {
         id: `iface-${iface.id}`,
         name: iface.name,
@@ -208,7 +211,7 @@ function buildGraph(data: NetworkInterface[]) {
         status: iface.status,
         bridgePorts: iface.bridge_ports,
         bondSlaves: iface.bond_slaves,
-        radius: 15
+        radius: ifaceRadius
       }
       nodes.push(ifaceNode)
       ifaceMap.set(`${nodeName}-${iface.name}`, ifaceNode)
@@ -253,6 +256,7 @@ function buildGraph(data: NetworkInterface[]) {
   })
 
   // 阶段二：提取子网并创建子网分组节点
+  // 先按接口自身 address 提取子网
   const subnetMembers = new Map<string, GraphNode[]>()
   ifaceMap.forEach(ifaceNode => {
     const subnet = extractSubnet(ifaceNode.address)
@@ -264,9 +268,27 @@ function buildGraph(data: NetworkInterface[]) {
     }
   })
 
-  // 只在有 2 个以上接口共享同一子网时创建子网节点
+  // 将 Bridge 的子网传递给其下层接口（bond/物理网卡），
+  // 将 Bond 的子网传递给其 slave 物理网卡，
+  // 使得整个网络链路归属同一子网分组
+  links.forEach(link => {
+    if (link.type !== 'bridge-port' && link.type !== 'bond-slave') return
+    const src = typeof link.source === 'string'
+      ? nodes.find(n => n.id === link.source)
+      : link.source as GraphNode
+    const tgt = typeof link.target === 'string'
+      ? nodes.find(n => n.id === link.target)
+      : link.target as GraphNode
+    if (!src || !tgt || !src.subnet || tgt.subnet) return
+    tgt.subnet = src.subnet
+    const list = subnetMembers.get(src.subnet) || []
+    list.push(tgt)
+    subnetMembers.set(src.subnet, list)
+  })
+
+  // 创建子网节点（有 1 个以上接口即显示）
   subnetMembers.forEach((members, subnet) => {
-    if (members.length < 2) return
+    if (members.length < 1) return
     const subnetId = `subnet-${subnet}`
     nodes.push({
       id: subnetId,
@@ -330,7 +352,12 @@ function initSvg() {
   // 创建力导向模拟
   simulation = d3.forceSimulation<GraphNode>()
     .force('link', d3.forceLink<GraphNode, GraphLink>().id(d => d.id)
-      .distance(d => (d as GraphLink).type === 'subnet-iface' ? 70 : 100))
+      .distance(d => {
+        const lt = (d as GraphLink).type
+        if (lt === 'subnet-iface') return 70
+        if (lt === 'bridge-port' || lt === 'bond-slave') return 60
+        return 100
+      }))
     .force('charge', d3.forceManyBody().strength(d => (d as GraphNode).type === 'subnet' ? -500 : -300))
     .force('center', d3.forceCenter(width / 2, height / 2))
     .force('collision', d3.forceCollide().radius(d => (d as GraphNode).radius + 10))
@@ -381,8 +408,16 @@ function updateGraph() {
       }
       return '#999'
     })
-    .attr('stroke-opacity', d => d.type === 'subnet-iface' ? 0.35 : 0.6)
-    .attr('stroke-width', d => d.type === 'subnet-iface' ? 1.5 : 2)
+    .attr('stroke-opacity', d => {
+      if (d.type === 'subnet-iface') return 0.3
+      if (d.type === 'bridge-port' || d.type === 'bond-slave') return 0.85
+      return 0.5
+    })
+    .attr('stroke-width', d => {
+      if (d.type === 'bridge-port' || d.type === 'bond-slave') return 2.5
+      if (d.type === 'subnet-iface') return 1.5
+      return 2
+    })
     .attr('stroke-dasharray', d => {
       if (d.type === 'node-iface') return '5,5'
       if (d.type === 'subnet-iface') return '3,3'
@@ -448,7 +483,7 @@ function updateGraph() {
     .attr('dy', d => {
       if (d.type === 'node') return 4
       if (d.type === 'subnet') return 5
-      return 30
+      return d.radius + 14
     })
     .attr('text-anchor', 'middle')
     .attr('font-size', d => d.type === 'subnet' ? '11px' : d.type === 'node' ? '12px' : '10px')
@@ -472,7 +507,7 @@ function updateGraph() {
   // IP 地址标签（接口）
   node.filter(d => d.type === 'iface' && d.address)
     .append('text')
-    .attr('dy', 42)
+    .attr('dy', d => d.radius + 26)
     .attr('text-anchor', 'middle')
     .attr('font-size', '9px')
     .attr('fill', '#666')
