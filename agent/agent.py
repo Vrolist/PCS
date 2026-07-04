@@ -37,7 +37,7 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-VERSION = "0.10.0"
+VERSION = "0.10.2"
 
 # 路径常量
 INSTALL_DIR = Path("/opt/pcs-agent")
@@ -722,6 +722,7 @@ def _scan_networks(pve, node):
         "active": bool(net.get("active", 0)),
         "method": net.get("method", ""),
         "address": net.get("address", ""),
+        "netmask": net.get("netmask", ""),
         "gateway": net.get("gateway", ""),
         "speed_mbps": net.get("speed"),
         "bridge_ports": net.get("bridge_ports", ""),

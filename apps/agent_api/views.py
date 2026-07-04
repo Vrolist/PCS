@@ -562,6 +562,18 @@ class ScanUploadView(APIView):
 
             # Network
             for net_data in node_data.get("networks", []):
+                address = net_data.get("address", "")
+                # address 无 CIDR 时，用 netmask 补全
+                # PVE API 的 netmask 是前缀长度字符串（如 "24"），非点分格式
+                if address and "/" not in address:
+                    netmask = net_data.get("netmask", "")
+                    if netmask:
+                        try:
+                            prefix = int(netmask)
+                            if 1 <= prefix <= 32:
+                                address = f"{address}/{prefix}"
+                        except (ValueError, TypeError):
+                            pass
                 NetworkInterface.objects.create(
                     node=node,
                     scan=scan_task,
@@ -569,7 +581,7 @@ class ScanUploadView(APIView):
                     type=net_data.get("type", ""),
                     active=net_data.get("active", True),
                     method=net_data.get("method", ""),
-                    address=net_data.get("address", ""),
+                    address=address,
                     gateway=net_data.get("gateway", ""),
                     speed_mbps=net_data.get("speed_mbps"),
                     bridge_ports=net_data.get("bridge_ports", ""),
@@ -1154,9 +1166,9 @@ class AgentTasksView(APIView):
 # Agent 版本常量（平台侧维护）
 # ============================================================
 
-AGENT_LATEST_VERSION = "0.10.0"
+AGENT_LATEST_VERSION = "0.10.2"
 AGENT_DOWNLOAD_URL = "/api/agent/install.sh"  # 从平台下载
-AGENT_CHANGELOG = "v0.10.0: 支持防火墙配置数据采集（集群/节点/VM/CT 规则、安全组、IPSet、别名）"
+AGENT_CHANGELOG = "v0.10.2: 采集 netmask 字段确保地址 CIDR 格式，后端修复 netmask 解析"
 
 
 class AgentUnregisterView(APIView):
