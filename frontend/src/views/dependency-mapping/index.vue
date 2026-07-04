@@ -13,7 +13,7 @@
         </div>
         <span class="toolbar-divider"></span>
         <div class="toolbar-group">
-          <button class="toolbar-btn-text" @click="fitView">{{ t('smartAnalysis.dependencyMapping.fitView') || '自适应' }}</button>
+          <button class="toolbar-btn-text" @click="fitView">自适应</button>
           <button class="toolbar-btn-text" @click="zoomTo(1)">100%</button>
         </div>
       </div>
@@ -279,7 +279,7 @@ function toggleType(type: string) {
 }
 
 function getSubLabel(n: any): string {
-  if (n.type === 'node') return `${n.cpu_load != null ? Number(n.cpu_load).toFixed(0) + '%' : ''} ${n.ip_address || ''}`.trim()
+  if (n.type === 'node') return n.ip_address || ''
   if (n.type === 'vm' || n.type === 'container') {
     const b = `${n.cpu_cores || 0}核 ${n.memory_mb ? (n.memory_mb / 1024).toFixed(0) + 'G' : ''}`
     return n.ha_enabled ? `${b} · HA:${n.ha_group}` : b
@@ -526,24 +526,77 @@ function layoutGraph() {
     }
   })
 
-  // 集群级叶子（未附着到任何节点的 storage/network/容器等）放在集群底部
+  // 集群级叶子（node_id 不匹配任何节点的 storage/network 等）
+  // 策略：放到选中资源所在节点内（或第一个节点），节点自动扩大
   const clusterLeafs = leafList.value.filter(lf => !nodeParentMap.value.has(lf.id))
   if (clusterLeafs.length > 0) {
-    const cp = positions[clusterNode.value!.id]
-    const startY = cp.y + cp.h - pad - childH / 2
-    clusterLeafs.forEach((lf, i) => {
-      const cols = Math.max(1, Math.min(clusterLeafs.length, 3))
-      const row = Math.floor(i / cols), col = i % cols
-      const totalW = Math.min(cols, clusterLeafs.length) * (childW + gap) - gap
-      const startX = cp.x + (cp.w - totalW) / 2
-      positions[lf.id] = {
-        x: startX + col * (childW + gap) + childW / 2,
-        y: startY - row * (childH + gap),
-        w: lf.width, h: lf.height,
-      }
-    })
-    // 集群自动扩大以容纳这些叶子
-    shrinkClusterToFit()
+    // 找到目标节点：选中资源所在节点，或第一个节点
+    let targetNd = pveNodes.value[0]
+    if (highlightedLeafId) {
+      const hlParent = nodeParentMap.value.get(highlightedLeafId)
+      if (hlParent) targetNd = pveNodes.value.find(nd => nd.id === hlParent) || targetNd
+    }
+    // 如果有资源选中，找其所在节点
+    if (!targetNd && pveNodes.value.length > 0) targetNd = pveNodes.value[0]
+    if (targetNd) {
+      // 把未匹配叶子加入目标节点的 leafs
+      clusterLeafs.forEach(lf => {
+        targetNd!.leafs.push(lf)
+        nodeParentMap.value.set(lf.id, targetNd!.id)
+      })
+      // 重新计算目标节点尺寸
+      const vms = targetNd.leafs.filter(c => ['vm', 'container'].includes(c.type))
+      const nets = targetNd.leafs.filter(c => c.type === 'network')
+      const stors = targetNd.leafs.filter(c => c.type === 'storage')
+      const cols = Math.max(1, Math.min(vms.length, 3))
+      const vmRows = Math.ceil(vms.length / cols)
+      const vmAreaW = cols * (childW + gap) - gap
+      const vmAreaH = vmRows * (childH + gap) - gap
+      const netAreaW = nets.length > 0 ? netW + gap : 0
+      const storRowH = stors.length > 0 ? childH + gap : 0
+      targetNd.width = Math.max(pad * 2 + vmAreaW + netAreaW, pad * 2 + stors.length * (childW + gap) - gap, 180)
+      targetNd.height = Math.max(pad + 28 + 12 + vmAreaH + storRowH + pad, 64)
+      // 更新节点位置
+      const np = positions[targetNd.id]
+      np.w = targetNd.width
+      np.h = targetNd.height
+      // 重新布局该节点的子节点
+      const innerX = np.x + pad
+      const innerY = np.y + pad + 32
+      const innerW = np.width - pad * 2
+      const innerH = np.height - pad * 2 - 32
+      // 网络（右侧列）
+      let netX = np.x + np.width - pad - netW / 2 - 10
+      nets.forEach((n, i) => {
+        positions[n.id] = {
+          x: netX, y: innerY + innerH / 2 + (i - (nets.length - 1) / 2) * (childH + 10),
+          w: n.width, h: n.height,
+        }
+      })
+      // 存储（底部行）
+      const storY = np.y + np.height - pad - childH / 2
+      stors.forEach((s, i) => {
+        const totalW = stors.length * (childW + gap) - gap
+        const startX = np.x + (np.width - totalW) / 2
+        positions[s.id] = {
+          x: startX + i * (childW + gap) + childW / 2,
+          y: storY,
+          w: s.width, h: s.height,
+        }
+      })
+      // VM/容器（网格）
+      vms.forEach(vm => {
+        const idx = vms.indexOf(vm)
+        const row = Math.floor(idx / cols), col = idx % cols
+        const vmAreaTotalW = cols * (childW + gap) - gap
+        const startX = innerX + (innerW - netW - (nets.length > 0 ? gap : 0) - vmAreaTotalW) / 2
+        positions[vm.id] = {
+          x: startX + col * (childW + gap) + childW / 2,
+          y: innerY + row * (childH + gap) + childH / 2,
+          w: childW, h: childH,
+        }
+      })
+    }
   }
 
   // 确保所有节点和子节点都被正确包含
@@ -578,8 +631,9 @@ function recalcParent(nodeId: string) {
     maxY = Math.max(maxY, cp.y + cp.h / 2 + edgePad)
   })
   if (minX !== Infinity) {
-    np.x = minX
-    np.y = minY
+    // 中心坐标：center = (min + max) / 2，宽高 = max - min
+    np.x = (minX + maxX) / 2
+    np.y = (minY + maxY) / 2
     np.w = Math.max(maxX - minX, 180)
     np.h = Math.max(maxY - minY, 64)
   }
