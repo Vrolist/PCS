@@ -1,7 +1,7 @@
 """灾备就绪评分 API (DR Score)"""
 from collections import defaultdict
 
-from django.db.models import Q, Max
+from django.db.models import Q, Max, Min
 from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -9,9 +9,11 @@ from rest_framework.views import APIView
 
 from apps.clusters.models import Cluster
 from apps.scanner.models import (
-    VM, LXC, VMConfig, LXCConfig, VMSnapshot,
+    VM, LXC, VMConfig, LXCConfig, VMSnapshot, ClusterNode,
     HAResource, NetworkInterface, BackupJob, BackupStorage, Storage,
 )
+
+PCS_VERSION = "1.0.0"
 
 
 def _user_cluster_ids(user):
@@ -323,6 +325,16 @@ class DRScoreView(APIView):
         # 按分数升序排列（最差的排前面）
         resources.sort(key=lambda r: r["score"])
 
+        # 元数据
+        from apps.agent_api.models import AgentInstance
+        agent_ver = AgentInstance.objects.filter(
+            cluster_id__in=cluster_ids
+        ).order_by("-version").values_list("version", flat=True).first() or "N/A"
+
+        period = ClusterNode.objects.filter(
+            cluster_id__in=cluster_ids
+        ).aggregate(earliest=Min("scanned_at"), latest=Max("scanned_at"))
+
         return Response({
             "cluster_score": cluster_score,
             "cluster_grade": cluster_grade,
@@ -335,4 +347,10 @@ class DRScoreView(APIView):
             },
             "resources": resources,
             "recommendations": recommendations,
+            "platform_version": PCS_VERSION,
+            "agent_version": agent_ver,
+            "data_period": {
+                "earliest": period["earliest"].isoformat() if period["earliest"] else None,
+                "latest": period["latest"].isoformat() if period["latest"] else None,
+            },
         })

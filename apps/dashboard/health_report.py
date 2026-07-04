@@ -2,7 +2,7 @@
 from collections import defaultdict
 from datetime import timedelta
 
-from django.db.models import Max, Q, Count
+from django.db.models import Max, Min, Q, Count
 from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -13,6 +13,8 @@ from apps.scanner.models import (
     ClusterNode, VM, LXC, Storage, CephStatus, HAResource,
     ScanHistory, DetectionResult, BackupJob, BackupHistory,
 )
+
+PCS_VERSION = "1.0.0"
 
 
 def _user_cluster_ids(user):
@@ -453,6 +455,16 @@ class HealthReportView(APIView):
         elif actual_days < 7:
             data_adequacy = "moderate"
 
+        # 元数据
+        from apps.agent_api.models import AgentInstance
+        agent_ver = AgentInstance.objects.filter(
+            cluster_id__in=cluster_ids
+        ).order_by("-version").values_list("version", flat=True).first() or "N/A"
+
+        scan_period = ClusterNode.objects.filter(
+            cluster_id__in=cluster_ids
+        ).aggregate(earliest=Min("scanned_at"), latest=Max("scanned_at"))
+
         return Response({
             "overall_score": total_score,
             "scores": {
@@ -480,5 +492,11 @@ class HealthReportView(APIView):
                 "storage_issue_count": storage_issue_count,
                 "period_start": since.isoformat(),
                 "period_end": timezone.now().isoformat(),
+            },
+            "platform_version": PCS_VERSION,
+            "agent_version": agent_ver,
+            "data_period": {
+                "earliest": scan_period["earliest"].isoformat() if scan_period["earliest"] else None,
+                "latest": scan_period["latest"].isoformat() if scan_period["latest"] else None,
             },
         })

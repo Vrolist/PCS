@@ -152,6 +152,12 @@ export interface HealthReportData {
     period_start: string
     period_end: string
   }
+  platform_version?: string
+  agent_version?: string
+  data_period?: {
+    earliest: string | null
+    latest: string | null
+  }
 }
 
 export function getHealthReport(clusterId?: number, days = 0) {
@@ -191,6 +197,12 @@ export interface DRScoreData {
   }
   resources: DRScoreResource[]
   recommendations: string[]
+  platform_version?: string
+  agent_version?: string
+  data_period?: {
+    earliest: string | null
+    latest: string | null
+  }
 }
 
 export function getDRScore(clusterId?: number) {
@@ -226,6 +238,12 @@ export interface ComplianceData {
   categories: ComplianceCategory[]
   recommendations: string[]
   generated_at: string
+  platform_version: string
+  agent_version: string
+  data_period: {
+    earliest: string | null
+    latest: string | null
+  }
 }
 
 export function getComplianceReport(clusterId?: number) {

@@ -7,6 +7,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from django.db.models import Min, Max
+
 from apps.clusters.models import Cluster
 from apps.scanner.models import (
     ClusterNode, VM, LXC, VMConfig, LXCConfig,
@@ -14,6 +16,8 @@ from apps.scanner.models import (
     FirewallOptions, FirewallRule, NetworkInterface, Storage,
     ReplicationJob, DetectionResult,
 )
+
+PCS_VERSION = "1.0.0"
 
 
 def _user_cluster_ids(user):
@@ -348,6 +352,15 @@ class ComplianceReportView(APIView):
                 for issue in c["issues"][:2]:
                     recommendations.append(f"[{c['label']}] {issue}")
 
+        # 元数据: 平台版本、Agent版本、数据周期
+        from apps.agent_api.models import AgentInstance
+        agent_qs = AgentInstance.objects.filter(cluster_id__in=cluster_ids).order_by("-version")
+        agent_ver = agent_qs.values_list("version", flat=True).first() or "N/A"
+
+        period = ClusterNode.objects.filter(
+            cluster_id__in=cluster_ids
+        ).aggregate(earliest=Min("scanned_at"), latest=Max("scanned_at"))
+
         return Response({
             "overall_score": overall_score,
             "overall_grade": overall_grade,
@@ -362,4 +375,10 @@ class ComplianceReportView(APIView):
             "categories": categories,
             "recommendations": recommendations,
             "generated_at": timezone.now().isoformat(),
+            "platform_version": PCS_VERSION,
+            "agent_version": agent_ver,
+            "data_period": {
+                "earliest": period["earliest"].isoformat() if period["earliest"] else None,
+                "latest": period["latest"].isoformat() if period["latest"] else None,
+            },
         })

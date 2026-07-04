@@ -1689,7 +1689,7 @@ def do_upload(token, levels=None, num_scans=7):
                 "pve_password": f"fake-password-{node['name']}",
                 "hostname": node["name"],
                 "scan_interval": 300,
-                "version": f"0.6.0",
+                "version": "0.10.2",
             })
             if reg_status == 201:
                 aid = reg_resp["agent_id"]
@@ -1701,7 +1701,7 @@ def do_upload(token, levels=None, num_scans=7):
         # 3. 发送心跳
         for aid in agent_ids:
             api_request("/api/agent/heartbeat/", "POST", {
-                "agent_id": aid, "status": "online", "version": "0.6.0"
+                "agent_id": aid, "status": "online", "version": "0.10.2"
             })
 
         # 4. 上传扫描数据（多轮，模拟历史趋势）

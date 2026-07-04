@@ -395,6 +395,13 @@ function gradeLabel(grade: string): string {
   return map[grade] || grade
 }
 
+function fmtDT(iso: string | null | undefined): string {
+  if (!iso) return 'N/A'
+  const d = new Date(iso)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
+
 // ── PDF 导出 (jsPDF — helvetica 字体，英文标签) ──
 const EN_GRADE: Record<string, string> = { excellent: 'Excellent', good: 'Good', fair: 'Fair', danger: 'Danger' }
 
@@ -404,203 +411,337 @@ async function exportPDF() {
   try {
     const { jsPDF } = await import('jspdf')
     const d = data.value
+
+    // A4 尺寸 (mm)
+    const pageWidth = 210
+    const pageHeight = 297
+    const margin = 15
+    const contentWidth = pageWidth - margin * 2
+
+    // 创建 PDF 文档
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    })
+
+    // 颜色定义
+    const colors = {
+      primary: '#409eff',
+      success: '#67c23a',
+      warning: '#e6a23c',
+      danger: '#f56c6c',
+      text: '#333333',
+      textSecondary: '#666666',
+      textLight: '#999999',
+      background: '#f8f9fa',
+      border: '#eeeeee'
+    }
+
+    // 辅助函数：设置颜色
+    const setColor = (color: string) => {
+      const hex = color.replace('#', '')
+      const r = parseInt(hex.substr(0, 2), 16)
+      const g = parseInt(hex.substr(2, 2), 16)
+      const b = parseInt(hex.substr(4, 2), 16)
+      doc.setTextColor(r, g, b)
+    }
+
+    const setDrawColor = (color: string) => {
+      const hex = color.replace('#', '')
+      const r = parseInt(hex.substr(0, 2), 16)
+      const g = parseInt(hex.substr(2, 2), 16)
+      const b = parseInt(hex.substr(4, 2), 16)
+      doc.setDrawColor(r, g, b)
+    }
+
+    const setFillColor = (color: string) => {
+      const hex = color.replace('#', '')
+      const r = parseInt(hex.substr(0, 2), 16)
+      const g = parseInt(hex.substr(2, 2), 16)
+      const b = parseInt(hex.substr(4, 2), 16)
+      doc.setFillColor(r, g, b)
+    }
+
+    // 格式化时间
+    const formatDateTime = (isoStr: string) => {
+      const dt = new Date(isoStr)
+      return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')} ${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}:${String(dt.getSeconds()).padStart(2, '0')}`
+    }
+
+    // 分数颜色函数
+    function scoreColorHex(score: number): string {
+      if (score >= 80) return colors.success
+      if (score >= 60) return colors.primary
+      if (score >= 40) return colors.warning
+      return colors.danger
+    }
+
     const now = new Date()
-    const exportTime = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`
+    const pcsVersion = `v${d.platform_version || 'N/A'}`
+    const agentVersion = `v${d.agent_version || 'N/A'}`
+    const periodStart = d.data_period?.earliest ? formatDateTime(d.data_period.earliest) : 'N/A'
+    const periodEnd = d.data_period?.latest ? formatDateTime(d.data_period.latest) : 'N/A'
+    const exportTime = formatDateTime(now.toISOString())
     const clusterName = clusterStore.currentCluster?.name || 'All Clusters'
 
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-    const W = 210, M = 16, CW = W - M * 2
+    let y = margin
+
+    // === 报告头部 ===
+    // 标题
+    doc.setFontSize(24)
+    setColor(colors.text)
+    doc.setFont('helvetica', 'bold')
+    doc.text('Disaster Recovery Readiness Report', pageWidth / 2, y + 8, { align: 'center' })
+
+    // 集群名称
+    doc.setFontSize(16)
+    setColor(colors.textSecondary)
+    doc.setFont('helvetica', 'normal')
+    doc.text(clusterName, pageWidth / 2, y + 18, { align: 'center' })
+
+    // 分隔线
+    y += 25
+    setDrawColor(colors.primary)
+    doc.setLineWidth(0.8)
+    doc.line(margin, y, pageWidth - margin, y)
+
+    // 版本信息
+    y += 8
+    doc.setFontSize(9)
+    setColor(colors.textSecondary)
+
+    // 左侧信息
+    doc.setFont('helvetica', 'bold')
+    doc.text('PCS Version:', margin, y)
+    doc.setFont('helvetica', 'normal')
+    doc.text(pcsVersion, margin + 25, y)
+
+    doc.setFont('helvetica', 'bold')
+    doc.text('PCS-Agent Version:', margin, y + 5)
+    doc.setFont('helvetica', 'normal')
+    doc.text(agentVersion, margin + 35, y + 5)
+
+    // 右侧信息
+    doc.setFont('helvetica', 'bold')
+    doc.text('Report Period:', pageWidth / 2 + 10, y)
+    doc.setFont('helvetica', 'normal')
+    doc.text(`${periodStart} ~ ${periodEnd}`, pageWidth / 2 + 35, y)
+
+    doc.setFont('helvetica', 'bold')
+    doc.text('Export Time:', pageWidth / 2 + 10, y + 5)
+    doc.setFont('helvetica', 'normal')
+    doc.text(exportTime, pageWidth / 2 + 32, y + 5)
+
+    y += 15
+
+    // === 总体评分 ===
     const sc = d.cluster_score
     const sg = EN_GRADE[d.cluster_grade] || d.cluster_grade
-    const sColor: [number, number, number] = sc >= 80 ? [103, 194, 58] : sc >= 60 ? [64, 158, 255] : sc >= 40 ? [230, 162, 60] : [245, 108, 108]
-    const C = {
-      text: [26, 26, 46] as [number, number, number],
-      sub: [85, 85, 119] as [number, number, number],
-      light: [136, 136, 153] as [number, number, number],
-      bg: [248, 249, 252] as [number, number, number],
-      border: [226, 228, 234] as [number, number, number],
-      primary: [64, 158, 255] as [number, number, number],
-      success: [103, 194, 58] as [number, number, number],
-      warning: [230, 162, 60] as [number, number, number],
-      danger: [245, 108, 108] as [number, number, number],
-    }
-    const tc = (c: [number, number, number]) => doc.setTextColor(c[0], c[1], c[2])
-    const fc = (c: [number, number, number]) => doc.setFillColor(c[0], c[1], c[2])
-    const dc = (c: [number, number, number]) => doc.setDrawColor(c[0], c[1], c[2])
-    const scC = (s: number): [number, number, number] => s >= 80 ? C.success : s >= 60 ? C.primary : s >= 40 ? C.warning : C.danger
+    const scoreHex = scoreColorHex(sc)
 
-    let y = 14
+    // 评分卡片背景
+    setFillColor(colors.background)
+    doc.roundedRect(margin, y, contentWidth, 30, 3, 3, 'F')
 
-    // === Top decorative line ===
-    fc(C.primary)
-    doc.rect(0, 0, W, 1.5, 'F')
+    // 评分数字
+    doc.setFontSize(36)
+    setColor(scoreHex)
+    doc.setFont('helvetica', 'bold')
+    doc.text(String(sc), pageWidth / 2 - 15, y + 18, { align: 'center' })
 
-    // === Title ===
-    y = 22; doc.setFont('helvetica', 'bold'); doc.setFontSize(22); tc(C.text)
-    doc.text('Disaster Recovery Readiness Report', W / 2, y, { align: 'center' })
-    y += 7; doc.setFont('helvetica', 'normal'); doc.setFontSize(10); tc(C.sub)
-    doc.text(clusterName, W / 2, y, { align: 'center' })
-    y += 5; dc(C.primary); doc.setLineWidth(0.6)
-    doc.line(M + 40, y, W - M - 40, y)
-    y += 7; doc.setFontSize(7); tc(C.light)
-    doc.text('PVE Cluster Scan Platform', M, y)
-    doc.text(exportTime, W - M, y, { align: 'right' })
-    y += 10
+    // 评分标签
+    doc.setFontSize(12)
+    setColor(colors.textSecondary)
+    doc.setFont('helvetica', 'normal')
+    doc.text('Overall Score', pageWidth / 2 - 15, y + 25, { align: 'center' })
 
-    // === Score card ===
-    fc(C.bg); doc.roundedRect(M, y, CW, 28, 3, 3, 'F')
-    // Big score
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(36); tc(sColor)
-    doc.text(String(sc), M + 35, y + 18, { align: 'center' })
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); tc(C.light)
-    doc.text('Overall Score', M + 35, y + 25, { align: 'center' })
-    // Divider
-    dc(C.border); doc.setLineWidth(0.3); doc.line(M + 60, y + 4, M + 60, y + 24)
-    // Grade
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(14); tc(sColor)
-    doc.text(sg, M + 88, y + 14, { align: 'center' })
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); tc(C.light)
-    doc.text('Grade', M + 88, y + 22, { align: 'center' })
-    // Divider
-    doc.line(M + 115, y + 4, M + 115, y + 24)
-    // Distribution
-    const distItems = [
-      { label: 'Excellent', count: d.summary.excellent, color: C.success },
-      { label: 'Good', count: d.summary.good, color: C.primary },
-      { label: 'Fair', count: d.summary.fair, color: C.warning },
-      { label: 'Danger', count: d.summary.danger, color: C.danger },
+    // 等级
+    doc.setFontSize(14)
+    setColor(scoreHex)
+    doc.setFont('helvetica', 'bold')
+    doc.text(sg, pageWidth / 2 + 25, y + 18, { align: 'center' })
+
+    y += 38
+
+    // === 维度评分卡片 ===
+    const dimensions = [
+      { name: 'HA Protection', max: 30, key: 'ha' },
+      { name: 'Snapshot', max: 20, key: 'snapshot' },
+      { name: 'Backup', max: 20, key: 'backup' },
+      { name: 'QEMU Agent', max: 15, key: 'agent' },
+      { name: 'Network', max: 15, key: 'network' },
     ]
-    const distW = (CW - 115) / 4
-    distItems.forEach((item, i) => {
-      const ix = M + 115 + i * distW + distW / 2
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(16); tc(item.color)
-      doc.text(String(item.count), ix, y + 14, { align: 'center' })
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); tc(C.light)
-      doc.text(item.label, ix, y + 21, { align: 'center' })
-    })
-    y += 33
-    doc.setFontSize(7); tc(C.light)
-    doc.text(`Total Resources: ${d.summary.total_resources}`, W / 2, y, { align: 'center' })
-    y += 10
-
-    // === Dimension table ===
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(11); tc(C.text)
-    doc.text('Score Breakdown', M, y)
-    y += 2; doc.setLineWidth(0.3); doc.line(M, y, W - M, y)
-    y += 5
-
-    const dims = [
-      { name: 'HA Protection', weight: 30, max: 30, key: 'ha' },
-      { name: 'Snapshot', weight: 20, max: 20, key: 'snapshot' },
-      { name: 'Backup', weight: 20, max: 20, key: 'backup' },
-      { name: 'QEMU Agent', weight: 15, max: 15, key: 'agent' },
-      { name: 'Network Redundancy', weight: 15, max: 15, key: 'network' },
-    ]
-    fc(C.bg); doc.rect(M, y, CW, 6, 'F')
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(7); tc(C.sub)
-    doc.text('Dimension', M + 2, y + 4.5)
-    doc.text('Weight', M + 55, y + 4.5)
-    doc.text('Avg', M + 78, y + 4.5)
-    doc.text('Max', M + 100, y + 4.5)
-    doc.text('Coverage', M + 120, y + 4.5)
-    y += 6
 
     const resArr = d.resources
-    const n = resArr.length || 1
-    dims.forEach(dim => {
+    const resCount = resArr.length || 1
+    const cardWidth = (contentWidth - 20) / 5
+    const cardHeight = 25
+
+    dimensions.forEach((dim, index) => {
+      const x = margin + index * (cardWidth + 5)
       const sum = resArr.reduce((a, r) => a + (r.breakdown as any)[dim.key], 0)
-      const avg = sum / n
-      const pct = Math.round((avg / dim.max) * 100)
-      const c = scC(avg / dim.max * 100)
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); tc(C.text)
-      doc.text(dim.name, M + 2, y + 4.5)
-      tc(C.light); doc.text(`${dim.weight}%`, M + 55, y + 4.5)
-      tc(c); doc.setFont('helvetica', 'bold'); doc.text(avg.toFixed(1), M + 78, y + 4.5)
-      doc.setFont('helvetica', 'normal'); tc(C.light); doc.text(String(dim.max), M + 100, y + 4.5)
-      // Progress bar
-      const barX = M + 120, barW = 50
-      fc([238, 238, 242]); doc.roundedRect(barX, y + 2, barW, 2.5, 1, 1, 'F')
-      fc(c); doc.roundedRect(barX, y + 2, barW * pct / 100, 2.5, 1, 1, 'F')
-      tc(c); doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5)
-      doc.text(`${pct}%`, barX + barW + 3, y + 4)
-      dc(C.border); doc.setLineWidth(0.1); doc.line(M, y + 6, W - M, y + 6)
-      y += 6
+      const avg = sum / resCount
+      const dimColor = scoreColorHex(avg)
+
+      // 卡片背景
+      setFillColor(colors.background)
+      doc.roundedRect(x, y, cardWidth, cardHeight, 2, 2, 'F')
+
+      // 顶部颜色条
+      setFillColor(dimColor)
+      doc.rect(x, y, cardWidth, 2, 'F')
+
+      // 分数
+      doc.setFontSize(20)
+      setColor(dimColor)
+      doc.setFont('helvetica', 'bold')
+      doc.text(avg.toFixed(0), x + cardWidth / 2, y + 12, { align: 'center' })
+
+      // 名称
+      doc.setFontSize(8)
+      setColor(colors.textSecondary)
+      doc.setFont('helvetica', 'normal')
+      doc.text(dim.name, x + cardWidth / 2, y + 18, { align: 'center' })
+
+      // 最大分值
+      doc.setFontSize(7)
+      setColor(colors.textLight)
+      doc.text(`Max: ${dim.max}`, x + cardWidth / 2, y + 22, { align: 'center' })
     })
-    y += 8
 
-    // === Resource ranking ===
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(11); tc(C.text)
-    doc.text('Resource Ranking (Top 20)', M, y)
-    y += 2; doc.setLineWidth(0.3); doc.line(M, y, W - M, y)
-    y += 5
+    y += cardHeight + 8
 
-    const sorted = [...resArr].sort((a, b) => a.score - b.score).slice(0, 20)
-    const drawHeader = (yy: number) => {
-      fc(C.bg); doc.rect(M, yy, CW, 6, 'F')
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); tc(C.sub)
-      doc.text('#', M + 1, yy + 4.5)
-      doc.text('Type', M + 8, yy + 4.5)
-      doc.text('ID', M + 24, yy + 4.5)
-      doc.text('Name', M + 36, yy + 4.5)
-      doc.text('Node', M + 76, yy + 4.5)
-      doc.text('HA', M + 96, yy + 4.5)
-      doc.text('Snap', M + 108, yy + 4.5)
-      doc.text('Bkp', M + 120, yy + 4.5)
-      doc.text('Agent', M + 132, yy + 4.5)
-      doc.text('Net', M + 146, yy + 4.5)
-      doc.text('Score', M + 158, yy + 4.5)
-      doc.text('Grade', M + 172, yy + 4.5)
-      return yy + 6
+    // === 报告概要 ===
+    // 检查是否需要换页
+    if (y > pageHeight - 50) {
+      doc.addPage()
+      y = margin
     }
-    y = drawHeader(y)
 
-    sorted.forEach((r, i) => {
-      if (y > 275) { doc.addPage(); y = 14; y = drawHeader(y) }
-      if (i % 2 === 0) { fc([250, 250, 252]); doc.rect(M, y, CW, 5.5, 'F') }
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5)
-      tc(C.light); doc.text(String(i + 1), M + 1, y + 4)
-      // Type badge
-      const tpc = r.type === 'vm' ? C.success : C.primary
-      fc(tpc); doc.roundedRect(M + 8, y + 0.5, 14, 4, 1, 1, 'F')
-      doc.setTextColor(255, 255, 255); doc.setFontSize(5.5)
-      doc.text(r.type.toUpperCase(), M + 15, y + 3.5, { align: 'center' })
-      doc.setFontSize(6.5); tc(C.text)
-      doc.text(String(r.vmid), M + 24, y + 4)
-      doc.text(r.name.substring(0, 15), M + 36, y + 4)
-      tc(C.light); doc.text(r.node.substring(0, 10), M + 76, y + 4)
-      // Scores
-      const cell = (v: number, x: number) => {
-        if (v > 0) { tc(C.success); doc.text(String(v), x, y + 4, { align: 'center' }) }
-        else { tc(C.danger); doc.text('-', x, y + 4, { align: 'center' }) }
-      }
-      cell(r.breakdown.ha, M + 100)
-      cell(r.breakdown.snapshot, M + 114)
-      cell(r.breakdown.backup, M + 126)
-      if (r.type === 'lxc') { tc(C.light); doc.text('N/A', M + 138, y + 4, { align: 'center' }) }
-      else cell(r.breakdown.agent, M + 138)
-      cell(r.breakdown.network, M + 152)
-      tc(scC(r.score)); doc.setFont('helvetica', 'bold'); doc.setFontSize(8)
-      doc.text(String(r.score), M + 163, y + 4, { align: 'center' })
-      doc.setFontSize(6); tc(scC(r.score))
-      doc.text(EN_GRADE[r.grade] || r.grade, M + 178, y + 4, { align: 'center' })
-      y += 5.5
+    setFillColor(colors.background)
+    doc.roundedRect(margin, y, contentWidth, 25, 3, 3, 'F')
+
+    doc.setFontSize(11)
+    setColor(colors.text)
+    doc.setFont('helvetica', 'bold')
+    doc.text('Report Summary', margin + 5, y + 7)
+
+    // 分隔线
+    setDrawColor(colors.border)
+    doc.setLineWidth(0.2)
+    doc.line(margin + 5, y + 9, margin + contentWidth - 5, y + 9)
+
+    // 概要数据
+    const summaryItems = [
+      { label: 'Total Resources', value: String(d.summary.total_resources), color: colors.primary },
+      { label: 'Excellent', value: String(d.summary.excellent), color: colors.success },
+      { label: 'Good', value: String(d.summary.good), color: colors.primary },
+      { label: 'Fair / Danger', value: `${d.summary.fair} / ${d.summary.danger}`, color: d.summary.danger > 0 ? colors.danger : colors.warning },
+    ]
+
+    const summaryCardWidth = (contentWidth - 20) / 4
+
+    summaryItems.forEach((item, index) => {
+      const x = margin + 5 + index * (summaryCardWidth + 3)
+
+      // 卡片背景
+      doc.setFillColor(255, 255, 255)
+      doc.roundedRect(x, y + 12, summaryCardWidth, 10, 2, 2, 'F')
+
+      // 数值
+      doc.setFontSize(11)
+      setColor(item.color)
+      doc.setFont('helvetica', 'bold')
+      doc.text(item.value, x + summaryCardWidth / 2, y + 18, { align: 'center' })
+
+      // 标签
+      doc.setFontSize(6)
+      setColor(colors.textSecondary)
+      doc.setFont('helvetica', 'normal')
+      doc.text(item.label, x + summaryCardWidth / 2, y + 22, { align: 'center' })
     })
-    y += 8
 
-    // === Footer ===
-    y += 6
-    if (y > 275) { doc.addPage(); y = 14 }
-    dc(C.border); doc.setLineWidth(0.3); doc.line(M, y, W - M, y)
+    y += 30
+
+    // === 改进建议 ===
+    const recs = d.recommendations || []
+    if (recs.length > 0) {
+      // 检查是否需要换页
+      if (y > pageHeight - 50) {
+        doc.addPage()
+        y = margin
+      }
+
+      doc.setFontSize(11)
+      setColor(colors.text)
+      doc.setFont('helvetica', 'bold')
+      doc.text('Recommendations', margin, y + 5)
+
+      // 分隔线
+      setDrawColor(colors.border)
+      doc.setLineWidth(0.2)
+      doc.line(margin, y + 7, margin + contentWidth, y + 7)
+
+      y += 10
+
+      const recColorArr = [colors.danger, colors.warning, colors.primary, '#8b5cf6', colors.success, colors.danger, colors.warning, colors.primary]
+      const maxRecs = recs.slice(0, 8)
+      maxRecs.forEach((rec, idx) => {
+        // 检查是否需要换页
+        if (y > pageHeight - 20) {
+          doc.addPage()
+          y = margin
+        }
+
+        const recColor = recColorArr[idx % recColorArr.length]
+        const cleanRec = rec.replace(/[\u4e00-\u9fff]/g, '').trim() || rec
+
+        // 编号圆形徽章
+        setFillColor(recColor)
+        doc.circle(margin + 5, y + 2.5, 3, 'F')
+        doc.setFontSize(7)
+        doc.setTextColor(255, 255, 255)
+        doc.setFont('helvetica', 'bold')
+        doc.text(String(idx + 1), margin + 5, y + 3.5, { align: 'center' })
+
+        // 建议文本
+        setColor(colors.text)
+        doc.setFontSize(8)
+        doc.setFont('helvetica', 'normal')
+        const splitText = doc.splitTextToSize(cleanRec, contentWidth - 16)
+        doc.text(splitText, margin + 11, y + 3.5)
+
+        y += Math.max(splitText.length * 4, 6) + 2
+      })
+
+      y += 5
+    }
+
+    // === 页脚 ===
+    // 检查是否需要换页
+    if (y > pageHeight - 20) {
+      doc.addPage()
+      y = margin
+    }
+
+    // 分隔线
+    setDrawColor(colors.border)
+    doc.setLineWidth(0.3)
+    doc.line(margin, y, pageWidth - margin, y)
+
     y += 5
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); tc(C.light)
-    doc.text('PVE Cluster Scan Platform - Disaster Recovery Readiness Report', W / 2, y, { align: 'center' })
-    doc.text(exportTime, W / 2, y + 4, { align: 'center' })
-    // Bottom decorative line
-    fc(C.success); doc.rect(0, 295.5, W, 1.5, 'F')
+    doc.setFontSize(8)
+    setColor(colors.textLight)
+    doc.setFont('helvetica', 'normal')
+    doc.text('Generated by PVE Cluster Scan Platform', pageWidth / 2, y, { align: 'center' })
+    doc.text(exportTime, pageWidth / 2, y + 4, { align: 'center' })
 
-    const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`
-    const cName = clusterStore.currentCluster?.name || 'all'
-    doc.save(`${cName}-dr-score-${ts}.pdf`)
+    // 生成文件名并下载
+    const clusterNameForFile = clusterStore.currentCluster?.name || 'all'
+    const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`
+    doc.save(`${clusterNameForFile}-dr-score-${timestamp}.pdf`)
+
     ElMessage.success(t('healthReport.exportSuccess'))
   } catch (err) {
     console.error('Export failed:', err)

@@ -300,10 +300,10 @@ async function exportPDF() {
     }
 
     const now = new Date()
-    const pcsVersion = `dev-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`
-    const agentVersion = r.assets?.agent_version || 'v0.6.0'
-    const periodStart = formatDateTime(r.summary.period_start)
-    const periodEnd = formatDateTime(r.summary.period_end)
+    const pcsVersion = `v${r.platform_version || 'N/A'}`
+    const agentVersion = `v${r.agent_version || 'N/A'}`
+    const periodStart = r.data_period?.earliest ? formatDateTime(r.data_period.earliest) : 'N/A'
+    const periodEnd = r.data_period?.latest ? formatDateTime(r.data_period.latest) : 'N/A'
     const exportTime = formatDateTime(now.toISOString())
     const clusterName = clusterStore.currentCluster?.name || t('healthReport.allClusters')
 
