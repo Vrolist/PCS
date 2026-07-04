@@ -239,15 +239,230 @@ async function exportPDF() {
   exporting.value = true
   try {
     const html2pdf = (await import('html2pdf.js')).default
-    const element = document.querySelector('.page-container')
-    if (!element) return
+    const r = report.value
 
-    const clusterName = clusterStore.currentClusterName || 'all'
-    const date = new Date().toISOString().slice(0, 10)
-    const filename = `health-report-${clusterName}-${date}.pdf`
+    // 生成 PCS 版本号（dev-年月日时分秒）
+    const now = new Date()
+    const pcsVersion = `dev-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`
+
+    // 获取 Agent 版本（从集群详情获取，或使用默认值）
+    const agentVersion = r.assets?.agent_version || 'v0.6.0'
+
+    // 格式化时间
+    const formatDateTime = (isoStr: string) => {
+      const d = new Date(isoStr)
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`
+    }
+
+    const periodStart = formatDateTime(r.summary.period_start)
+    const periodEnd = formatDateTime(r.summary.period_end)
+    const exportTime = formatDateTime(now.toISOString())
+
+    // 集群名称
+    const clusterName = clusterStore.currentCluster?.name || t('healthReport.allClusters')
+
+    // 创建 PDF 专用模板（亮色主题）
+    const pdfTemplate = document.createElement('div')
+    pdfTemplate.style.cssText = `
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      color: #333;
+      background: #fff;
+      padding: 20px;
+      max-width: 800px;
+      margin: 0 auto;
+    `
+
+    // 头部信息
+    const header = document.createElement('div')
+    header.style.cssText = `
+      text-align: center;
+      border-bottom: 3px solid #409eff;
+      padding-bottom: 20px;
+      margin-bottom: 30px;
+    `
+    header.innerHTML = `
+      <h1 style="margin: 0 0 10px; color: #1a1a1a; font-size: 28px;">PVE Cluster Health Report</h1>
+      <h2 style="margin: 0 0 20px; color: #666; font-weight: normal; font-size: 18px;">${clusterName}</h2>
+      <div style="font-size: 14px; color: #666; margin-bottom: 10px;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+          <span><strong>PCS Version:</strong> ${pcsVersion}</span>
+          <span><strong>Report Period:</strong> ${periodStart} ~ ${periodEnd}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+          <span><strong>PCS-Agent Version:</strong> ${agentVersion}</span>
+          <span><strong>Export Time:</strong> ${exportTime}</span>
+        </div>
+      </div>
+    `
+    pdfTemplate.appendChild(header)
+
+    // 总体评分
+    const scoreSection = document.createElement('div')
+    scoreSection.style.cssText = `
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 40px;
+      margin-bottom: 30px;
+      padding: 20px;
+      background: #f8f9fa;
+      border-radius: 8px;
+    `
+    const scoreColor = r.overall_score >= 90 ? '#67c23a' : r.overall_score >= 70 ? '#409eff' : r.overall_score >= 50 ? '#e6a23c' : '#f56c6c'
+    const scoreGrade = r.overall_score >= 90 ? 'Healthy' : r.overall_score >= 70 ? 'Good' : r.overall_score >= 50 ? 'Fair' : 'Critical'
+
+    scoreSection.innerHTML = `
+      <div style="text-align: center;">
+        <div style="font-size: 64px; font-weight: bold; color: ${scoreColor};">${r.overall_score}</div>
+        <div style="font-size: 18px; color: #666;">Overall Score</div>
+        <div style="font-size: 24px; font-weight: bold; color: ${scoreColor}; margin-top: 5px;">${scoreGrade}</div>
+      </div>
+    `
+    pdfTemplate.appendChild(scoreSection)
+
+    // 维度评分
+    const dimensions = [
+      { name: 'Node Health', ...r.scores.node },
+      { name: 'Resource Usage', ...r.scores.resource },
+      { name: 'Alert Status', ...r.scores.alert },
+      { name: 'Backup Status', ...r.scores.backup },
+      { name: 'Data Completeness', ...r.scores.completeness }
+    ]
+
+    const dimSection = document.createElement('div')
+    dimSection.style.cssText = `
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 15px;
+      margin-bottom: 30px;
+    `
+    dimensions.forEach(dim => {
+      const dimColor = dim.score >= 90 ? '#67c23a' : dim.score >= 70 ? '#409eff' : dim.score >= 50 ? '#e6a23c' : '#f56c6c'
+      const dimDiv = document.createElement('div')
+      dimDiv.style.cssText = `
+        text-align: center;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        border-top: 3px solid ${dimColor};
+      `
+      dimDiv.innerHTML = `
+        <div style="font-size: 32px; font-weight: bold; color: ${dimColor};">${dim.score}</div>
+        <div style="font-size: 12px; color: #666; margin-top: 5px;">${dim.name}</div>
+      `
+      dimSection.appendChild(dimDiv)
+    })
+    pdfTemplate.appendChild(dimSection)
+
+    // 资产概览
+    const assetSection = document.createElement('div')
+    assetSection.style.cssText = `
+      margin-bottom: 30px;
+    `
+    assetSection.innerHTML = `
+      <h3 style="margin: 0 0 15px; color: #1a1a1a; border-bottom: 2px solid #eee; padding-bottom: 10px;">Asset Overview</h3>
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px;">
+        <div style="text-align: center; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+          <div style="font-size: 24px; font-weight: bold; color: #409eff;">${r.assets.online_nodes}/${r.assets.total_nodes}</div>
+          <div style="font-size: 12px; color: #666;">Online Nodes</div>
+        </div>
+        <div style="text-align: center; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+          <div style="font-size: 24px; font-weight: bold; color: #67c23a;">${r.assets.running_vms}/${r.assets.total_vms}</div>
+          <div style="font-size: 12px; color: #666;">Running VMs</div>
+        </div>
+        <div style="text-align: center; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+          <div style="font-size: 24px; font-weight: bold; color: #67c23a;">${r.assets.running_lxc}/${r.assets.total_lxc}</div>
+          <div style="font-size: 12px; color: #666;">Running Containers</div>
+        </div>
+        <div style="text-align: center; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+          <div style="font-size: 24px; font-weight: bold; color: #409eff;">${fmtStorage(r.assets.used_storage_gb)}/${fmtStorage(r.assets.total_storage_gb)}</div>
+          <div style="font-size: 12px; color: #666;">Storage Usage</div>
+        </div>
+      </div>
+    `
+    pdfTemplate.appendChild(assetSection)
+
+    // 风险预警
+    if (r.issues.length > 0) {
+      const issuesSection = document.createElement('div')
+      issuesSection.style.cssText = `margin-bottom: 30px;`
+      issuesSection.innerHTML = `
+        <h3 style="margin: 0 0 15px; color: #1a1a1a; border-bottom: 2px solid #eee; padding-bottom: 10px;">Risk Alerts</h3>
+        <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+          <thead>
+            <tr style="background: #f8f9fa;">
+              <th style="padding: 10px; text-align: left; border-bottom: 2px solid #eee;">Severity</th>
+              <th style="padding: 10px; text-align: left; border-bottom: 2px solid #eee;">Resource</th>
+              <th style="padding: 10px; text-align: left; border-bottom: 2px solid #eee;">Detail</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${r.issues.map(issue => `
+              <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 10px;">
+                  <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; ${issue.severity === 'critical' ? 'background: #fef0f0; color: #f56c6c;' : 'background: #fdf6ec; color: #e6a23c;'}">${issue.severity}</span>
+                </td>
+                <td style="padding: 10px;">${issue.resource}</td>
+                <td style="padding: 10px;">${issue.detail}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `
+      pdfTemplate.appendChild(issuesSection)
+    }
+
+    // 报告概要
+    const summarySection = document.createElement('div')
+    summarySection.style.cssText = `margin-bottom: 30px;`
+    summarySection.innerHTML = `
+      <h3 style="margin: 0 0 15px; color: #1a1a1a; border-bottom: 2px solid #eee; padding-bottom: 10px;">Report Summary</h3>
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+        <div style="padding: 15px; background: #f8f9fa; border-radius: 8px;">
+          <div style="font-size: 20px; font-weight: bold; color: #409eff;">${r.summary.scan_count}</div>
+          <div style="font-size: 12px; color: #666;">Scan Count</div>
+        </div>
+        <div style="padding: 15px; background: #f8f9fa; border-radius: 8px;">
+          <div style="font-size: 20px; font-weight: bold; color: #67c23a;">${r.summary.avg_cpu.toFixed(1)}%</div>
+          <div style="font-size: 12px; color: #666;">Avg CPU</div>
+        </div>
+        <div style="padding: 15px; background: #f8f9fa; border-radius: 8px;">
+          <div style="font-size: 20px; font-weight: bold; color: #67c23a;">${r.summary.avg_mem.toFixed(1)}%</div>
+          <div style="font-size: 12px; color: #666;">Avg Memory</div>
+        </div>
+      </div>
+    `
+    pdfTemplate.appendChild(summarySection)
+
+    // 页脚
+    const footer = document.createElement('div')
+    footer.style.cssText = `
+      text-align: center;
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 2px solid #eee;
+      font-size: 12px;
+      color: #999;
+    `
+    footer.innerHTML = `
+      <div>Generated by PVE Cluster Scan Platform</div>
+      <div style="margin-top: 5px;">${exportTime}</div>
+    `
+    pdfTemplate.appendChild(footer)
+
+    // 添加到临时容器
+    const tempContainer = document.createElement('div')
+    tempContainer.style.cssText = 'position: absolute; left: -9999px; top: 0;'
+    tempContainer.appendChild(pdfTemplate)
+    document.body.appendChild(tempContainer)
+
+    // 生成 PDF
+    const clusterNameForFile = clusterStore.currentCluster?.name || 'all'
+    const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`
+    const filename = `${clusterNameForFile}-health-report-${timestamp}.pdf`
 
     const opt = {
-      margin: [10, 10, 10, 10],
+      margin: [15, 15, 15, 15],
       filename,
       image: { type: 'jpeg', quality: 0.98 },
       html2canvas: { scale: 2, useCORS: true, logging: false },
@@ -255,7 +470,10 @@ async function exportPDF() {
       pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
     }
 
-    await html2pdf().set(opt).from(element).save()
+    await html2pdf().set(opt).from(pdfTemplate).save()
+
+    // 清理临时容器
+    document.body.removeChild(tempContainer)
   } catch (err) {
     console.error('Export PDF failed:', err)
     ElMessage.error(t('healthReport.exportFailed'))

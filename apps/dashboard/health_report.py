@@ -478,5 +478,7 @@ class HealthReportView(APIView):
                 "backup_total": backup_total,
                 "backup_enabled": backup_enabled,
                 "storage_issue_count": storage_issue_count,
+                "period_start": since.isoformat(),
+                "period_end": timezone.now().isoformat(),
             },
         })

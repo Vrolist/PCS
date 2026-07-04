@@ -149,6 +149,8 @@ export interface HealthReportData {
     backup_total: number
     backup_enabled: number
     storage_issue_count: number
+    period_start: string
+    period_end: string
   }
 }
 
