@@ -179,6 +179,7 @@ const clusterStore = useClusterStore()
 // ─── 响应式状态 ───
 const loading = ref(false)
 const initDone = ref(false)
+const loadGeneration = ref(0) // 防止 loadData 并发竞态
 const svgRef = ref<SVGSVGElement>()
 const selectedNode = ref<any>(null)
 const zoomPercent = ref(100)
@@ -1010,6 +1011,7 @@ async function loadResourceLists() {
 }
 
 async function loadData() {
+  const gen = ++loadGeneration.value // 递增世代号，后续异步操作检查是否过期
   loading.value = true
   initDone.value = false
   highlightedLeafId.value = ''
@@ -1027,33 +1029,35 @@ async function loadData() {
 
   try {
     if (!clusterStore.clusterList.length) await clusterStore.fetchClusters()
+    if (gen !== loadGeneration.value) return // fetchClusters 可能触发 watcher，已过期则退出
+
     const params: any = { cluster_id: clusterStore.currentClusterId }
     if (selectedResourceType.value && selectedResourceId.value) {
       params.resource_type = selectedResourceType.value
       params.resource_id = selectedResourceId.value
     }
     graphData.value = await getDependencyGraph(params)
+    if (gen !== loadGeneration.value) return
     if (!graphData.value.nodes.length) { loading.value = false; return }
 
     buildHierarchy(graphData.value)
     await nextTick()
-    await new Promise(r => setTimeout(r, 50))
-    await nextTick()
     layoutGraph()
-    initDone.value = true
-    // 加载了具体资源时，自动高亮并平移到该资源
+    // 先计算自适应位置，再渲染，避免图形先出现在原点再跳到居中
     if (selectedResourceType.value && selectedResourceId.value) {
-      await nextTick()
-      const leaf = leafList.value[0] // API 只返回一个资源节点
+      const leaf = leafList.value[0]
       if (leaf) {
         highlightedLeafId.value = leaf.id
         panToLeaf(leaf.id)
-        showDetails(leaf)
       }
     } else {
-      // 自适应
-      await nextTick()
-      setTimeout(() => fitView(), 100)
+      fitView()
+    }
+    initDone.value = true
+    // 具体资源详情在渲染完成后显示
+    if (selectedResourceType.value && selectedResourceId.value) {
+      const leaf = leafList.value[0]
+      if (leaf) showDetails(leaf)
     }
   } catch (e) { console.error(e) }
   finally { loading.value = false }
