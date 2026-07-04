@@ -1553,24 +1553,40 @@ class DependencyGraphView(APIView):
                 "type": "node-container",
             })
 
-        # 5. 存储 - 如果选择了特定资源，只显示该资源所在节点的存储
+        # 5. 存储 - 选择特定资源时只显示该资源使用的存储
         storage_node_ids = node_ids
-        if resource_id:
-            # 找到选中资源所在的节点
+        used_storage_names = set()  # 该资源使用的存储名
+        if resource_id and resource_type:
             if resource_type == "vm":
                 vm_obj = VM.objects.filter(pk=resource_id).first()
                 if vm_obj:
                     storage_node_ids = [vm_obj.node_id]
+                    # 从 VMConfig 获取该 VM 使用的存储
+                    vm_config = VMConfig.objects.filter(vm=vm_obj).first()
+                    if vm_config:
+                        for disk in (vm_config.scsi_disks or []):
+                            if disk.get("storage"):
+                                used_storage_names.add(disk["storage"])
+                        for disk in (vm_config.ide_disks or []):
+                            if disk.get("storage"):
+                                used_storage_names.add(disk["storage"])
             elif resource_type == "container":
                 ct_obj = LXC.objects.filter(pk=resource_id).first()
                 if ct_obj:
                     storage_node_ids = [ct_obj.node_id]
+                    # 从 LXCConfig 获取该容器使用的存储
+                    ct_config = LXCConfig.objects.filter(container=ct_obj).first()
+                    if ct_config and ct_config.rootfs and ct_config.rootfs.get("storage"):
+                        used_storage_names.add(ct_config.rootfs["storage"])
 
         storage_qs = Storage.objects.filter(node_id__in=storage_node_ids).order_by("node_id", "storage_name", "-scanned_at")
         seen_storages = set()
         for s in storage_qs:
             storage_key = f"{s.node_id}-{s.storage_name}"
             if storage_key in seen_storages:
+                continue
+            # 选择特定资源时，只显示该资源使用的存储
+            if resource_id and resource_type and used_storage_names and s.storage_name not in used_storage_names:
                 continue
             seen_storages.add(storage_key)
             storage_id = f"storage-{s.node_id}-{s.storage_name}"
@@ -1590,17 +1606,30 @@ class DependencyGraphView(APIView):
                 "type": "node-storage",
             })
 
-        # 6. 网络接口 - 如果选择了特定资源，只显示该资源所在节点的网络
+        # 6. 网络接口 - 选择特定资源时只显示该资源使用的网桥
         net_node_ids = node_ids
-        if resource_id:
+        used_bridges = set()  # 该资源使用的网桥名
+        if resource_id and resource_type:
             if resource_type == "vm":
                 vm_obj = VM.objects.filter(pk=resource_id).first()
                 if vm_obj:
                     net_node_ids = [vm_obj.node_id]
+                    # 从 VMConfig 获取该 VM 使用的网桥
+                    vm_config = VMConfig.objects.filter(vm=vm_obj).first()
+                    if vm_config:
+                        for nd in (vm_config.net_devices or []):
+                            if nd.get("bridge"):
+                                used_bridges.add(nd["bridge"])
             elif resource_type == "container":
                 ct_obj = LXC.objects.filter(pk=resource_id).first()
                 if ct_obj:
                     net_node_ids = [ct_obj.node_id]
+                    # 从 LXCConfig 获取该容器使用的网桥
+                    ct_config = LXCConfig.objects.filter(container=ct_obj).first()
+                    if ct_config:
+                        for nd in (ct_config.net_devices or []):
+                            if nd.get("bridge"):
+                                used_bridges.add(nd["bridge"])
 
         net_qs = NetworkInterface.objects.filter(node_id__in=net_node_ids).order_by("node_id", "name", "-scanned_at")
         seen_nets = set()
@@ -1608,6 +1637,14 @@ class DependencyGraphView(APIView):
             net_key = f"{ni.node_id}-{ni.name}"
             if net_key in seen_nets:
                 continue
+            # 选择特定资源时，只显示该资源使用的网桥，不显示物理网卡
+            if resource_id and resource_type:
+                if used_bridges:
+                    if ni.name not in used_bridges:
+                        continue
+                else:
+                    # 没有网桥配置时不显示任何网络
+                    continue
             seen_nets.add(net_key)
             net_id = f"net-{ni.node_id}-{ni.name}"
             nodes_list.append({
@@ -1666,6 +1703,68 @@ class DependencyGraphView(APIView):
                                 "target": net_id,
                                 "type": "container-network",
                             })
+
+        # 7b. VM/容器 → 存储（通过 VMConfig/LXCConfig 的磁盘配置）
+        # 只在选择特定资源时添加这些连线
+        if resource_id and resource_type:
+            if resource_type == "vm" and vm_ids:
+                vm_configs = VMConfig.objects.filter(vm_id__in=vm_ids)
+                for cfg in vm_configs:
+                    vm_obj = next((v for v in vm_qs if v.id == cfg.vm_id), None)
+                    if not vm_obj:
+                        continue
+                    vm_node_id = f"vm-{vm_obj.node_id}-{vm_obj.vmid}"
+                    # SCSI 磁盘
+                    for disk in (cfg.scsi_disks or []):
+                        storage_name = disk.get("storage", "")
+                        if storage_name:
+                            storage_id = f"storage-{vm_obj.node_id}-{storage_name}"
+                            if any(n["id"] == storage_id for n in nodes_list):
+                                edges_list.append({
+                                    "source": vm_node_id,
+                                    "target": storage_id,
+                                    "type": "vm-storage",
+                                })
+                    # IDE 磁盘
+                    for disk in (cfg.ide_disks or []):
+                        storage_name = disk.get("storage", "")
+                        if storage_name:
+                            storage_id = f"storage-{vm_obj.node_id}-{storage_name}"
+                            if any(n["id"] == storage_id for n in nodes_list):
+                                edges_list.append({
+                                    "source": vm_node_id,
+                                    "target": storage_id,
+                                    "type": "vm-storage",
+                                })
+            elif resource_type == "container" and ct_ids:
+                ct_configs = LXCConfig.objects.filter(container_id__in=ct_ids)
+                for cfg in ct_configs:
+                    ct_obj = next((c for c in lxc_qs if c.id == cfg.container_id), None)
+                    if not ct_obj:
+                        continue
+                    ct_node_id = f"ct-{ct_obj.node_id}-{ct_obj.vmid}"
+                    # rootfs
+                    if cfg.rootfs and cfg.rootfs.get("storage"):
+                        storage_id = f"storage-{ct_obj.node_id}-{cfg.rootfs['storage']}"
+                        if any(n["id"] == storage_id for n in nodes_list):
+                            edges_list.append({
+                                "source": ct_node_id,
+                                "target": storage_id,
+                                "type": "container-storage",
+                            })
+                    # mount_points
+                    for mp in (cfg.mount_points or []):
+                        # 从 raw 中解析 storage name（格式如 "local-lvm:vm-107-disk-0,size=8G"）
+                        raw = mp.get("raw", "")
+                        if ":" in raw:
+                            storage_name = raw.split(":")[0]
+                            storage_id = f"storage-{ct_obj.node_id}-{storage_name}"
+                            if any(n["id"] == storage_id for n in nodes_list):
+                                edges_list.append({
+                                    "source": ct_node_id,
+                                    "target": storage_id,
+                                    "type": "container-storage",
+                                })
 
         # 8. Ceph 状态 - 选择特定资源时不显示 Ceph（集群级别）
         if resource_id and resource_type:

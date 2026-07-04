@@ -18,12 +18,12 @@
       </div>
     </div>
 
-    <!-- 资源选择器 -->
-    <div class="resource-selector">
-      <div class="selector-row">
+    <div class="graph-container" v-loading="loading">
+      <!-- 资源选择器 - 浮在图左侧 -->
+      <div class="resource-selector-overlay">
         <div class="selector-item">
           <label class="selector-label">{{ t('smartAnalysis.dependencyMapping.resourceType') }}</label>
-          <el-select v-model="selectedResourceType" :placeholder="t('smartAnalysis.dependencyMapping.selectResourcePlaceholder')" @change="onResourceTypeChange" style="width: 160px" clearable>
+          <el-select v-model="selectedResourceType" :placeholder="t('smartAnalysis.dependencyMapping.selectResourcePlaceholder')" @change="onResourceTypeChange" style="width: 150px" size="small" clearable>
             <el-option :label="t('smartAnalysis.dependencyMapping.legendVM')" value="vm" />
             <el-option :label="t('smartAnalysis.dependencyMapping.legendContainer')" value="container" />
           </el-select>
@@ -36,7 +36,8 @@
             filterable
             clearable
             @change="onResourceChange"
-            style="width: 240px"
+            style="width: 200px"
+            size="small"
           >
             <el-option
               v-for="item in resourceOptions"
@@ -47,9 +48,6 @@
           </el-select>
         </div>
       </div>
-    </div>
-
-    <div class="graph-container" v-loading="loading">
       <div v-if="!loading && !graphData.nodes.length" class="empty-state">
         <el-empty :description="!selectedResourceType || !selectedResourceId ? '请先选择虚拟机/容器' : t('smartAnalysis.dependencyMapping.emptyDesc')" />
       </div>
@@ -282,6 +280,7 @@ const renderedEdges = computed(() => {
     else if (edge.type === 'node-storage') color = '#f56c6c'
     else if (edge.type === 'node-network') color = '#8b5cf6'
     else if (edge.type === 'vm-network' || edge.type === 'container-network') { color = '#8b5cf6'; dashed = true }
+    else if (edge.type === 'vm-storage' || edge.type === 'container-storage') { color = '#f56c6c'; dashed = true }
     else if (edge.type === 'cluster-ceph') color = '#06b6d4'
     else if (edge.type === 'node-ha' || edge.type === 'resource-ha') color = '#f97316'
     else if (edge.type === 'cluster-sdn' || edge.type === 'zone-vnet' || edge.type === 'vnet-subnet') color = '#ec4899'
@@ -618,34 +617,6 @@ watch(() => clusterStore.currentClusterId, async () => {
   margin: 4px 0 0;
 }
 
-/* 资源选择器 */
-.resource-selector {
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  padding: 16px;
-  margin-bottom: 16px;
-}
-
-.selector-row {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-  flex-wrap: wrap;
-}
-
-.selector-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.selector-label {
-  font-size: 14px;
-  color: var(--text-secondary);
-  white-space: nowrap;
-}
-
 /* 工具栏 */
 .toolbar {
   display: flex;
@@ -743,6 +714,37 @@ watch(() => clusterStore.currentClusterId, async () => {
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
+  position: relative;
+}
+
+/* 资源选择器浮层 */
+.resource-selector-overlay {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border-color, #e4e7ed);
+  border-radius: 10px;
+  padding: 10px 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.resource-selector-overlay .selector-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.resource-selector-overlay .selector-label {
+  font-size: 12px;
+  color: var(--text-secondary, #606266);
+  white-space: nowrap;
+  min-width: 56px;
+  text-align: right;
 }
 
 .empty-state {
