@@ -91,15 +91,9 @@ const hiddenTypes = ref(new Set<string>())
 let svg: d3.Selection<SVGSVGElement, unknown, null, undefined> | null = null
 let g: d3.Selection<SVGGElement, unknown, null, undefined> | null = null
 let zoomBehavior: d3.ZoomBehavior<SVGSVGElement, unknown> | null = null
-let simulation: d3.Simulation<D3Node, D3Edge> | null = null
 
 // D3 数据类型
-interface D3Node {
-  id: string; type: string; name: string; x?: number; y?: number;
-  fx?: number | null; fy?: number | null; nodeType?: string;
-  width: number; height: number; [key: string]: any;
-}
-interface D3Edge { source: string | D3Node; target: string | D3Node; type: string; color: string; dashed: boolean }
+interface D3Edge { source: string | HNode; target: string | HNode; type: string; color: string; dashed: boolean }
 
 const resourceOptions = computed(() => {
   if (selectedResourceType.value === 'vm') return vmList.value.map(vm => ({ id: vm.id, name: vm.name, vmid: vm.vmid }))
@@ -171,24 +165,92 @@ const nodeSizes: Record<string, [number, number]> = {
   sdn_zone: [130, 44], sdn_vnet: [120, 40], sdn_subnet: [120, 40],
 }
 
-/** 构建 D3 数据 */
-function buildGraph(apiData: DependencyGraph) {
-  const nodes: D3Node[] = []
-  const edges: D3Edge[] = []
+/** 层次结构 */
+interface HNode {
+  id: string; type: string; name: string; width: number; height: number;
+  x: number; y: number; children: HNode[]; leafs: HNode[];
+  [key: string]: any;
+}
 
-  apiData.nodes.forEach(n => {
+/** 预计算层次布局 */
+function buildHierarchy(apiData: DependencyGraph): { hierarchy: HNode[]; leafs: HNode[]; edges: D3Edge[]; haNodes: HNode[] } {
+  const raw = apiData.nodes
+  const cluster = raw.find(n => n.type === 'cluster')
+  if (!cluster) return { hierarchy: [], leafs: [], edges: [], haNodes: [] }
+
+  const nodeMap = new Map<string, HNode>()
+  raw.forEach(n => {
     const [w, h] = nodeSizes[n.type] || [140, 44]
-    nodes.push({ id: n.id, type: n.type, name: n.name, width: w, height: h, ...n })
+    nodeMap.set(n.id, { id: n.id, type: n.type, name: n.name, width: w, height: h, x: 0, y: 0, children: [], leafs: [], ...n })
   })
 
-  // 过滤: node-storage / node-network / node-vm / node-container
+  const nodes = raw.filter(n => n.type === 'node').map(n => nodeMap.get(n.id)!)
+  const leafNodes = raw.filter(n => !['cluster', 'node'].includes(n.type))
+  const haNodes: HNode[] = []
+  const nonHaLeafs: HNode[] = []
+
+  leafNodes.forEach(n => {
+    const hNode = nodeMap.get(n.id)!
+    if (n.type === 'ha') { haNodes.push(hNode); return }
+    nonHaLeafs.push(hNode)
+    if (n.node_id != null) {
+      const parent = nodes.find(nd => nd.node_id === n.node_id)
+      if (parent) { parent.leafs.push(hNode); return }
+    }
+    // cluster-level children (ceph, sdn)
+    if (cluster) nodeMap.get(cluster.id)!.leafs.push(hNode)
+  })
+
+  // 预计算每个 node 的布局
+  const pad = 28, childW = 170, childH = 48, gap = 16, netW = 160
+  nodes.forEach(node => {
+    const vms = node.leafs.filter(c => ['vm', 'container'].includes(c.type))
+    const nets = node.leafs.filter(c => c.type === 'network')
+    const stors = node.leafs.filter(c => c.type === 'storage')
+
+    if (vms.length === 0 && nets.length === 0 && stors.length === 0) {
+      node.width = 180; node.height = 64; return
+    }
+
+    const cols = Math.max(1, Math.min(vms.length, 3))
+    const vmRows = Math.ceil(vms.length / cols)
+    const vmAreaW = cols * (childW + gap) - gap
+    const vmAreaH = vmRows * (childH + gap) - gap
+    const netAreaW = nets.length > 0 ? netW + gap : 0
+    const storRowH = stors.length > 0 ? childH + gap : 0
+    node.width = Math.max(pad * 2 + vmAreaW + netAreaW, pad * 2 + stors.length * (childW + gap) - gap, 180)
+    node.height = pad + 28 + 12 + vmAreaH + storRowH + pad
+  })
+
+  // 预计算 cluster 尺寸
+  let clusterW: number, clusterH: number
+  if (nodes.length === 1) {
+    const n = nodes[0]
+    clusterW = n.width + pad * 2 + 40
+    clusterH = n.height + pad * 2 + 60 + 40
+  } else {
+    const maxW = Math.max(...nodes.map(n => n.width))
+    const gap2 = 40
+    clusterW = maxW + pad * 2 + gap2 * 2
+    clusterH = nodes.reduce((s, n) => s + n.height + gap2, 0) + 80
+  }
+
+  const clusterHNode = nodeMap.get(cluster.id)!
+  clusterHNode.width = Math.max(clusterW, 300)
+  clusterHNode.height = Math.max(clusterH, 200)
+
+  return { hierarchy: [clusterHNode, ...nodes], leafs: nonHaLeafs, edges: buildEdges(apiData), haNodes }
+}
+
+function buildEdges(apiData: DependencyGraph): D3Edge[] {
+  const edges: D3Edge[] = []
   apiData.edges.forEach(e => {
-    if (['node-storage', 'node-network', 'node-vm', 'node-container'].includes(e.type)) return
+    // 过滤所有父子层级边（层级关系由嵌套布局表达，不需要连线）
+    if (['cluster-node', 'node-storage', 'node-network', 'node-vm', 'node-container'].includes(e.type)) return
     const s = edgeStyle(e.type)
     edges.push({ source: e.source, target: e.target, type: e.type, ...s })
   })
-
-  return { nodes, edges }
+  return edges
 }
 
 /** 初始化 D3 */
@@ -228,104 +290,301 @@ function renderGraph() {
   if (!g || !svg) return
   g.selectAll('*').remove()
 
-  const { nodes, edges } = buildGraph(graphData.value)
-  if (!nodes.length) return
+  const { hierarchy, leafs, edges, haNodes } = buildHierarchy(graphData.value)
+  if (!hierarchy.length) return
 
   const container = svgRef.value!.parentElement!
-  const width = container.clientWidth
-  const height = container.clientHeight
+  const svgW = container.clientWidth, svgH = container.clientHeight
+  const cx = svgW / 2, cy = svgH / 2
+  const pad = 28, childW = 170, childH = 48, gap = 16, netW = 160
 
-  // 力导向模拟
-  simulation = d3.forceSimulation<D3Node>(nodes)
-    .force('link', d3.forceLink<D3Node, D3Edge>(edges).id(d => d.id).distance(160))
-    .force('charge', d3.forceManyBody().strength(-400))
-    .force('center', d3.forceCenter(width / 2, height / 2))
-    .force('collision', d3.forceCollide().radius(d => Math.max(d.width, d.height) * 0.7))
-    .force('x', d3.forceX(width / 2).strength(0.05))
-    .force('y', d3.forceY(height / 2).strength(0.05))
-    .alphaDecay(0.03)
+  // ── 位置存储（可变，拖拽时更新） ──
+  interface Pos { x: number; y: number; w: number; h: number }
+  const pos = new Map<string, Pos>()
+  function getPos(id: string) { return pos.get(id)! }
+  function setPos(id: string, x: number, y: number) { const p = pos.get(id)!; p.x = x; p.y = y }
 
-  // 边层
-  const edgeG = g.append('g').attr('class', 'edges')
-  const edgeSel = edgeG.selectAll<SVGPathElement, D3Edge>('path')
-    .data(edges, d => `${typeof d.source === 'string' ? d.source : d.source.id}-${typeof d.target === 'string' ? d.target : d.target.id}`)
-    .join('path')
-    .attr('fill', 'none')
-    .attr('stroke', d => d.color)
-    .attr('stroke-width', 2)
-    .attr('stroke-dasharray', d => d.dashed ? '6,3' : '')
-    .attr('marker-end', 'url(#arrowhead)')
+  // ── 1. 定位 cluster 和 nodes ──
+  const clusterNode = hierarchy.find(n => n.type === 'cluster')!
+  const pveNodes = hierarchy.filter(n => n.type === 'node')
+  clusterNode.x = cx - clusterNode.width / 2
+  clusterNode.y = cy - clusterNode.height / 2
+  pos.set(clusterNode.id, { x: clusterNode.x, y: clusterNode.y, w: clusterNode.width, h: clusterNode.height })
 
-  // 节点层
-  const nodeG = g.append('g').attr('class', 'nodes')
-  const nodeSel = nodeG.selectAll<SVGGElement, D3Node>('g')
-    .data(nodes, d => d.id)
-    .join('g')
-    .style('cursor', 'pointer')
-    .style('opacity', 0)
-    .call(d3.drag<SVGGElement, D3Node>()
-      .on('start', (event, d) => {
-        if (!event.active) simulation!.alphaTarget(0.3).restart()
-        d.fx = d.x; d.fy = d.y
+  let ny = clusterNode.y + pad + 36
+  pveNodes.forEach(nd => {
+    nd.x = clusterNode.x + (clusterNode.width - nd.width) / 2
+    nd.y = ny
+    pos.set(nd.id, { x: nd.x, y: nd.y, w: nd.width, h: nd.height })
+    ny += nd.height + 30
+  })
+
+  // ── 2. 父子关系索引 ──
+  const childMap = new Map<string, string[]>()
+  pveNodes.forEach(nd => { childMap.set(nd.id, nd.leafs.map(c => c.id)) })
+  const nodeParentMap = new Map<string, string>()
+  pveNodes.forEach(nd => nd.leafs.forEach(c => nodeParentMap.set(c.id, nd.id)))
+
+  // ── 3. 定位 leaf 子节点 ──
+  const allLeafs: HNode[] = []
+  pveNodes.forEach(nd => {
+    const vms = nd.leafs.filter(c => ['vm', 'container'].includes(c.type))
+    const nets = nd.leafs.filter(c => c.type === 'network')
+    const stors = nd.leafs.filter(c => c.type === 'storage')
+    const innerX = nd.x + pad, innerY = nd.y + pad + 32
+    const innerW = nd.width - pad * 2, innerH = nd.height - pad * 2 - 32
+
+    let netX = nd.x + nd.width - pad - netW / 2 - 10
+    nets.forEach((n, i) => {
+      n.x = netX; n.y = innerY + innerH / 2 + (i - (nets.length - 1) / 2) * (childH + 10)
+      pos.set(n.id, { x: n.x, y: n.y, w: n.width, h: n.height }); allLeafs.push(n)
+    })
+
+    const storY = nd.y + nd.height - pad - childH / 2
+    stors.forEach((s, i) => {
+      const totalW = stors.length * (childW + gap) - gap
+      const startX = nd.x + (nd.width - totalW) / 2
+      s.x = startX + i * (childW + gap) + childW / 2; s.y = storY
+      pos.set(s.id, { x: s.x, y: s.y, w: s.width, h: s.height }); allLeafs.push(s)
+    })
+
+    vms.forEach(vm => {
+      const cols = Math.max(1, Math.min(vms.length, 3))
+      const idx = vms.indexOf(vm)
+      const row = Math.floor(idx / cols), col = idx % cols
+      const vmAreaW = cols * (childW + gap) - gap
+      const startX = innerX + (innerW - netW - (nets.length > 0 ? gap : 0) - vmAreaW) / 2
+      vm.x = startX + col * (childW + gap) + childW / 2
+      vm.y = innerY + row * (childH + gap) + childH / 2
+      pos.set(vm.id, { x: vm.x, y: vm.y, w: vm.width, h: vm.height }); allLeafs.push(vm)
+    })
+
+    if (vms.length > 1) {
+      const sim = d3.forceSimulation<HNode>(vms)
+        .force('collision', d3.forceCollide<HNode>().radius(() => Math.max(childW, childH) * 0.55).strength(0.8))
+        .force('x', d3.forceX<HNode>(d => d.x!).strength(0.6))
+        .force('y', d3.forceY<HNode>(d => d.y!).strength(0.6))
+        .stop()
+      for (let i = 0; i < 80; i++) sim.tick()
+      vms.forEach(vm => {
+        const hw = childW / 2, hh = childH / 2
+        vm.x = Math.max(innerX + hw, Math.min(innerX + innerW - nets.length * (netW + gap) - hw, vm.x!))
+        vm.y = Math.max(innerY + hh, Math.min(innerY + innerH - (stors.length > 0 ? childH + gap : 0) - hh, vm.y!))
+        setPos(vm.id, vm.x!, vm.y!)
       })
-      .on('drag', (event, d) => { d.fx = event.x; d.fy = event.y })
-      .on('end', (event, d) => {
-        if (!event.active) simulation!.alphaTarget(0)
-        d.fx = null; d.fy = null
+    }
+  })
+
+  haNodes.forEach((ha, i) => {
+    ha.x = clusterNode.x + clusterNode.width / 2 + (i - (haNodes.length - 1) / 2) * 180
+    ha.y = clusterNode.y + clusterNode.height + 60
+    pos.set(ha.id, { x: ha.x, y: ha.y, w: ha.width, h: ha.height }); allLeafs.push(ha)
+  })
+
+  // 确保所有节点和子节点都被正确包含
+  pveNodes.forEach(nd => expandParent(nd.id))
+  resolveNodeCollisions()
+  pveNodes.forEach(nd => resolveLeafCollisions(nd.id))
+
+  // ── 4. 边路径计算函数 ──
+  function edgePath(sId: string, tId: string): string {
+    const sp = getPos(sId), tp = getPos(tId)
+    if (!sp || !tp) return ''
+    const dx = tp.x - sp.x, dy = tp.y - sp.y
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1
+    const x1 = sp.x + (dx / dist) * (sp.w / 2), y1 = sp.y + (dy / dist) * (sp.h / 2)
+    const x2 = tp.x - (dx / dist) * (tp.w / 2), y2 = tp.y - (dy / dist) * (tp.h / 2)
+    const mx = (x1 + x2) / 2, my = (y1 + y2) / 2
+    const off = Math.min(dist * 0.15, 50)
+    return `M${x1},${y1} Q${mx + (-dy / dist) * off},${my + (dx / dist) * off} ${x2},${y2}`
+  }
+
+  // ── 5. 渲染层次背景（可拖拽） ──
+  const bgG = g.append('g').attr('class', 'backgrounds')
+
+  // Cluster 背景拖拽组
+  const clusterG = bgG.append('g').style('cursor', 'grab')
+  clusterG.append('rect').attr('rx', 20)
+    .attr('fill', getColors('cluster').fill).attr('stroke', getColors('cluster').stroke)
+    .attr('stroke-width', 2.5).attr('stroke-dasharray', '8,4')
+  clusterG.append('text').attr('fill', 'var(--text-heading)').attr('font-size', 15)
+    .attr('font-weight', 700).attr('class', 'svg-text-primary').text(clusterNode.name)
+
+  function updateClusterG() {
+    const p = getPos(clusterNode.id)
+    clusterG.select('rect').attr('x', p.x).attr('y', p.y).attr('width', p.w).attr('height', p.h)
+    clusterG.select('text').attr('x', p.x + 16).attr('y', p.y + 26)
+  }
+  updateClusterG()
+
+  // Cluster 拖拽：移动所有子元素
+  clusterG.call(d3.drag<SVGGElement, unknown>()
+    .on('start', function() { d3.select(this).style('cursor', 'grabbing') })
+    .on('drag', function(event) {
+      const dx = event.dx, dy = event.dy
+      // 移动 cluster
+      const cp = getPos(clusterNode.id); cp.x += dx; cp.y += dy
+      // 移动所有 node
+      pveNodes.forEach(nd => { const np = getPos(nd.id); np.x += dx; np.y += dy })
+      // 移动所有 leaf
+      allLeafs.forEach(lf => { const lp = getPos(lf.id); lp.x += dx; lp.y += dy })
+      updateAll()
+    })
+    .on('end', function() { d3.select(this).style('cursor', 'grab') })
+  )
+
+  // Node 背景拖拽组
+  const nodeGroups = new Map<string, d3.Selection<SVGGElement, unknown, SVGGElement, unknown>>()
+  pveNodes.forEach(nd => {
+    const ng = bgG.append('g').style('cursor', 'grab')
+    ng.append('rect').attr('rx', 14)
+      .attr('fill', getColors('node').fill).attr('stroke', getColors('node').stroke)
+      .attr('stroke-width', 2).attr('stroke-dasharray', '6,3')
+    ng.append('text').attr('fill', 'var(--text-heading)').attr('font-size', 13)
+      .attr('font-weight', 700).attr('class', 'svg-text-primary')
+      .text(`${nd.name}  ${getSubLabel(nd)}`)
+    nodeGroups.set(nd.id, ng)
+
+    ng.call(d3.drag<SVGGElement, unknown>()
+      .on('start', function() { d3.select(this).style('cursor', 'grabbing') })
+      .on('drag', function(event) {
+        const dx = event.dx, dy = event.dy
+        const np = getPos(nd.id); np.x += dx; np.y += dy
+        nd.leafs.forEach(c => { const lp = getPos(c.id); lp.x += dx; lp.y += dy })
+        expandParent(nd.id)
+        resolveNodeCollisions()
+        pveNodes.forEach(n => resolveLeafCollisions(n.id))
+        updateAll()
       })
+      .on('end', function() { d3.select(this).style('cursor', 'grab') })
     )
+  })
+
+  function updateNodeGs() {
+    pveNodes.forEach(nd => {
+      const p = getPos(nd.id), ng = nodeGroups.get(nd.id)!
+      ng.select('rect').attr('x', p.x).attr('y', p.y).attr('width', p.w).attr('height', p.h)
+      ng.select('text').attr('x', p.x + 12).attr('y', p.y + 22)
+    })
+  }
+
+  // ── 6. 父节点边界扩充（不覆盖标签区域） ──
+  const LABEL_AREA_H = 40  // 标签占用的顶部区域高度
+
+  function expandParent(nodeId: string) {
+    const np = getPos(nodeId)
+    const childIds = childMap.get(nodeId) || []
+    const edgePad = 20
+    let maxRight = np.x + np.w, maxBottom = np.y + np.h
+    childIds.forEach(cid => {
+      const cp = getPos(cid)
+      maxRight = Math.max(maxRight, cp.x + cp.w / 2 + edgePad)
+      maxBottom = Math.max(maxBottom, cp.y + cp.h / 2 + edgePad)
+    })
+    if (maxRight > np.x + np.w) np.w = maxRight - np.x
+    if (maxBottom > np.y + np.h) np.h = maxBottom - np.y
+  }
+
+  // ── 6b. 同级碰撞检测 ──
+  function rectsOverlap(ax: number, ay: number, aw: number, ah: number, bx: number, by: number, bw: number, bh: number) {
+    return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by
+  }
+
+  function resolveLeafCollisions(parentId: string) {
+    const childIds = childMap.get(parentId) || []
+    for (let i = 0; i < childIds.length; i++) {
+      for (let j = i + 1; j < childIds.length; j++) {
+        const a = getPos(childIds[i]), b = getPos(childIds[j])
+        if (!a || !b) continue
+        const aw = a.w, ah = a.h, bw = b.w, bh = b.h
+        const ax = a.x - aw / 2, ay = a.y - ah / 2
+        const bx = b.x - bw / 2, by = b.y - bh / 2
+        if (rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh)) {
+          const overlapX = Math.min(ax + aw - bx, bx + bw - ax)
+          const overlapY = Math.min(ay + ah - by, by + bh - ay)
+          if (overlapX < overlapY) {
+            const push = overlapX / 2 + 1
+            if (a.x < b.x) { a.x -= push; b.x += push } else { a.x += push; b.x -= push }
+          } else {
+            const push = overlapY / 2 + 1
+            if (a.y < b.y) { a.y -= push; b.y += push } else { a.y += push; b.y -= push }
+          }
+        }
+      }
+    }
+  }
+
+  function resolveNodeCollisions() {
+    for (let i = 0; i < pveNodes.length; i++) {
+      for (let j = i + 1; j < pveNodes.length; j++) {
+        const a = getPos(pveNodes[i].id), b = getPos(pveNodes[j].id)
+        if (!a || !b) continue
+        const ax = a.x, ay = a.y, bx = b.x, by = b.y
+        if (rectsOverlap(ax, ay, a.w, a.h, bx, by, b.w, b.h)) {
+          const overlapY = Math.min(ay + a.h - by, by + b.h - ay)
+          const push = overlapY / 2 + 2
+          if (a.y < b.y) { a.y -= push; b.y += push } else { a.y += push; b.y -= push }
+        }
+      }
+    }
+  }
+
+  // ── 7. 渲染边 ──
+  const edgeG = g.append('g').attr('class', 'edges')
+  const edgePaths: { el: d3.Selection<SVGPathElement, unknown, SVGGElement, unknown>; srcId: string; tgtId: string }[] = []
+  edges.forEach(e => {
+    const srcId = typeof e.source === 'string' ? e.source : (e.source as any).id
+    const tgtId = typeof e.target === 'string' ? e.target : (e.target as any).id
+    if (!pos.has(srcId) || !pos.has(tgtId)) return
+    const p = edgeG.append('path')
+      .attr('fill', 'none').attr('stroke', e.color)
+      .attr('stroke-width', e.dashed ? 1.5 : 2)
+      .attr('stroke-dasharray', e.dashed ? '6,3' : '')
+      .attr('marker-end', 'url(#arrowhead)')
+      .attr('d', edgePath(srcId, tgtId))
+      .style('opacity', 0)
+    p.transition().duration(500).delay(200).style('opacity', 0.85)
+    edgePaths.push({ el: p, srcId, tgtId })
+  })
+
+  // ── 8. 渲染叶子节点卡片（可拖拽） ──
+  const nodeG = g.append('g').attr('class', 'nodes')
+  const nodeSel = nodeG.selectAll<SVGGElement, HNode>('g')
+    .data(allLeafs, d => d.id)
+    .join('g')
+    .style('cursor', 'pointer').style('opacity', 0)
     .on('click', (_, d) => showDetails(d))
 
-  // 入场动画
-  nodeSel.transition().duration(500).delay((_, i) => i * 30).style('opacity', 1)
+  nodeSel.transition().duration(400).delay((_, i) => 100 + i * 30).style('opacity', 1)
 
-  // 节点矩形
   nodeSel.append('rect')
     .attr('width', d => d.width).attr('height', d => d.height)
     .attr('x', d => -d.width / 2).attr('y', d => -d.height / 2)
-    .attr('rx', d => d.type === 'cluster' ? 16 : d.type === 'node' ? 12 : 10)
+    .attr('rx', 10)
     .attr('fill', d => getColors(d.type).fill)
     .attr('stroke', d => getColors(d.type).stroke)
-    .attr('stroke-width', 2)
-    .attr('stroke-dasharray', d => d.type === 'node' ? '6,3' : '')
-    .attr('filter', 'url(#shadow)')
+    .attr('stroke-width', 2).attr('filter', 'url(#shadow)')
 
-  // 节点主标签
   nodeSel.append('text')
     .attr('text-anchor', 'middle')
-    .attr('y', d => {
-      const sub = getSubLabel(d)
-      return sub ? -5 : 0
-    })
+    .attr('y', d => getSubLabel(d) ? -5 : 0)
     .attr('dy', '0.35em')
-    .attr('fill', 'var(--text-heading)')
-    .attr('font-size', d => d.type === 'cluster' ? 14 : 12)
-    .attr('font-weight', d => d.type === 'cluster' || d.type === 'node' ? 700 : 600)
+    .attr('fill', 'var(--text-heading)').attr('font-size', 12).attr('font-weight', 600)
     .attr('class', 'svg-text-primary')
     .text(d => d.name)
     .each(function(d) {
-      // 截断长文本
-      const maxW = d.width - 16
-      const self = d3.select(this)
-      while ((this as SVGTextElement).getComputedTextLength() > maxW && self.text()!.length > 3) {
+      const maxW = d.width - 16, self = d3.select(this)
+      while ((this as SVGTextElement).getComputedTextLength() > maxW && self.text()!.length > 3)
         self.text(self.text()!.slice(0, -4) + '...')
-      }
     })
 
-  // 节点副标签
   nodeSel.filter(d => !!getSubLabel(d))
-    .append('text')
-    .attr('text-anchor', 'middle')
-    .attr('y', 10)
-    .attr('fill', 'var(--text-muted)')
-    .attr('font-size', 10)
-    .attr('class', 'svg-text-muted')
+    .append('text').attr('text-anchor', 'middle').attr('y', 10)
+    .attr('fill', 'var(--text-muted)').attr('font-size', 10).attr('class', 'svg-text-muted')
     .text(d => getSubLabel(d))
 
-  // HA 徽章
   nodeSel.filter(d => d.ha_enabled)
-    .append('g').attr('transform', d => `${-d.width / 2 + 6}, ${-d.height / 2 + 5}`)
-    .each(function() {
+    .append('g').each(function() {
       const badge = d3.select(this)
       badge.append('rect').attr('width', 28).attr('height', 14).attr('rx', 3).attr('fill', '#f97316').attr('opacity', 0.9)
       badge.append('text').attr('x', 14).attr('y', 11).attr('text-anchor', 'middle')
@@ -334,41 +593,80 @@ function renderGraph() {
 
   // Hover 效果
   nodeSel.on('mouseenter', function() {
-    d3.select(this).select('rect').transition().duration(150)
-      .attr('stroke-width', 3).attr('filter', 'url(#shadow)')
-  }).on('mouseleave', function(_, d) {
-    d3.select(this).select('rect').transition().duration(150)
-      .attr('stroke-width', 2)
+    d3.select(this).select('rect').transition().duration(150).attr('stroke-width', 3)
+  }).on('mouseleave', function() {
+    d3.select(this).select('rect').transition().duration(150).attr('stroke-width', 2)
   })
 
-  // 模拟 tick
-  simulation.on('tick', () => {
-    edgeSel.interrupt().attr('d', d => {
-      const s = d.source as D3Node, tgt = d.target as D3Node
-      const sx = s.x!, sy = s.y!, tx = tgt.x!, ty = tgt.y!
-      const dx = tx - sx, dy = ty - sy
-      const dist = Math.sqrt(dx * dx + dy * dy) || 1
-      // 从源边缘到目标边缘
-      const sox = (dx / dist) * (s.width / 2)
-      const soy = (dy / dist) * (s.height / 2)
-      const tox = -(dx / dist) * (tgt.width / 2)
-      const toy = -(dy / dist) * (tgt.height / 2)
-      const x1 = sx + sox, y1 = sy + soy
-      const x2 = tx + tox, y2 = ty + toy
-      const mx = (x1 + x2) / 2, my = (y1 + y2) / 2
-      // 贝塞尔曲线偏移
-      const offset = Math.min(dist * 0.2, 60)
-      const nx = -dy / dist * offset, ny = dx / dist * offset
-      return `M${x1},${y1} Q${mx + nx},${my + ny} ${x2},${y2}`
+  // 叶子节点拖拽
+  nodeSel.call(d3.drag<SVGGElement, HNode>()
+    .on('start', function() { d3.select(this).raise().select('rect').attr('stroke-width', 3) })
+    .on('drag', function(event, d) {
+      const lp = getPos(d.id)
+      const newX = lp.x + event.dx, newY = lp.y + event.dy
+      const hw = d.width / 2, hh = d.height / 2
+
+      // 约束在父节点内
+      const parentId = nodeParentMap.get(d.id)
+      if (parentId) {
+        const np = getPos(parentId)
+        const minX = np.x + pad + hw
+        const minY = np.y + pad + 32 + hh
+        // 计算如果子节点移动到新位置，父节点需要扩展的量
+        const needRight = newX + hw - (np.x + np.w - pad)
+        const needBottom = newY + hh - (np.y + np.h - pad)
+
+        // 右边界：允许扩展
+        if (needRight > 0) np.w += needRight
+        // 下边界：允许扩展
+        if (needBottom > 0) np.h += needBottom
+
+        // 左/上边界：硬约束（不允许覆盖标签区域）
+        lp.x = Math.max(minX, newX)
+        lp.y = Math.max(minY, newY)
+
+        // 约束同级节点不重叠
+        resolveLeafCollisions(parentId)
+        expandParent(parentId)
+      } else {
+        lp.x = newX; lp.y = newY
+      }
+
+      // 约束节点间不重叠
+      resolveNodeCollisions()
+      // 同步子节点跟随父节点移动后，重新检查所有节点的子节点碰撞
+      pveNodes.forEach(nd => resolveLeafCollisions(nd.id))
+
+      updateAll()
     })
-    nodeSel.attr('transform', d => `translate(${d.x},${d.y})`)
-  })
+    .on('end', function() { d3.select(this).select('rect').attr('stroke-width', 2) })
+  )
+
+  // ── 9. 统一更新函数 ──
+  function updateNodePositions() {
+    nodeG.selectAll<SVGGElement, HNode>('g')
+      .attr('transform', d => {
+        const p = getPos(d.id); return p ? `translate(${p.x},${p.y})` : ''
+      })
+    // 更新 HA badge 位置
+    nodeG.selectAll<SVGGElement, HNode>('g').each(function(d) {
+      const badge = d3.select(this).select('g')
+      if (!badge.empty()) badge.attr('transform', `${-d.width / 2 + 6}, ${-d.height / 2 + 5}`)
+    })
+  }
+
+  function updateAll() {
+    updateClusterG()
+    updateNodeGs()
+    edgePaths.forEach(ep => ep.el.interrupt().attr('d', edgePath(ep.srcId, ep.tgtId)).style('opacity', 0.85))
+    updateNodePositions()
+  }
 
   // 初始自适应
-  setTimeout(() => fitView(), 800)
+  setTimeout(() => fitView(), 600)
 }
 
-function showDetails(node: D3Node) {
+function showDetails(node: HNode) {
   const d: Record<string, string> = {}
   if (node.type === 'node') {
     d[t('smartAnalysis.dependencyMapping.cpuLoad')] = node.cpu_load ? `${(node.cpu_load * 100).toFixed(1)}%` : '-'
@@ -400,7 +698,7 @@ function showDetails(node: D3Node) {
 
 function updateVisibility() {
   if (!g) return
-  g.selectAll<SVGGElement, D3Node>('g.nodes g').style('opacity', function(_, i) {
+  g.selectAll<SVGGElement, HNode>('g.nodes g').style('opacity', function() {
     const node = d3.select(this).datum()
     return hiddenTypes.value.has(node.type) ? 0.1 : 1
   })
@@ -462,7 +760,6 @@ onMounted(async () => {
   initD3()
 })
 onBeforeUnmount(() => {
-  simulation?.stop()
   svg?.selectAll('*').remove()
 })
 watch(() => clusterStore.currentClusterId, async () => {
