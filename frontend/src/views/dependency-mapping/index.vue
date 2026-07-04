@@ -18,9 +18,40 @@
       </div>
     </div>
 
+    <!-- 资源选择器 -->
+    <div class="resource-selector">
+      <div class="selector-row">
+        <div class="selector-item">
+          <label class="selector-label">{{ t('smartAnalysis.dependencyMapping.resourceType') }}</label>
+          <el-select v-model="selectedResourceType" :placeholder="t('smartAnalysis.dependencyMapping.selectResourcePlaceholder')" @change="onResourceTypeChange" style="width: 160px" clearable>
+            <el-option :label="t('smartAnalysis.dependencyMapping.legendVM')" value="vm" />
+            <el-option :label="t('smartAnalysis.dependencyMapping.legendContainer')" value="container" />
+          </el-select>
+        </div>
+        <div class="selector-item" v-if="selectedResourceType">
+          <label class="selector-label">{{ t('smartAnalysis.dependencyMapping.selectResource') }}</label>
+          <el-select
+            v-model="selectedResourceId"
+            :placeholder="t('smartAnalysis.dependencyMapping.selectResourcePlaceholder')"
+            filterable
+            clearable
+            @change="onResourceChange"
+            style="width: 240px"
+          >
+            <el-option
+              v-for="item in resourceOptions"
+              :key="item.id"
+              :label="`${item.name} (${item.vmid})`"
+              :value="item.id"
+            />
+          </el-select>
+        </div>
+      </div>
+    </div>
+
     <div class="graph-container" v-loading="loading">
       <div v-if="!loading && !graphData.nodes.length" class="empty-state">
-        <el-empty :description="t('smartAnalysis.dependencyMapping.emptyDesc')" />
+        <el-empty :description="!selectedResourceType || !selectedResourceId ? '请先选择虚拟机/容器' : t('smartAnalysis.dependencyMapping.emptyDesc')" />
       </div>
       <div v-else class="graph-canvas">
         <svg :viewBox="currentViewBox" class="graph-svg"
@@ -44,8 +75,6 @@
             <rect :width="node.width" :height="node.height" rx="10"
               :fill="getNodeFill(node.type)" :stroke="getNodeStroke(node.type)"
               stroke-width="2" :class="['node-rect', `node-${node.type}`]" />
-            <image v-if="getNodeIcon()" :href="getNodeIcon()"
-              :x="12" :y="(node.height - 20) / 2" width="20" height="20" />
             <text :x="node.width / 2" :y="node.height / 2 - 6" text-anchor="middle"
               class="node-label">{{ node.name }}</text>
             <text v-if="node.subLabel" :x="node.width / 2" :y="node.height / 2 + 12"
@@ -95,17 +124,25 @@ import { ref, onMounted, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getDependencyGraph, type DependencyNode, type DependencyGraph } from '@/api/dependency'
 import { useClusterStore } from '@/stores/cluster'
+import { getVMs, type VMInfo } from '@/api/vms'
+import { getContainers, type ContainerInfo } from '@/api/containers'
 
 const { t } = useI18n()
 const clusterStore = useClusterStore()
 
-const loading = ref(true)
+const loading = ref(false)
 const graphData = ref<DependencyGraph>({ nodes: [], edges: [] })
 const scale = ref(1)
 const minScale = 0.3
 const maxScale = 3
 const hiddenTypes = ref(new Set<string>())
 const selectedNode = ref<any>(null)
+
+// 资源选择状态
+const selectedResourceType = ref<'all' | 'vm' | 'container' | ''>('')
+const selectedResourceId = ref<number | undefined>(undefined)
+const vmList = ref<VMInfo[]>([])
+const containerList = ref<ContainerInfo[]>([])
 
 // 拖动状态
 const draggingId = ref('')
@@ -117,6 +154,24 @@ const nodePositions = ref<Map<string, { x: number; y: number }>>(new Map())
 // 初始 SVG 尺寸
 const initialSvgWidth = ref(1200)
 const initialSvgHeight = ref(800)
+
+// 资源选项
+const resourceOptions = computed(() => {
+  if (selectedResourceType.value === 'vm') {
+    return vmList.value.map(vm => ({
+      id: vm.id,
+      name: vm.name,
+      vmid: vm.vmid
+    }))
+  } else if (selectedResourceType.value === 'container') {
+    return containerList.value.map(ct => ({
+      id: ct.id,
+      name: ct.name,
+      vmid: ct.vmid
+    }))
+  }
+  return []
+})
 
 // 图例
 const legendItems = computed(() => [
@@ -346,11 +401,6 @@ function getNodeStroke(type: string): string {
   return colors[type] || '#909399'
 }
 
-function getNodeIcon(): string {
-  // 返回空字符串，使用文字代替图标
-  return ''
-}
-
 // 拖动
 function onNodeMouseDown(e: MouseEvent, node: any) {
   draggingId.value = node.id
@@ -437,7 +487,7 @@ function selectNode(node: any) {
     details[t('smartAnalysis.dependencyMapping.osdCount')] = String(node.total_osds || '-')
     details[t('smartAnalysis.dependencyMapping.onlineOsd')] = String(node.up_osds || '-')
   } else if (node.type === 'ha') {
-    details[t('smartAnalysis.dependencyMapping.resourceType')] = node.resource_type || '-'
+    details[t('smartAnalysis.dependencyMapping.type')] = node.resource_type || '-'
     details[t('smartAnalysis.dependencyMapping.state')] = node.state || '-'
     details[t('smartAnalysis.dependencyMapping.haGroup')] = node.ha_group || '-'
   }
@@ -449,8 +499,62 @@ function selectNode(node: any) {
   }
 }
 
-// 加载数据
+// 资源类型变化
+function onResourceTypeChange() {
+  selectedResourceId.value = undefined
+  if (!selectedResourceType.value) {
+    // 清空选择时，清空图形数据
+    graphData.value = { nodes: [], edges: [] }
+    nodePositions.value = new Map()
+    return
+  }
+  loadData()
+}
+
+// 资源选择变化
+function onResourceChange() {
+  if (!selectedResourceId.value) {
+    // 清空选择时，清空图形数据
+    graphData.value = { nodes: [], edges: [] }
+    nodePositions.value = new Map()
+    return
+  }
+  loadData()
+}
+
+// 加载 VM/容器列表
+async function loadResourceLists() {
+  const clusterId = clusterStore.currentClusterId
+  if (!clusterId) return
+
+  try {
+    const [vms, containers] = await Promise.all([
+      getVMs({ cluster_id: clusterId }),
+      getContainers({ cluster_id: clusterId })
+    ])
+    vmList.value = vms
+    containerList.value = containers
+  } catch (e) {
+    console.error('Failed to load resource lists:', e)
+  }
+}
+
+// 加载依赖图数据
 async function loadData() {
+  // 如果没有选择资源类型，不加载数据
+  if (!selectedResourceType.value) {
+    graphData.value = { nodes: [], edges: [] }
+    nodePositions.value = new Map()
+    return
+  }
+
+  // 如果选择了资源类型但没有选择具体资源，不加载数据
+  if (selectedResourceType.value && !selectedResourceId.value) {
+    graphData.value = { nodes: [], edges: [] }
+    nodePositions.value = new Map()
+    return
+  }
+
   loading.value = true
   try {
     if (!clusterStore.clusterList.length) await clusterStore.fetchClusters()
@@ -458,6 +562,8 @@ async function loadData() {
     if (clusterStore.currentClusterId) {
       params.cluster_id = clusterStore.currentClusterId
     }
+    params.resource_type = selectedResourceType.value
+    params.resource_id = selectedResourceId.value
     graphData.value = await getDependencyGraph(params)
     autoLayout()
   } catch (e) {
@@ -467,9 +573,18 @@ async function loadData() {
   }
 }
 
-onMounted(loadData)
+onMounted(async () => {
+  await loadResourceLists()
+  // 初始状态为空，不加载数据
+})
 
-watch(() => clusterStore.currentClusterId, loadData)
+watch(() => clusterStore.currentClusterId, async () => {
+  await loadResourceLists()
+  // 如果已选择资源类型和具体资源，才加载数据
+  if (selectedResourceType.value && selectedResourceId.value) {
+    await loadData()
+  }
+})
 </script>
 
 <style scoped>
@@ -485,7 +600,7 @@ watch(() => clusterStore.currentClusterId, loadData)
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
   flex-wrap: wrap;
   gap: 12px;
 }
@@ -501,6 +616,34 @@ watch(() => clusterStore.currentClusterId, loadData)
   font-size: 14px;
   color: var(--text-muted);
   margin: 4px 0 0;
+}
+
+/* 资源选择器 */
+.resource-selector {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.selector-row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.selector-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.selector-label {
+  font-size: 14px;
+  color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 /* 工具栏 */

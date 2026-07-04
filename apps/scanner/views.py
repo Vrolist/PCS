@@ -1434,6 +1434,8 @@ class DependencyGraphView(APIView):
 
     def get(self, request):
         cluster_filter = request.query_params.get("cluster_id")
+        resource_type = request.query_params.get("resource_type")  # vm or container
+        resource_id = request.query_params.get("resource_id")
         cluster_ids = _user_cluster_ids(request.user)
         if cluster_filter:
             cluster_ids = [int(cluster_filter)]
@@ -1458,6 +1460,21 @@ class DependencyGraphView(APIView):
                 nid for nid in node_ids
                 if ClusterNode.objects.filter(pk=nid, cluster_id=cluster_filter).exists()
             ]
+
+        # 如果选择了特定资源，只显示该资源所在的节点
+        if resource_id and resource_type:
+            resource_node_id = None
+            if resource_type == "vm":
+                vm_obj = VM.objects.filter(pk=resource_id).first()
+                if vm_obj:
+                    resource_node_id = vm_obj.node_id
+            elif resource_type == "container":
+                ct_obj = LXC.objects.filter(pk=resource_id).first()
+                if ct_obj:
+                    resource_node_id = ct_obj.node_id
+            if resource_node_id:
+                node_ids = [resource_node_id]
+
         pve_nodes = ClusterNode.objects.filter(pk__in=node_ids).select_related("cluster")
         for n in pve_nodes:
             nodes_list.append({
@@ -1478,6 +1495,11 @@ class DependencyGraphView(APIView):
 
         # 3. VM（每个节点每个 vmid 取最新）
         vm_qs = VM.objects.filter(node_id__in=node_ids).select_related("node").order_by("node_id", "vmid", "-scanned_at")
+        if resource_type == "vm" and resource_id:
+            vm_qs = vm_qs.filter(pk=resource_id)
+        elif resource_type == "container" and resource_id:
+            # 选择了容器，不显示任何 VM
+            vm_qs = vm_qs.none()
         seen_vms = set()
         for vm in vm_qs:
             vm_key = f"{vm.node_id}-{vm.vmid}"
@@ -1503,6 +1525,11 @@ class DependencyGraphView(APIView):
 
         # 4. LXC 容器
         lxc_qs = LXC.objects.filter(node_id__in=node_ids).select_related("node").order_by("node_id", "vmid", "-scanned_at")
+        if resource_type == "container" and resource_id:
+            lxc_qs = lxc_qs.filter(pk=resource_id)
+        elif resource_type == "vm" and resource_id:
+            # 选择了 VM，不显示任何容器
+            lxc_qs = lxc_qs.none()
         seen_containers = set()
         for ct in lxc_qs:
             ct_key = f"{ct.node_id}-{ct.vmid}"
@@ -1526,8 +1553,20 @@ class DependencyGraphView(APIView):
                 "type": "node-container",
             })
 
-        # 5. 存储
-        storage_qs = Storage.objects.filter(node_id__in=node_ids).order_by("node_id", "storage_name", "-scanned_at")
+        # 5. 存储 - 如果选择了特定资源，只显示该资源所在节点的存储
+        storage_node_ids = node_ids
+        if resource_id:
+            # 找到选中资源所在的节点
+            if resource_type == "vm":
+                vm_obj = VM.objects.filter(pk=resource_id).first()
+                if vm_obj:
+                    storage_node_ids = [vm_obj.node_id]
+            elif resource_type == "container":
+                ct_obj = LXC.objects.filter(pk=resource_id).first()
+                if ct_obj:
+                    storage_node_ids = [ct_obj.node_id]
+
+        storage_qs = Storage.objects.filter(node_id__in=storage_node_ids).order_by("node_id", "storage_name", "-scanned_at")
         seen_storages = set()
         for s in storage_qs:
             storage_key = f"{s.node_id}-{s.storage_name}"
@@ -1551,8 +1590,19 @@ class DependencyGraphView(APIView):
                 "type": "node-storage",
             })
 
-        # 6. 网络接口
-        net_qs = NetworkInterface.objects.filter(node_id__in=node_ids).order_by("node_id", "name", "-scanned_at")
+        # 6. 网络接口 - 如果选择了特定资源，只显示该资源所在节点的网络
+        net_node_ids = node_ids
+        if resource_id:
+            if resource_type == "vm":
+                vm_obj = VM.objects.filter(pk=resource_id).first()
+                if vm_obj:
+                    net_node_ids = [vm_obj.node_id]
+            elif resource_type == "container":
+                ct_obj = LXC.objects.filter(pk=resource_id).first()
+                if ct_obj:
+                    net_node_ids = [ct_obj.node_id]
+
+        net_qs = NetworkInterface.objects.filter(node_id__in=net_node_ids).order_by("node_id", "name", "-scanned_at")
         seen_nets = set()
         for ni in net_qs:
             net_key = f"{ni.node_id}-{ni.name}"
@@ -1617,8 +1667,11 @@ class DependencyGraphView(APIView):
                                 "type": "container-network",
                             })
 
-        # 8. Ceph 状态
-        ceph_qs = CephStatus.objects.filter(cluster_id__in=cluster_ids).order_by("cluster_id", "-scanned_at")
+        # 8. Ceph 状态 - 选择特定资源时不显示 Ceph（集群级别）
+        if resource_id and resource_type:
+            ceph_qs = CephStatus.objects.none()
+        else:
+            ceph_qs = CephStatus.objects.filter(cluster_id__in=cluster_ids).order_by("cluster_id", "-scanned_at")
         seen_ceph = set()
         for cs in ceph_qs:
             ceph_key = str(cs.cluster_id)
@@ -1643,6 +1696,20 @@ class DependencyGraphView(APIView):
 
         # 9. HA 资源
         ha_qs = HAResource.objects.filter(cluster_id__in=cluster_ids).select_related("cluster").order_by("sid", "-scanned_at")
+        # 如果选择了特定资源，只显示与该资源相关的 HA
+        if resource_id and resource_type:
+            if resource_type == "vm":
+                vm_obj = VM.objects.filter(pk=resource_id).first()
+                if vm_obj:
+                    ha_qs = ha_qs.filter(vmid=vm_obj.vmid, resource_type="vm")
+                else:
+                    ha_qs = ha_qs.none()
+            elif resource_type == "container":
+                ct_obj = LXC.objects.filter(pk=resource_id).first()
+                if ct_obj:
+                    ha_qs = ha_qs.filter(vmid=ct_obj.vmid, resource_type="lxc")
+                else:
+                    ha_qs = ha_qs.none()
         seen_ha = set()
         for ha in ha_qs:
             ha_key = ha.sid
@@ -1690,8 +1757,11 @@ class DependencyGraphView(APIView):
                         "type": "resource-ha",
                     })
 
-        # 10. SDN
-        sdn_zones = SDNZone.objects.filter(cluster_id__in=cluster_ids)
+        # 10. SDN - 选择特定资源时不显示 SDN（集群级别）
+        if resource_id and resource_type:
+            sdn_zones = SDNZone.objects.none()
+        else:
+            sdn_zones = SDNZone.objects.filter(cluster_id__in=cluster_ids)
         for zone in sdn_zones:
             zone_id = f"sdn-zone-{zone.cluster_id}-{zone.zone}"
             nodes_list.append({
@@ -1708,7 +1778,11 @@ class DependencyGraphView(APIView):
                 "type": "cluster-sdn",
             })
 
-        sdn_vnets = SDNVNet.objects.filter(cluster_id__in=cluster_ids).select_related("zone")
+        # 选择特定资源时不显示 SDN vnets/subnets
+        if resource_id and resource_type:
+            sdn_vnets = SDNVNet.objects.none()
+        else:
+            sdn_vnets = SDNVNet.objects.filter(cluster_id__in=cluster_ids).select_related("zone")
         for vnet in sdn_vnets:
             vnet_id = f"sdn-vnet-{vnet.cluster_id}-{vnet.vnet}"
             nodes_list.append({
@@ -1727,7 +1801,11 @@ class DependencyGraphView(APIView):
                     "type": "zone-vnet",
                 })
 
-        sdn_subnets = SDNSubnet.objects.filter(cluster_id__in=cluster_ids).select_related("vnet")
+        # 选择特定资源时不显示 SDN subnets
+        if resource_id and resource_type:
+            sdn_subnets = SDNSubnet.objects.none()
+        else:
+            sdn_subnets = SDNSubnet.objects.filter(cluster_id__in=cluster_ids).select_related("vnet")
         for subnet in sdn_subnets:
             subnet_id = f"sdn-subnet-{subnet.cluster_id}-{subnet.subnet}"
             nodes_list.append({

@@ -18,6 +18,10 @@ export interface DependencyGraph {
   edges: DependencyEdge[]
 }
 
-export function getDependencyGraph(params?: { cluster_id?: number }) {
+export function getDependencyGraph(params?: {
+  cluster_id?: number
+  resource_type?: 'vm' | 'container'
+  resource_id?: number
+}) {
   return request.get<any, DependencyGraph>('/scanner/dependency/', { params })
 }
