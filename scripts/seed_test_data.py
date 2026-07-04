@@ -281,7 +281,7 @@ def _gen_snapshots(vmid, count):
     return snapshots
 
 
-def _gen_vm_config(vmid, cpu_cores, mem_gb, cpu_model_idx=0):
+def _gen_vm_config(vmid, cpu_cores, mem_gb, cpu_model_idx=0, ha_enabled=False, agent_enabled=None):
     """生成 VM 配置（根据 CPU 型号选择 cpu_type，磁盘和网卡槽位多样化）"""
     cpu_model = CPU_MODELS[cpu_model_idx % len(CPU_MODELS)]
     # Intel 系列用 host / EPYC 系列用 EPYC
@@ -337,7 +337,8 @@ def _gen_vm_config(vmid, cpu_cores, mem_gb, cpu_model_idx=0):
         "scsi_disks": scsi_disks,
         "ide_disks": ide_disks,
         "net_devices": net_devices,
-        "agent_enabled": random.random() < 0.8,
+        "agent_enabled": agent_enabled if agent_enabled is not None else random.random() < 0.8,
+        "ha_enabled": ha_enabled,
         "description": "", "tags": "",
         "raw_config": {},
     }
@@ -361,7 +362,8 @@ def _gen_lxc(vmid, name, cpu_cores, mem_gb, disk_gb, status="running", tags=""):
 
 
 def _gen_lxc_config(vmid, cpu_cores, mem_gb, subnet_base="192.168.1",
-                     storage_type=None, has_data_mount=False, mount_gb=0):
+                     storage_type=None, has_data_mount=False, mount_gb=0,
+                     ha_enabled=False):
     """生成 LXC 配置（rootfs 存储类型多样化，支持数据挂载点）"""
     if storage_type is None:
         storage_type = random.choice(["local-lvm", "local-lvm", "local-zfs", "ceph-ssd"])
@@ -396,6 +398,7 @@ def _gen_lxc_config(vmid, cpu_cores, mem_gb, subnet_base="192.168.1",
         "rootfs": rootfs,
         "mount_points": mount_points,
         "net_devices": net_devices,
+        "ha_enabled": ha_enabled,
         "description": "", "tags": "",
         "startup_order": "",
         "raw_config": {},
@@ -439,6 +442,128 @@ def _gen_network(name, ntype, ip, gateway="192.168.1.1", speed=10000, **extra):
         net["bond_slaves"] = extra.get("bond_slaves", "enp0s31f6 enp0s17f6")
     net["mtu"] = extra.get("mtu", 1500)
     return net
+
+
+def _gen_backup_data(level, nodes, scan_time):
+    """根据集群层级生成备份数据
+
+    Level 1: 无备份
+    Level 2: 少量备份任务，成功率低
+    Level 3: 中等备份覆盖，成功率中等
+    Level 4: 较高备份覆盖，成功率高
+    Level 5: 几乎全覆盖，成功率很高
+    """
+    if level <= 1:
+        return {"backup_storages": [], "backup_jobs": [], "backup_history": []}
+
+    backup_storages = []
+    backup_jobs = []
+    backup_history = []
+
+    # 备份存储：L2+ 有备份存储
+    if level >= 2:
+        node_name = nodes[0]["name"] if nodes else "pve-1"
+        total_gb = 500 * level
+        used_ratio = 0.2 + level * 0.1
+        backup_storages.append({
+            "storage_name": "backup-nfs",
+            "storage_type": "nfs",
+            "node_name": node_name,
+            "path": "/mnt/pve/backup-nfs",
+            "content_types": "backup",
+            "active": True,
+            "shared": True,
+            "total_gb": total_gb,
+            "used_gb": round(total_gb * used_ratio, 2),
+            "avail_gb": round(total_gb * (1 - used_ratio), 2),
+            "used_fraction": round(used_ratio, 4),
+        })
+
+    # 收集所有 VMID
+    all_vmids = []
+    for node in nodes:
+        for vm in node.get("vms", []):
+            all_vmids.append((node["name"], vm["vmid"], "qemu"))
+        for ct in node.get("containers", []):
+            all_vmids.append((node["name"], ct["vmid"], "lxc"))
+
+    if not all_vmids:
+        return {"backup_storages": backup_storages, "backup_jobs": [], "backup_history": []}
+
+    # 备份任务覆盖率随等级提升
+    coverage_map = {2: 0.2, 3: 0.5, 4: 0.7, 5: 0.9}
+    coverage = coverage_map.get(level, 0)
+    num_to_backup = max(1, int(len(all_vmids) * coverage))
+
+    # 选择要备份的资源（按 VMID 排序取前 N 个）
+    sorted_vmids = sorted(all_vmids, key=lambda x: x[1])
+    to_backup = sorted_vmids[:num_to_backup]
+
+    modes = ["snapshot", "suspend", "stop"]
+    schedules = ["daily", "daily", "weekly"]
+
+    for idx, (node_name, vmid, rtype) in enumerate(to_backup):
+        job_id = f"vzdump-{vmid}"
+        mode = modes[idx % len(modes)]
+        schedule = schedules[idx % len(schedules)]
+        enabled = True
+        # L2 部分任务禁用
+        if level == 2 and idx > 1:
+            enabled = random.random() < 0.5
+
+        backup_jobs.append({
+            "job_id": job_id,
+            "vmid": vmid,
+            "resource_type": rtype,
+            "node_name": node_name,
+            "storage_name": "backup-nfs",
+            "mode": mode,
+            "schedule": schedule,
+            "retention": f"keep={min(level + 1, 7)}",
+            "enabled": enabled,
+            "compress": "zstd" if level >= 3 else "lzo",
+            "notes": f"自动备份 - {rtype} {vmid}",
+            "last_run": (scan_time - timedelta(hours=random.randint(1, 24))).isoformat(),
+            "last_status": "ok" if random.random() < (0.5 + level * 0.1) else "error",
+        })
+
+    # 备份历史（近 7 天的成功/失败记录）
+    # 成功率随等级提升
+    success_rate_map = {2: 0.5, 3: 0.7, 4: 0.85, 5: 0.95}
+    success_rate = success_rate_map.get(level, 0.5)
+
+    for day_offset in range(7):
+        hist_time = scan_time - timedelta(days=day_offset)
+        for node_name, vmid, rtype in to_backup:
+            if random.random() > 0.9:  # 有些天没有备份
+                continue
+            status = "ok" if random.random() < success_rate else "failed"
+            started = hist_time.replace(
+                hour=random.randint(1, 4),
+                minute=random.randint(0, 59),
+            )
+            duration = random.randint(60, 600)
+            backup_history.append({
+                "task_id": f"UPID:{node_name}:{uuid.uuid4().hex[:16]}",
+                "vmid": vmid,
+                "resource_type": rtype,
+                "node_name": node_name,
+                "storage_name": "backup-nfs",
+                "mode": "snapshot",
+                "status": status,
+                "started_at": started.isoformat(),
+                "finished_at": (started + timedelta(seconds=duration)).isoformat(),
+                "duration_seconds": duration,
+                "size_bytes": random.randint(1_000_000_000, 100_000_000_000),
+                "filename": f"vzdump-{rtype}-{vmid}-{started.strftime('%Y_%m_%d')}.vma.zst",
+                "error_message": "" if status == "ok" else "timeout",
+            })
+
+    return {
+        "backup_storages": backup_storages,
+        "backup_jobs": backup_jobs,
+        "backup_history": backup_history,
+    }
 
 
 def _gen_sdn_data(level):
@@ -841,11 +966,24 @@ def level_1_single_node():
     node = _gen_node("pve-single", "10", 0, cpu_cores=4, cpu_sockets=1,
                      mem_gb=16, rootfs_gb=200, swap_gb=4,
                      uptime_days_min=14, uptime_days_max=180)
+    # L1: 高资源压力 (CPU/内存使用率高，健康报告扣分)
+    node["cpu_load"] = round(random.uniform(85, 95), 1)
+    node["memory_used_mb"] = int(node["memory_total_mb"] * random.uniform(0.85, 0.95))
+    node["memory_free_mb"] = node["memory_total_mb"] - node["memory_used_mb"]
+    node["memory_usage_pct"] = round(node["memory_used_mb"] / node["memory_total_mb"] * 100, 1)
     # L1 磁盘: 仅 SATA 系统盘
     node["diskstat"] = [_diskstat_sata("sda")]
     node["disk_io_delay_ms"] = round(sum(d["io_ms"] for d in node["diskstat"]), 1)
 
-    node["vms"] = []
+    # L1: 2 stopped VMs (无HA/无快照/无Agent) + 3 LXCs (无HA/无备份)
+    node["vms"] = [
+        _gen_vm(100, "old-ubuntu", 1, 2, 20, status="stopped", tags="legacy"),
+        _gen_vm(101, "test-box", 1, 1, 10, status="stopped", tags="test"),
+    ]
+    node["vm_configs"] = {
+        str(100): _gen_vm_config(100, 1, 2, ha_enabled=False, agent_enabled=False),
+        str(101): _gen_vm_config(101, 1, 1, ha_enabled=False, agent_enabled=False),
+    }
     node["containers"] = [
         _gen_lxc(201, "alpine-dns", 1, 0.25, 2, tags="infra"),
         _gen_lxc(202, "nginx-proxy", 1, 0.5, 4, tags="web"),
@@ -868,7 +1006,7 @@ def level_1_single_node():
     node["vm_configs"] = {}
     return {
         "name": "单节点入门集群",
-        "desc": "1节点 / 0VM / 3容器 / 无Ceph / 无HA",
+        "desc": "1节点 / 2VM(停机) / 3容器 / 无Ceph / 无HA / 无备份",
         "pve_version": "8.2.4",
         "nodes": [node], "ceph": None, "ha_resources": [],
     }
@@ -890,16 +1028,17 @@ def level_2_dual_node():
     n1["diskstat"] = [_diskstat_sata("sda"), _diskstat_sata("sdb")]
     n1["disk_io_delay_ms"] = round(sum(d["io_ms"] for d in n1["diskstat"]), 1)
 
+    # L2: 6 VMs (snapshot + agent, 无HA), 13 LXCs (无HA)
     n1["vms"] = [
-        _gen_vm(100, "ubuntu-web", 2, 4, 50, tags="production,web"),
-        _gen_vm(101, "centos-db", 4, 16, 200, tags="production,database"),
+        _gen_vm(100, "ubuntu-web", 2, 4, 50, tags="production,web", snapshot_count=1),
+        _gen_vm(101, "centos-db", 4, 16, 200, tags="production,database", snapshot_count=1),
         _gen_vm(102, "dev-vm", 2, 4, 40, tags="development",
                 has_template=False, snapshot_count=1),
     ]
     n1["vm_configs"] = {
-        str(100): _gen_vm_config(100, 2, 4, cpu_model_idx=1),
-        str(101): _gen_vm_config(101, 4, 16, cpu_model_idx=1),
-        str(102): _gen_vm_config(102, 2, 4, cpu_model_idx=1),
+        str(100): _gen_vm_config(100, 2, 4, cpu_model_idx=1, agent_enabled=True),
+        str(101): _gen_vm_config(101, 4, 16, cpu_model_idx=1, agent_enabled=True),
+        str(102): _gen_vm_config(102, 2, 4, cpu_model_idx=1, agent_enabled=True),
     }
     n1["containers"] = [
         _gen_lxc(200, "redis-1", 1, 1.0, 4, tags="cache"),
@@ -935,14 +1074,14 @@ def level_2_dual_node():
     n2["disk_io_delay_ms"] = round(sum(d["io_ms"] for d in n2["diskstat"]), 1)
 
     n2["vms"] = [
-        _gen_vm(100, "ubuntu-app-1", 2, 4, 50, tags="production,app"),
-        _gen_vm(101, "ubuntu-app-2", 2, 4, 50, tags="production,app"),
+        _gen_vm(100, "ubuntu-app-1", 2, 4, 50, tags="production,app", snapshot_count=1),
+        _gen_vm(101, "ubuntu-app-2", 2, 4, 50, tags="production,app", snapshot_count=1),
         _gen_vm(102, "test-runner", 4, 8, 80, status="stopped", tags="ci"),
     ]
     n2["vm_configs"] = {
-        str(v): _gen_vm_config(v, 2, 4, cpu_model_idx=2) for v in [100, 101]
+        str(v): _gen_vm_config(v, 2, 4, cpu_model_idx=2, agent_enabled=True) for v in [100, 101]
     }
-    n2["vm_configs"]["102"] = _gen_vm_config(102, 4, 8, cpu_model_idx=2)
+    n2["vm_configs"]["102"] = _gen_vm_config(102, 4, 8, cpu_model_idx=2, agent_enabled=False)
     n2["containers"] = [
         _gen_lxc(200, "redis-2", 1, 1.0, 4, tags="cache"),
         _gen_lxc(201, "nginx-2", 1, 0.5, 2, tags="web"),
@@ -1027,12 +1166,18 @@ def level_3_triple_node():
         for j, (vname_pattern, vc, vd, vdsk, vtags) in enumerate(vm_names):
             vid = vm_base + j + 1
             status = "running" if random.random() > 0.1 else "stopped"
+            # L3: 50% VM 有快照
+            snap = random.randint(1, 3) if random.random() < 0.5 else 0
             vm = _gen_vm(vid, vname_pattern.format(i + 1), vc, vd, vdsk,
                          status=status, tags=vtags,
-                         snapshot_count=random.randint(0, 3),
+                         snapshot_count=snap,
                          cpu_model_idx=cpu_idx)
             n["vms"].append(vm)
-            n["vm_configs"][str(vid)] = _gen_vm_config(vid, vc, vd, cpu_model_idx=cpu_idx)
+            # L3: 25% HA, 80% agent
+            ha = random.random() < 0.25
+            agent = random.random() < 0.80
+            n["vm_configs"][str(vid)] = _gen_vm_config(vid, vc, vd, cpu_model_idx=cpu_idx,
+                                                       ha_enabled=ha, agent_enabled=agent)
 
         # 每节点 8~13 个 LXC
         n["containers"] = []
@@ -1060,9 +1205,10 @@ def level_3_triple_node():
             ct = _gen_lxc(cid, tmpl[0].format(i + 1), tmpl[1], tmpl[2], tmpl[3],
                           status=status, tags=tmpl[4])
             n["containers"].append(ct)
+            ha_lxc = random.random() < 0.25
             n["lxc_configs"][str(cid)] = _gen_lxc_config(
                 cid, tmpl[1], tmpl[2], subnet_base=f"192.168.{ip}",
-                has_data_mount=tmpl[5], mount_gb=tmpl[6],
+                has_data_mount=tmpl[5], mount_gb=tmpl[6], ha_enabled=ha_lxc,
             )
 
         n["storages"] = [
@@ -1146,12 +1292,18 @@ def level_4_ceph_cluster():
         for j, (vname_pattern, vc, vd, vdsk, vtags) in enumerate(vm_pool):
             vid = vm_base + j + 1
             status = "running" if random.random() > 0.05 else "stopped"
+            # L4: 50% VM 有快照 (1-5)
+            snap = random.randint(1, 5) if random.random() < 0.5 else 0
             vm = _gen_vm(vid, vname_pattern.format(i + 1), vc, vd, vdsk,
                          status=status, tags=vtags,
-                         snapshot_count=random.randint(0, 5),
+                         snapshot_count=snap,
                          cpu_model_idx=cpu_idx)
             n["vms"].append(vm)
-            n["vm_configs"][str(vid)] = _gen_vm_config(vid, vc, vd, cpu_model_idx=cpu_idx)
+            # L4: 50% HA, 90% agent
+            ha = random.random() < 0.5
+            agent = random.random() < 0.90
+            n["vm_configs"][str(vid)] = _gen_vm_config(vid, vc, vd, cpu_model_idx=cpu_idx,
+                                                       ha_enabled=ha, agent_enabled=agent)
 
         n["containers"] = []
         n["lxc_configs"] = {}
@@ -1174,9 +1326,11 @@ def level_4_ceph_cluster():
             ct = _gen_lxc(cid, tmpl[0].format(i + 1), tmpl[1], tmpl[2], tmpl[3],
                           tags=tmpl[4])
             n["containers"].append(ct)
+            ha_lxc = random.random() < 0.50
             n["lxc_configs"][str(cid)] = _gen_lxc_config(
                 cid, tmpl[1], tmpl[2], subnet_base=f"192.168.{ip}",
                 storage_type="ceph-ssd", has_data_mount=tmpl[5], mount_gb=tmpl[6],
+                ha_enabled=ha_lxc,
             )
 
         n["storages"] = [
@@ -1306,41 +1460,48 @@ def level_5_enterprise():
             status = "running" if random.random() > 0.03 else "stopped"
             vm = _gen_vm(vid, tmpl[0].format(i + 1), tmpl[1], tmpl[2], tmpl[3],
                          status=status, tags=tmpl[4],
-                         snapshot_count=random.randint(0, 8),
+                         snapshot_count=random.randint(2, 8),
                          cpu_model_idx=cpu_idx)
             n["vms"].append(vm)
-            n["vm_configs"][str(vid)] = _gen_vm_config(vid, tmpl[1], tmpl[2], cpu_model_idx=cpu_idx)
+            ha = random.random() < 0.9
+            n["vm_configs"][str(vid)] = _gen_vm_config(vid, tmpl[1], tmpl[2], cpu_model_idx=cpu_idx,
+                                                       ha_enabled=ha, agent_enabled=True)
 
-        # 每节点 10~14 个 LXC
+        # 每节点 10~14 个 LXC（prod-4 离线节点仅用 VM，无 LXC）
         n["containers"] = []
         n["lxc_configs"] = {}
-        lxc_pool = [
-            ("nginx-ingress-{}", 2, 1.0, 2, "web,loadbalancer", False, 0),
-            ("coredns-{}", 1, 0.5, 2, "infra,dns", False, 0),
-            ("etcd-{}", 2, 4.0, 10, "infra,etcd", True, 20),
-            ("harbor-registry-{}", 2, 4.0, 50, "docker,registry", True, 100),
-            ("argocd-{}", 2, 2.0, 10, "ci,gitops", False, 0),
-            ("prometheus-{}", 2, 4.0, 40, "monitoring", True, 50),
-            ("grafana-{}", 2, 2.0, 10, "monitoring", False, 0),
-            ("loki-{}", 2, 4.0, 50, "monitoring,logging", True, 80),
-            ("minio-{}", 4, 4.0, 100, "storage", True, 200),
-            ("vault-{}", 2, 2.0, 4, "security", False, 0),
-            ("consul-{}", 1, 1.0, 4, "infra", False, 0),
-            ("rabbitmq-{}", 2, 2.0, 10, "mq", False, 0),
-            ("cert-manager-{}", 1, 1.0, 4, "security", False, 0),
-            ("zabbix-{}", 2, 4.0, 30, "monitoring", True, 30),
-        ]
-        num_lxc = random.randint(10, 14)
-        for j in range(num_lxc):
-            tmpl = lxc_pool[j % len(lxc_pool)]
-            cid = lxc_base + j + 1
-            ct = _gen_lxc(cid, tmpl[0].format(i + 1), tmpl[1], tmpl[2], tmpl[3],
-                          tags=tmpl[4])
-            n["containers"].append(ct)
-            n["lxc_configs"][str(cid)] = _gen_lxc_config(
-                cid, tmpl[1], tmpl[2], subnet_base=f"192.168.{ip}",
-                storage_type="ceph-ssd", has_data_mount=tmpl[5], mount_gb=tmpl[6],
-            )
+        if node_status != "offline":
+            lxc_pool = [
+                ("nginx-ingress-{}", 2, 1.0, 2, "web,loadbalancer", False, 0),
+                ("coredns-{}", 1, 0.5, 2, "infra,dns", False, 0),
+                ("etcd-{}", 2, 4.0, 10, "infra,etcd", True, 20),
+                ("harbor-registry-{}", 2, 4.0, 50, "docker,registry", True, 100),
+                ("argocd-{}", 2, 2.0, 10, "ci,gitops", False, 0),
+                ("prometheus-{}", 2, 4.0, 40, "monitoring", True, 50),
+                ("grafana-{}", 2, 2.0, 10, "monitoring", False, 0),
+                ("loki-{}", 2, 4.0, 50, "monitoring,logging", True, 80),
+                ("minio-{}", 4, 4.0, 100, "storage", True, 200),
+                ("vault-{}", 2, 2.0, 4, "security", False, 0),
+                ("consul-{}", 1, 1.0, 4, "infra", False, 0),
+                ("rabbitmq-{}", 2, 2.0, 10, "mq", False, 0),
+                ("cert-manager-{}", 1, 1.0, 4, "security", False, 0),
+                ("zabbix-{}", 2, 4.0, 30, "monitoring", True, 30),
+            ]
+            num_lxc = random.randint(10, 14)
+            for j in range(num_lxc):
+                tmpl = lxc_pool[j % len(lxc_pool)]
+                cid = lxc_base + j + 1
+                ct = _gen_lxc(cid, tmpl[0].format(i + 1), tmpl[1], tmpl[2], tmpl[3],
+                              tags=tmpl[4])
+                n["containers"].append(ct)
+                ha_lxc = random.random() < 0.9
+                n["lxc_configs"][str(cid)] = _gen_lxc_config(
+                    cid, tmpl[1], tmpl[2], subnet_base=f"192.168.{ip}",
+                    storage_type="ceph-ssd", has_data_mount=tmpl[5], mount_gb=tmpl[6],
+                    ha_enabled=ha_lxc,
+                )
+        else:
+            num_lxc = 0
 
         n["storages"] = [
             _gen_storage("local", "dir", 100, 0.2),
@@ -1367,10 +1528,10 @@ def level_5_enterprise():
         lxc_base += num_lxc
         nodes.append(n)
 
-    # Ceph: HEALTH_WARN — 2 个 OSD down
+    # Ceph: HEALTH_OK — 全部 OSD 正常
     ceph = {
-        "health": "HEALTH_WARN",
-        "total_osds": 24, "up_osds": 22, "in_osds": 23,
+        "health": "HEALTH_OK",
+        "total_osds": 24, "up_osds": 24, "in_osds": 24,
         "pool_count": 8,
         "total_used_gb": 32768.0, "total_avail_gb": 49152.0, "total_space_gb": 81920.0,
     }
@@ -1400,7 +1561,7 @@ def level_5_enterprise():
 
     return {
         "name": "企业生产集群",
-        "desc": "5节点 / ~65VM / ~60容器 / Ceph WARN(24OSD, 2down) / 5 HA资源 / 复杂网络",
+        "desc": "5节点 / ~65VM / ~60容器 / Ceph OK(24OSD) / 5 HA资源 / 复杂网络 / prod-4离线",
         "pve_version": "8.3.2",
         "nodes": nodes, "ceph": ceph, "ha_resources": ha_resources,
     }
@@ -1442,7 +1603,7 @@ def do_detect(token):
     print(f"\n  {'ID':<6} {'名称':<30} {'节点':<6} {'VM':<6} {'容器':<6} {'最后扫描':<20}")
     print(f"  {'-'*54}")
     for c in test_clusters:
-        last_scan = c.get("last_scanned_at", "")[:19] or "从未扫描"
+        last_scan = (c.get("last_scanned_at") or "")[:19] or "从未扫描"
         print(f"  {c['id']:<6} {c['name']:<30} {c.get('total_nodes',0):<6} "
               f"{c.get('total_vms',0):<6} {c.get('total_lxc',0):<6} {last_scan:<20}")
 
@@ -1687,6 +1848,7 @@ def _build_scan_payload(cluster_id, agent_ids, data, scan_time, scan_idx, total_
         "sdn": _gen_sdn_data(level),
         "replication": _gen_replication_data(level, nodes_out),
         "firewall": _gen_firewall_data(level, nodes_out),
+        "backups": _gen_backup_data(level, nodes_out, scan_time),
     }
     return payload
 
@@ -1701,11 +1863,11 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 架构层级:
-  Level 1  单节点入门   (1节点 / 0VM / 3容器 / 无Ceph / 无HA)
+  Level 1  单节点入门   (1节点 / 2VM停机 / 3容器 / 无Ceph / 无HA / 无备份)
   Level 2  双节点小集群  (2节点 / 6VM / 13容器 / NFS存储 / 无Ceph)
-  Level 3  三节点标准集群 (3节点 / ~20VM / ~35容器 / 多存储 / Bond网络)
-  Level 4  Ceph三节点    (3节点 / ~36VM / ~30容器 / Ceph OK / 2 HA资源)
-  Level 5  企业生产集群   (5节点 / ~65VM / ~60容器 / Ceph WARN / 5 HA资源)
+  Level 3  三节点标准集群 (3节点 / ~20VM / ~35容器 / 多存储 / Bond网络 / 25%HA)
+  Level 4  Ceph三节点    (3节点 / ~36VM / ~30容器 / Ceph OK / 50%HA)
+  Level 5  企业生产集群   (5节点 / ~65VM / ~60容器 / Ceph OK / 90%HA / prod-4离线)
 
 示例:
   python scripts/seed_test_data.py detect
