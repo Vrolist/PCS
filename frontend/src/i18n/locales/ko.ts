@@ -73,6 +73,16 @@ export default {
     opsDetection: '운영 감지',
     alertCenter: '알림 센터',
     opsService: '운영 서비스',
+    smartAnalysis: 'Smart Analysis',
+    capacityPlanning: 'Capacity Planning',
+    changeTracking: 'Change Tracking',
+    resourceReclamation: 'Resource Reclamation',
+    drScore: 'DR Score',
+    performanceCorrelation: 'Performance Analysis',
+    dependencyMapping: 'Dependency Mapping',
+    reportCenter: 'Report Center',
+    complianceReport: 'Compliance Report',
+    healthReport: 'Health Report',
     userInfo: '사용자 정보',
     operationLogs: '작업 로그',
     notificationSettings: '알림 설정',
@@ -613,6 +623,22 @@ export default {
     title: '알림 설정',
     subtitle: '알림 및 경고 전달 방식을 관리합니다',
     comingSoon: '알림 설정 기능 개발 중',
+  },
+
+  // Smart Analysis
+  smartAnalysis: {
+    capacityPlanning: { title: 'Capacity Planning & Trend Prediction', subtitle: 'Predict resource usage trends and full-load dates based on historical data', comingSoon: 'Capacity planning coming soon' },
+    changeTracking: { title: 'Change Tracking', subtitle: 'Compare adjacent scan diffs to track cluster resource changes', comingSoon: 'Change tracking coming soon' },
+    resourceReclamation: { title: 'Resource Reclamation', subtitle: 'Detect zombie VMs, unused disks and other reclaimable resources', comingSoon: 'Resource reclamation coming soon' },
+    drScore: { title: 'DR Readiness Score', subtitle: 'Assess cluster disaster recovery capability with improvement suggestions', comingSoon: 'DR score coming soon' },
+    performanceCorrelation: { title: 'Performance Correlation Analysis', subtitle: 'Multi-dimensional performance metric correlation and visualization', comingSoon: 'Performance analysis coming soon' },
+    dependencyMapping: { title: 'Dependency Mapping', subtitle: 'VM → Node → Storage → Network dependency graph', comingSoon: 'Dependency mapping coming soon' },
+  },
+
+  // Report Center
+  reportCenter: {
+    complianceReport: { title: 'Compliance Audit Report', subtitle: 'Generate compliance audit reports by node/cluster', comingSoon: 'Compliance report coming soon' },
+    healthReport: { title: 'Periodic Health Report', subtitle: 'Auto-generate weekly/monthly reports with resource trends and risk alerts', comingSoon: 'Health report coming soon' },
   },
 
   // 고급 정보 플레이스홀더

@@ -73,6 +73,16 @@ export default {
     opsDetection: '运维检测',
     alertCenter: '告警中心',
     opsService: '运维服务',
+    smartAnalysis: '智能分析',
+    capacityPlanning: '容量规划',
+    changeTracking: '变更追踪',
+    resourceReclamation: '资源回收',
+    drScore: '灾备评分',
+    performanceCorrelation: '性能关联',
+    dependencyMapping: '依赖链路',
+    reportCenter: '报告中心',
+    complianceReport: '合规审计报告',
+    healthReport: '定期健康报告',
     userInfo: '用户信息',
     operationLogs: '操作日志',
     notificationSettings: '通知设置',
@@ -621,6 +631,22 @@ export default {
     title: '通知设置',
     subtitle: '管理通知和告警推送方式',
     comingSoon: '通知设置功能开发中',
+  },
+
+  // 智能分析
+  smartAnalysis: {
+    capacityPlanning: { title: '容量规划与趋势预测', subtitle: '基于历史数据预测资源使用趋势与满载日期', comingSoon: '容量规划功能开发中' },
+    changeTracking: { title: '变更追踪', subtitle: '对比相邻扫描差异，追踪集群资源变化', comingSoon: '变更追踪功能开发中' },
+    resourceReclamation: { title: '资源回收建议', subtitle: '检测僵尸 VM、未使用磁盘等可回收资源', comingSoon: '资源回收功能开发中' },
+    drScore: { title: '灾备就绪评分', subtitle: '评估集群灾备能力，提供改进建议', comingSoon: '灾备评分功能开发中' },
+    performanceCorrelation: { title: '性能关联分析', subtitle: '多维度性能指标关联分析与可视化', comingSoon: '性能关联分析功能开发中' },
+    dependencyMapping: { title: '依赖链路可视化', subtitle: 'VM → 节点 → 存储 → 网络依赖关系图', comingSoon: '依赖链路功能开发中' },
+  },
+
+  // 报告中心
+  reportCenter: {
+    complianceReport: { title: '合规审计报告', subtitle: '按节点/集群维度生成合规审计报告', comingSoon: '合规审计报告功能开发中' },
+    healthReport: { title: '定期健康报告', subtitle: '自动生成周报/月报，含资源趋势与风险预警', comingSoon: '定期健康报告功能开发中' },
   },
 
   // 进阶信息占位页

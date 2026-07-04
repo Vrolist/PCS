@@ -130,6 +130,57 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/snapshots/index.vue'),
         meta: { title: '快照管理', titleKey: 'nav.snapshotManagement', icon: 'Camera' },
       },
+      // 智能分析
+      {
+        path: 'capacity-planning',
+        name: 'CapacityPlanning',
+        component: () => import('@/views/capacity-planning/index.vue'),
+        meta: { title: '容量规划', titleKey: 'nav.capacityPlanning', icon: 'DataAnalysis' },
+      },
+      {
+        path: 'change-tracking',
+        name: 'ChangeTracking',
+        component: () => import('@/views/change-tracking/index.vue'),
+        meta: { title: '变更追踪', titleKey: 'nav.changeTracking', icon: 'Switch' },
+      },
+      {
+        path: 'resource-reclamation',
+        name: 'ResourceReclamation',
+        component: () => import('@/views/resource-reclamation/index.vue'),
+        meta: { title: '资源回收', titleKey: 'nav.resourceReclamation', icon: 'Delete' },
+      },
+      {
+        path: 'dr-score',
+        name: 'DRScore',
+        component: () => import('@/views/dr-score/index.vue'),
+        meta: { title: '灾备评分', titleKey: 'nav.drScore', icon: 'Trophy' },
+      },
+      {
+        path: 'performance-correlation',
+        name: 'PerformanceCorrelation',
+        component: () => import('@/views/performance-correlation/index.vue'),
+        meta: { title: '性能关联', titleKey: 'nav.performanceCorrelation', icon: 'Histogram' },
+      },
+      {
+        path: 'dependency-mapping',
+        name: 'DependencyMapping',
+        component: () => import('@/views/dependency-mapping/index.vue'),
+        meta: { title: '依赖链路', titleKey: 'nav.dependencyMapping', icon: 'Share' },
+      },
+      // 报告中心
+      {
+        path: 'compliance-report',
+        name: 'ComplianceReport',
+        component: () => import('@/views/compliance-report/index.vue'),
+        meta: { title: '合规审计报告', titleKey: 'nav.complianceReport', icon: 'Files' },
+      },
+      {
+        path: 'health-report',
+        name: 'HealthReport',
+        component: () => import('@/views/health-report/index.vue'),
+        meta: { title: '定期健康报告', titleKey: 'nav.healthReport', icon: 'Document' },
+      },
+      // 运维检测
       {
         path: 'alerts',
         name: 'Alerts',

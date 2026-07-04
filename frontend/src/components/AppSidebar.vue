@@ -177,6 +177,60 @@
       </el-menu-item>
     </template>
 
+    <!-- 智能分析 -->
+    <div v-if="!appStore.sidebarCollapsed" class="menu-section collapsible" @click="toggleSection('smart')">
+      <span class="menu-label">{{ t('nav.smartAnalysis') }}</span>
+      <el-icon class="section-arrow" :class="{ expanded: expandedSections.smart }"><ArrowRight /></el-icon>
+    </div>
+    <div v-else class="menu-section">
+      <span class="menu-label" style="font-size:0"></span>
+    </div>
+    <template v-if="expandedSections.smart || appStore.sidebarCollapsed">
+      <el-menu-item index="/dashboard/capacity-planning" class="sidebar-item">
+        <div class="item-icon-wrap"><el-icon><DataAnalysis /></el-icon></div>
+        <template #title><span>{{ t('nav.capacityPlanning') }}</span></template>
+      </el-menu-item>
+      <el-menu-item index="/dashboard/change-tracking" class="sidebar-item">
+        <div class="item-icon-wrap"><el-icon><Switch /></el-icon></div>
+        <template #title><span>{{ t('nav.changeTracking') }}</span></template>
+      </el-menu-item>
+      <el-menu-item index="/dashboard/resource-reclamation" class="sidebar-item">
+        <div class="item-icon-wrap"><el-icon><Delete /></el-icon></div>
+        <template #title><span>{{ t('nav.resourceReclamation') }}</span></template>
+      </el-menu-item>
+      <el-menu-item index="/dashboard/dr-score" class="sidebar-item">
+        <div class="item-icon-wrap"><el-icon><Trophy /></el-icon></div>
+        <template #title><span>{{ t('nav.drScore') }}</span></template>
+      </el-menu-item>
+      <el-menu-item index="/dashboard/performance-correlation" class="sidebar-item">
+        <div class="item-icon-wrap"><el-icon><Histogram /></el-icon></div>
+        <template #title><span>{{ t('nav.performanceCorrelation') }}</span></template>
+      </el-menu-item>
+      <el-menu-item index="/dashboard/dependency-mapping" class="sidebar-item">
+        <div class="item-icon-wrap"><el-icon><Share /></el-icon></div>
+        <template #title><span>{{ t('nav.dependencyMapping') }}</span></template>
+      </el-menu-item>
+    </template>
+
+    <!-- 报告中心 -->
+    <div v-if="!appStore.sidebarCollapsed" class="menu-section collapsible" @click="toggleSection('report')">
+      <span class="menu-label">{{ t('nav.reportCenter') }}</span>
+      <el-icon class="section-arrow" :class="{ expanded: expandedSections.report }"><ArrowRight /></el-icon>
+    </div>
+    <div v-else class="menu-section">
+      <span class="menu-label" style="font-size:0"></span>
+    </div>
+    <template v-if="expandedSections.report || appStore.sidebarCollapsed">
+      <el-menu-item index="/dashboard/compliance-report" class="sidebar-item">
+        <div class="item-icon-wrap"><el-icon><Files /></el-icon></div>
+        <template #title><span>{{ t('nav.complianceReport') }}</span></template>
+      </el-menu-item>
+      <el-menu-item index="/dashboard/health-report" class="sidebar-item">
+        <div class="item-icon-wrap"><el-icon><Document /></el-icon></div>
+        <template #title><span>{{ t('nav.healthReport') }}</span></template>
+      </el-menu-item>
+    </template>
+
     <!-- 用户信息 -->
     <div v-if="!appStore.sidebarCollapsed" class="menu-section collapsible" @click="toggleSection('user')">
       <span class="menu-label">{{ t('nav.userInfo') }}</span>
@@ -209,7 +263,7 @@ import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { useThemeStore } from '@/stores/theme'
 import { useClusterStore } from '@/stores/cluster'
-import { Monitor, Connection, Cpu, Box, Bell, Service, User, Document, Coin, Share, Lock, FolderOpened, CopyDocument, Camera, ArrowRight, ArrowDown, Check } from '@element-plus/icons-vue'
+import { Monitor, Connection, Cpu, Box, Bell, Service, User, Document, Coin, Share, Lock, FolderOpened, CopyDocument, Camera, ArrowRight, ArrowDown, Check, DataAnalysis, Switch, Delete, Trophy, Histogram, Files } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const { t } = useI18n()
@@ -237,6 +291,8 @@ const sectionRoutes: Record<string, string[]> = {
   basic: ['/dashboard/nodes', '/dashboard/vms', '/dashboard/containers', '/dashboard/storage', '/dashboard/networks'],
   advanced: ['/dashboard/network-topology', '/dashboard/ceph', '/dashboard/ha', '/dashboard/sdn', '/dashboard/firewall', '/dashboard/backup', '/dashboard/replication', '/dashboard/snapshots'],
   ops: ['/dashboard/alerts', '/dashboard/services'],
+  smart: ['/dashboard/capacity-planning', '/dashboard/change-tracking', '/dashboard/resource-reclamation', '/dashboard/dr-score', '/dashboard/performance-correlation', '/dashboard/dependency-mapping'],
+  report: ['/dashboard/compliance-report', '/dashboard/health-report'],
   user: ['/dashboard/settings', '/dashboard/user-logs', '/dashboard/user-notifications'],
 }
 
@@ -245,7 +301,7 @@ function getInitialSections(): Record<string, boolean> {
   if (saved) {
     try { return JSON.parse(saved) } catch {}
   }
-  return { basic: true, advanced: true, ops: true, user: true }
+  return { basic: true, advanced: true, ops: true, smart: true, report: true, user: true }
 }
 
 const expandedSections = reactive<Record<string, boolean>>(getInitialSections())

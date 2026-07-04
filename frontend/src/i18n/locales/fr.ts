@@ -73,6 +73,16 @@ export default {
     opsDetection: 'Détection opérationnelle',
     alertCenter: "Centre d'alertes",
     opsService: "Service d'exploitation",
+    smartAnalysis: 'Smart Analysis',
+    capacityPlanning: 'Capacity Planning',
+    changeTracking: 'Change Tracking',
+    resourceReclamation: 'Resource Reclamation',
+    drScore: 'DR Score',
+    performanceCorrelation: 'Performance Analysis',
+    dependencyMapping: 'Dependency Mapping',
+    reportCenter: 'Report Center',
+    complianceReport: 'Compliance Report',
+    healthReport: 'Health Report',
     userInfo: 'Informations utilisateur',
     operationLogs: "Journaux d'opérations",
     notificationSettings: 'Paramètres de notification',
@@ -620,6 +630,22 @@ export default {
     title: 'Paramètres de notification',
     subtitle: 'Gérez les modes de notification et de diffusion des alertes',
     comingSoon: 'Fonctionnalité de notification en cours de développement',
+  },
+
+  // Smart Analysis
+  smartAnalysis: {
+    capacityPlanning: { title: 'Capacity Planning & Trend Prediction', subtitle: 'Predict resource usage trends and full-load dates based on historical data', comingSoon: 'Capacity planning coming soon' },
+    changeTracking: { title: 'Change Tracking', subtitle: 'Compare adjacent scan diffs to track cluster resource changes', comingSoon: 'Change tracking coming soon' },
+    resourceReclamation: { title: 'Resource Reclamation', subtitle: 'Detect zombie VMs, unused disks and other reclaimable resources', comingSoon: 'Resource reclamation coming soon' },
+    drScore: { title: 'DR Readiness Score', subtitle: 'Assess cluster disaster recovery capability with improvement suggestions', comingSoon: 'DR score coming soon' },
+    performanceCorrelation: { title: 'Performance Correlation Analysis', subtitle: 'Multi-dimensional performance metric correlation and visualization', comingSoon: 'Performance analysis coming soon' },
+    dependencyMapping: { title: 'Dependency Mapping', subtitle: 'VM → Node → Storage → Network dependency graph', comingSoon: 'Dependency mapping coming soon' },
+  },
+
+  // Report Center
+  reportCenter: {
+    complianceReport: { title: 'Compliance Audit Report', subtitle: 'Generate compliance audit reports by node/cluster', comingSoon: 'Compliance report coming soon' },
+    healthReport: { title: 'Periodic Health Report', subtitle: 'Auto-generate weekly/monthly reports with resource trends and risk alerts', comingSoon: 'Health report coming soon' },
   },
 
   // Pages d'information avancée
