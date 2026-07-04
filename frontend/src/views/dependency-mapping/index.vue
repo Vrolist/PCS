@@ -247,166 +247,62 @@ const currentViewBox = computed(() => {
 // 自动布局
 function autoLayout() {
   const positions = new Map<string, { x: number; y: number }>()
-  const nodes = graphData.value.nodes
-  const edges = graphData.value.edges
+  const { nodes, edges } = graphData.value
 
-  // 按类型分组
-  const clusters = nodes.filter(n => n.type === 'cluster')
-  const pveNodes = nodes.filter(n => n.type === 'node')
-  const vms = nodes.filter(n => n.type === 'vm')
-  const containers = nodes.filter(n => n.type === 'container')
-  const storages = nodes.filter(n => n.type === 'storage')
-  const networks = nodes.filter(n => n.type === 'network')
-  const cephNodes = nodes.filter(n => n.type === 'ceph')
-  const haNodes = nodes.filter(n => n.type === 'ha')
-  const sdnZones = nodes.filter(n => n.type === 'sdn_zone')
-  const sdnVnets = nodes.filter(n => n.type === 'sdn_vnet')
-  const sdnSubnets = nodes.filter(n => n.type === 'sdn_subnet')
-
-  // 层级 Y 坐标
-  const layerY = {
-    cluster: 40,
-    node: 140,
-    vmContainer: 260,
-    storageNetwork: 400,
-    cephHA: 540,
-    sdn: 680,
+  if (!nodes.length) {
+    nodePositions.value = positions
+    return
   }
 
-  // 每层的节点间距
-  const gapX = 180
-  const gapXSmall = 150
+  // 1. 构建邻接表（用 edges 自动推导父子关系）
+  const children = new Map<string, string[]>()
+  const parents = new Map<string, string>()
+  const nodeMap = new Map(nodes.map(n => [n.id, n]))
 
-  // 1. 集群 - 居中
-  clusters.forEach((c, i) => {
-    const totalWidth = clusters.length * gapX
+  edges.forEach(e => {
+    if (!children.has(e.source)) children.set(e.source, [])
+    children.get(e.source)!.push(e.target)
+    parents.set(e.target, e.source)
+  })
+
+  // 2. 找根节点（没有父节点的）
+  const roots = nodes.filter(n => !parents.has(n.id))
+
+  // 3. BFS 分层
+  const layers: string[][] = []
+  let frontier = roots.map(n => n.id)
+  const visited = new Set<string>()
+
+  while (frontier.length) {
+    layers.push(frontier)
+    frontier.forEach(id => visited.add(id))
+    const next: string[] = []
+    frontier.forEach(id => {
+      (children.get(id) || []).forEach(cid => {
+        if (!visited.has(cid)) next.push(cid)
+      })
+    })
+    // 去重
+    frontier = [...new Set(next)]
+  }
+
+  // 4. 每层水平居中布局
+  const gapY = 140
+  const gapX = 170
+  const baseY = 40
+
+  layers.forEach((layer, layerIdx) => {
+    const totalWidth = layer.length * gapX
     const startX = (initialSvgWidth.value - totalWidth) / 2 + gapX / 2
-    positions.set(c.id, { x: startX + i * gapX, y: layerY.cluster })
-  })
-
-  // 2. 物理节点 - 按集群分组
-  pveNodes.forEach((n) => {
-    const clusterX = positions.get(`cluster-${n.cluster_id}`)?.x || 0
-    const nodesInCluster = pveNodes.filter(pn => pn.cluster_id === n.cluster_id)
-    const nodeIdx = nodesInCluster.indexOf(n)
-    const totalWidth = nodesInCluster.length * gapX
-    const startX = clusterX - totalWidth / 2 + gapX / 2
-    positions.set(n.id, { x: startX + nodeIdx * gapX, y: layerY.node })
-  })
-
-  // 3. VM 和容器 - 按节点分组，先VM后容器
-  const vmsAndContainers = [...vms, ...containers].sort((a, b) => {
-    const nodeA = a.node_id || 0
-    const nodeB = b.node_id || 0
-    if (nodeA !== nodeB) return nodeA - nodeB
-    return a.type === 'vm' ? -1 : 1
-  })
-
-  const nodeGroups = new Map<string, DependencyNode[]>()
-  vmsAndContainers.forEach(item => {
-    const nodeId = String(item.node_id || 0)
-    if (!nodeGroups.has(nodeId)) nodeGroups.set(nodeId, [])
-    nodeGroups.get(nodeId)!.push(item)
-  })
-
-  pveNodes.forEach(n => {
-    const nodeIdStr = String(n.node_id ?? n.id.replace('node-', ''))
-    const items = nodeGroups.get(nodeIdStr) || []
-    const nodeX = positions.get(n.id)?.x || 0
-    items.forEach((item, i) => {
-      const totalWidth = items.length * gapXSmall
-      const startX = nodeX - totalWidth / 2 + gapXSmall / 2
-      positions.set(item.id, { x: startX + i * gapXSmall, y: layerY.vmContainer })
+    layer.forEach((id, i) => {
+      positions.set(id, { x: startX + i * gapX, y: baseY + layerIdx * gapY })
     })
-  })
-
-  // 4. 存储和网络 - 按节点分组
-  const storageAndNetwork = [...storages, ...networks].sort((a, b) => {
-    const nodeA = a.node_id || 0
-    const nodeB = b.node_id || 0
-    if (nodeA !== nodeB) return nodeA - nodeB
-    return a.type === 'storage' ? -1 : 1
-  })
-
-  const snGroups = new Map<string, DependencyNode[]>()
-  storageAndNetwork.forEach(item => {
-    const nodeId = String(item.node_id || 0)
-    if (!snGroups.has(nodeId)) snGroups.set(nodeId, [])
-    snGroups.get(nodeId)!.push(item)
-  })
-
-  pveNodes.forEach(n => {
-    const nodeIdStr = String(n.node_id ?? n.id.replace('node-', ''))
-    const items = snGroups.get(nodeIdStr) || []
-    const nodeX = positions.get(n.id)?.x || 0
-    items.forEach((item, i) => {
-      const totalWidth = items.length * gapXSmall
-      const startX = nodeX - totalWidth / 2 + gapXSmall / 2
-      positions.set(item.id, { x: startX + i * gapXSmall, y: layerY.storageNetwork })
-    })
-  })
-
-  // 5. Ceph 和 HA - 居中
-  const cephHANodes = [...cephNodes, ...haNodes]
-  cephHANodes.forEach((n) => {
-    const clusterId = n.cluster_id
-    const clusterX = positions.get(`cluster-${clusterId}`)?.x || initialSvgWidth.value / 2
-
-    // 检查 HA 资源是否有对应的 VM/容器连接
-    const haEdge = edges.find(e => e.target === n.id && (e.type === 'resource-ha' || e.type === 'node-ha'))
-    if (haEdge && haEdge.type === 'resource-ha') {
-      // 找到连接的 VM/容器，放在其下方
-      const sourcePos = positions.get(haEdge.source)
-      if (sourcePos) {
-        positions.set(n.id, { x: sourcePos.x, y: sourcePos.y + 70 })
-        return
-      }
-    }
-
-    // 默认布局：按集群分组
-    const totalWidth = cephHANodes.filter(ch => ch.cluster_id === clusterId).length * gapXSmall
-    const itemsInCluster = cephHANodes.filter(ch => ch.cluster_id === clusterId)
-    const idx = itemsInCluster.indexOf(n)
-    const startX = clusterX - totalWidth / 2 + gapXSmall / 2
-    positions.set(n.id, { x: startX + idx * gapXSmall, y: layerY.cephHA })
-  })
-
-  // 6. SDN - 右侧
-  const sdnStartX = initialSvgWidth.value - 300
-  sdnZones.forEach((z, i) => {
-    positions.set(z.id, { x: sdnStartX, y: layerY.sdn + i * 120 })
-  })
-
-  sdnVnets.forEach((v, i) => {
-    // 找到所属 zone
-    const edge = edges.find(e => e.target === v.id && e.type === 'zone-vnet')
-    if (edge) {
-      const zonePos = positions.get(edge.source)
-      if (zonePos) {
-        positions.set(v.id, { x: zonePos.x + 160, y: zonePos.y })
-      }
-    } else {
-      positions.set(v.id, { x: sdnStartX + 160, y: layerY.sdn + i * 80 })
-    }
-  })
-
-  sdnSubnets.forEach((s, i) => {
-    const edge = edges.find(e => e.target === s.id && e.type === 'vnet-subnet')
-    if (edge) {
-      const vnetPos = positions.get(edge.source)
-      if (vnetPos) {
-        positions.set(s.id, { x: vnetPos.x + 140, y: vnetPos.y })
-      }
-    } else {
-      positions.set(s.id, { x: sdnStartX + 300, y: layerY.sdn + i * 60 })
-    }
   })
 
   nodePositions.value = positions
 
-  // 计算 SVG 尺寸
-  let maxX = 0
-  let maxY = 0
+  // 动态计算 SVG 尺寸
+  let maxX = 0, maxY = 0
   positions.forEach(pos => {
     maxX = Math.max(maxX, pos.x + 200)
     maxY = Math.max(maxY, pos.y + 100)
