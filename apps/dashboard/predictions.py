@@ -122,11 +122,13 @@ def _build_dimension(daily_data, field, capacity=None, unit="pct", display_multi
 
     trend = _classify_trend(slope, threshold)
 
-    # 满载预测
+    # 满载预测（仅当趋势为上升时才有意义，且不超过 365 天才显示）
     days_until_full = None
     predicted_full_date = None
-    if capacity and slope and slope > 0:
+    if trend == "rising" and capacity and slope and slope > 0:
         predicted_full_date, days_until_full = _predict_full_date(current, capacity, slope, timezone.now().date())
+        if days_until_full and days_until_full > 365:
+            predicted_full_date, days_until_full = None, None
 
     # 预测线：延伸到满载日期或最多再加 30 天
     predicted_dates = []
@@ -199,8 +201,85 @@ def _build_storage_from_tables(cluster_id, days):
 
     days_until_full = None
     predicted_full_date = None
-    if slope and slope > 0 and total_gb > current_used:
+    if trend == "rising" and slope and slope > 0 and total_gb > current_used:
         predicted_full_date, days_until_full = _predict_full_date(current_used, total_gb, slope, timezone.now().date())
+        if days_until_full and days_until_full > 365:
+            predicted_full_date, days_until_full = None, None
+
+    # 预测线
+    predicted_dates = []
+    predicted_values = []
+    if slope is not None and intercept is not None:
+        extend_days = min(days_until_full or 30, 90)
+        from datetime import datetime as dt
+        base_date = dt.strptime(dates[-1], "%Y-%m-%d")
+        for i in range(1, extend_days + 1):
+            future_date = base_date + timedelta(days=i)
+            predicted_dates.append(future_date.strftime("%Y-%m-%d"))
+            predicted_values.append(round(slope * (len(used_values) - 1 + i) + intercept, 2))
+
+    return {
+        "current_used_gb": round(current_used, 2),
+        "total_gb": round(total_gb, 2),
+        "current_pct": round(current_used / total_gb * 100, 1) if total_gb > 0 else 0,
+        "trend": trend,
+        "slope_gb_per_day": round(slope, 3) if slope is not None else None,
+        "days_until_full": days_until_full,
+        "predicted_full_date": predicted_full_date,
+        "data_points": len(dates),
+        "history_days": len(dates),
+        "chart": {
+            "dates": dates,
+            "values": used_values,
+            "predicted_dates": predicted_dates,
+            "predicted_values": predicted_values,
+        },
+    }
+
+
+def _build_rootfs_from_tables(cluster_id, days):
+    """从 ClusterNode 表按天聚合根分区数据（回退方案）"""
+    since = timezone.now() - timedelta(days=days)
+    nodes = ClusterNode.objects.filter(
+        cluster_id=cluster_id, scanned_at__gte=since
+    ).order_by("scanned_at")
+
+    # 按天分组，每天每个节点只取最新一条（去重）
+    daily_nodes = defaultdict(dict)  # {date_key: {node_name: ClusterNode}}
+    for n in nodes:
+        date_key = n.scanned_at.strftime("%Y-%m-%d")
+        if n.rootfs_used_gb and n.rootfs_total_gb:
+            daily_nodes[date_key][n.node_name] = n
+
+    dates = []
+    used_values = []
+    total_values = []
+    for date_key in sorted(daily_nodes.keys()):
+        node_pool = daily_nodes[date_key]
+        used = sum(float(n.rootfs_used_gb or 0) for n in node_pool.values())
+        total = sum(float(n.rootfs_total_gb or 0) for n in node_pool.values())
+        dates.append(date_key)
+        used_values.append(round(used, 2))
+        total_values.append(round(total, 2))
+
+    if not dates:
+        return None
+
+    total_gb = total_values[-1] if total_values else 0
+
+    # 线性回归
+    points = [(float(i), v) for i, v in enumerate(used_values)]
+    slope, intercept = _linear_regression(points)
+
+    current_used = used_values[-1] if used_values else 0
+    trend = _classify_trend(slope, 0.1)
+
+    days_until_full = None
+    predicted_full_date = None
+    if trend == "rising" and slope and slope > 0 and total_gb > current_used:
+        predicted_full_date, days_until_full = _predict_full_date(current_used, total_gb, slope, timezone.now().date())
+        if days_until_full and days_until_full > 365:
+            predicted_full_date, days_until_full = None, None
 
     # 预测线
     predicted_dates = []
@@ -302,13 +381,16 @@ class PredictionsView(APIView):
             rootfs_result = _build_dimension(daily, "used_rootfs_gb", capacity=total_rootfs_gb, unit="gb")
             rootfs_result["total_gb"] = round(total_rootfs_gb, 2)
         else:
-            rootfs_result = {
-                "current_used_gb": None, "total_gb": None, "current_pct": None,
-                "trend": "unknown", "slope_gb_per_day": None,
-                "days_until_full": None, "predicted_full_date": None,
-                "data_points": 0, "history_days": 0,
-                "chart": {"dates": [], "values": [], "predicted_dates": [], "predicted_values": []},
-            }
+            # 回退到 ClusterNode 表
+            rootfs_result = _build_rootfs_from_tables(cluster_ids[0], days)
+            if rootfs_result is None:
+                rootfs_result = {
+                    "current_used_gb": None, "total_gb": None, "current_pct": None,
+                    "trend": "unknown", "slope_gb_per_day": None,
+                    "days_until_full": None, "predicted_full_date": None,
+                    "data_points": 0, "history_days": 0,
+                    "chart": {"dates": [], "values": [], "predicted_dates": [], "predicted_values": []},
+                }
 
         # 为存储和根分区补 total 信息
         if "total_gb" not in storage_result:
