@@ -30,9 +30,12 @@
       <span class="legend-item legend-static">
         <span class="legend-dot" style="background:#4f46e5"></span>{{ t('networkTopology.legendNode') }}
       </span>
+      <span class="legend-item legend-static">
+        <span class="legend-dot legend-dot-ring" style="border-color:#0ea5e9"></span>{{ t('networkTopology.legendSubnet') }}
+      </span>
       <span class="legend-sep"></span>
       <template v-for="item in legendItems" :key="item.type">
-        <span v-if="item.type !== 'node'"
+        <span v-if="item.type !== 'node' && item.type !== 'subnet'"
           class="legend-item"
           :class="{ 'is-hidden': hiddenTypes.has(item.type) }"
           @click="toggleType(item.type)">
@@ -61,6 +64,7 @@ const zoomLevel = ref(1)
 const hiddenTypes = ref(new Set<string>())
 const legendItems = computed(() => [
   { type: 'node', label: t('networkTopology.legendNode'), color: '#4f46e5' },
+  { type: 'subnet', label: t('networkTopology.legendSubnet'), color: '#0ea5e9' },
   { type: 'eth', label: t('networkTopology.legendPhysical'), color: '#409eff' },
   { type: 'bridge', label: t('networkTopology.legendBridge'), color: '#67c23a' },
   { type: 'bond', label: t('networkTopology.legendBond'), color: '#e6a23c' },
@@ -80,20 +84,21 @@ function toggleType(type: string) {
 interface GraphNode extends d3.SimulationNodeDatum {
   id: string
   name: string
-  type: 'node' | 'iface'
+  type: 'node' | 'iface' | 'subnet'
   ifaceType?: string
   nodeName?: string
   address?: string
   status?: string
   bridgePorts?: string
   bondSlaves?: string
+  ifaceCount?: number
   radius: number
 }
 
 interface GraphLink extends d3.SimulationLinkDatum<GraphNode> {
   source: string | GraphNode
   target: string | GraphNode
-  type: 'node-iface' | 'bridge-port' | 'bond-slave'
+  type: 'node-iface' | 'bridge-port' | 'bond-slave' | 'subnet-iface'
 }
 
 const graphData = ref<{ nodes: GraphNode[]; links: GraphLink[] }>({ nodes: [], links: [] })
@@ -113,8 +118,58 @@ const ifaceColors: Record<string, string> = {
   other: '#909399'
 }
 
+// 网段颜色（用于不同子网的环形节点）
+const subnetColors = [
+  '#0ea5e9', '#14b8a6', '#f59e0b', '#ec4899', '#8b5cf6',
+  '#06b6d4', '#84cc16', '#ef4444', '#6366f1', '#d946ef',
+]
+let subnetColorMap = new Map<string, string>()
+let subnetColorIdx = 0
+
+/** 从 CIDR 地址提取子网（如 192.168.1.100/24 → 192.168.1.0/24） */
+function extractSubnet(address?: string): string | null {
+  if (!address) return null
+  const parts = address.split('/')
+  if (parts.length !== 2) return null
+  const ipParts = parts[0].split('.')
+  const prefix = parseInt(parts[1], 10)
+  if (ipParts.length !== 4 || isNaN(prefix) || prefix < 1 || prefix > 32) return null
+
+  const ip = ipParts.reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0
+  const mask = prefix === 0 ? 0 : (~0 << (32 - prefix)) >>> 0
+  const network = (ip & mask) >>> 0
+
+  return [
+    (network >>> 24) & 0xff,
+    (network >>> 16) & 0xff,
+    (network >>> 8) & 0xff,
+    network & 0xff
+  ].join('.') + '/' + prefix
+}
+
+/** 获取子网显示标签 */
+function subnetLabel(subnet: string): string {
+  const prefix = subnet.split('/')[1]
+  if (prefix === '24') return subnet.replace('.0/', '.x/')
+  if (prefix === '16') return subnet.replace('.0.0/', '.x.x/')
+  return subnet
+}
+
+/** 获取子网的颜色 */
+function getSubnetColor(subnet: string): string {
+  if (!subnetColorMap.has(subnet)) {
+    subnetColorMap.set(subnet, subnetColors[subnetColorIdx % subnetColors.length])
+    subnetColorIdx++
+  }
+  return subnetColorMap.get(subnet)!
+}
+
 /** 构建图数据 */
 function buildGraph(data: NetworkInterface[]) {
+  // 重置子网颜色分配
+  subnetColorMap = new Map()
+  subnetColorIdx = 0
+
   const nodes: GraphNode[] = []
   const links: GraphLink[] = []
   const nodeMap = new Map<string, GraphNode>()
@@ -128,7 +183,7 @@ function buildGraph(data: NetworkInterface[]) {
     groups.set(iface.node_name, list)
   })
 
-  // 创建节点
+  // 阶段一：创建节点 + 接口
   groups.forEach((ifaces, nodeName) => {
     const node: GraphNode = {
       id: `node-${nodeName}`,
@@ -142,7 +197,7 @@ function buildGraph(data: NetworkInterface[]) {
     // 创建接口
     ifaces.forEach(iface => {
       if (hiddenTypes.value.has(iface.type === 'eth' ? 'eth' : iface.type)) return
-      
+
       const ifaceNode: GraphNode = {
         id: `iface-${iface.id}`,
         name: iface.name,
@@ -197,6 +252,39 @@ function buildGraph(data: NetworkInterface[]) {
     })
   })
 
+  // 阶段二：提取子网并创建子网分组节点
+  const subnetMembers = new Map<string, GraphNode[]>()
+  ifaceMap.forEach(ifaceNode => {
+    const subnet = extractSubnet(ifaceNode.address)
+    if (subnet) {
+      ifaceNode.subnet = subnet
+      const list = subnetMembers.get(subnet) || []
+      list.push(ifaceNode)
+      subnetMembers.set(subnet, list)
+    }
+  })
+
+  // 只在有 2 个以上接口共享同一子网时创建子网节点
+  subnetMembers.forEach((members, subnet) => {
+    if (members.length < 2) return
+    const subnetId = `subnet-${subnet}`
+    nodes.push({
+      id: subnetId,
+      name: subnetLabel(subnet),
+      type: 'subnet',
+      address: subnet,
+      ifaceCount: members.length,
+      radius: 40
+    })
+    members.forEach(ifaceNode => {
+      links.push({
+        source: subnetId,
+        target: ifaceNode.id,
+        type: 'subnet-iface'
+      })
+    })
+  })
+
   // 过滤掉引用不存在节点的连线（避免 D3 force 模拟报错）
   const validNodeIds = new Set(nodes.map(n => n.id))
   const validLinks = links.filter(l => {
@@ -241,8 +329,9 @@ function initSvg() {
 
   // 创建力导向模拟
   simulation = d3.forceSimulation<GraphNode>()
-    .force('link', d3.forceLink<GraphNode, GraphLink>().id(d => d.id).distance(100))
-    .force('charge', d3.forceManyBody().strength(-300))
+    .force('link', d3.forceLink<GraphNode, GraphLink>().id(d => d.id)
+      .distance(d => (d as GraphLink).type === 'subnet-iface' ? 70 : 100))
+    .force('charge', d3.forceManyBody().strength(d => (d as GraphNode).type === 'subnet' ? -500 : -300))
     .force('center', d3.forceCenter(width / 2, height / 2))
     .force('collision', d3.forceCollide().radius(d => (d as GraphNode).radius + 10))
     .force('x', d3.forceX(width / 2).strength(0.1))
@@ -286,11 +375,19 @@ function updateGraph() {
     .attr('stroke', d => {
       if (d.type === 'bridge-port') return '#67c23a'
       if (d.type === 'bond-slave') return '#e6a23c'
+      if (d.type === 'subnet-iface') {
+        const t = d.target as GraphNode
+        return getSubnetColor(t.subnet || '')
+      }
       return '#999'
     })
-    .attr('stroke-opacity', 0.6)
-    .attr('stroke-width', 2)
-    .attr('stroke-dasharray', d => d.type === 'node-iface' ? '5,5' : 'none')
+    .attr('stroke-opacity', d => d.type === 'subnet-iface' ? 0.35 : 0.6)
+    .attr('stroke-width', d => d.type === 'subnet-iface' ? 1.5 : 2)
+    .attr('stroke-dasharray', d => {
+      if (d.type === 'node-iface') return '5,5'
+      if (d.type === 'subnet-iface') return '3,3'
+      return 'none'
+    })
 
   // 创建节点组
   const node = g.append('g')
@@ -311,24 +408,29 @@ function updateGraph() {
     .attr('r', d => d.radius)
     .attr('fill', d => {
       if (d.type === 'node') return '#4f46e5'
+      if (d.type === 'subnet') return getSubnetColor(d.address || '') + '18'
       return ifaceColors[d.ifaceType || 'other'] || '#909399'
     })
-    .attr('stroke', '#fff')
-    .attr('stroke-width', 2)
+    .attr('stroke', d => {
+      if (d.type === 'subnet') return getSubnetColor(d.address || '')
+      return '#fff'
+    })
+    .attr('stroke-width', d => d.type === 'subnet' ? 2.5 : 2)
+    .attr('stroke-dasharray', d => d.type === 'subnet' ? '6,3' : 'none')
     .attr('cursor', 'pointer')
     .on('mouseover', function(event, d) {
       d3.select(this)
         .transition()
         .duration(200)
         .attr('r', d.radius * 1.2)
-        .attr('stroke-width', 3)
+        .attr('stroke-width', d.type === 'subnet' ? 3.5 : 3)
     })
     .on('mouseout', function(event, d) {
       d3.select(this)
         .transition()
         .duration(200)
         .attr('r', d.radius)
-        .attr('stroke-width', 2)
+        .attr('stroke-width', d.type === 'subnet' ? 2.5 : 2)
     })
 
   // 状态指示器（接口）
@@ -343,12 +445,29 @@ function updateGraph() {
 
   // 节点标签
   node.append('text')
-    .attr('dy', d => d.type === 'node' ? 4 : 30)
+    .attr('dy', d => {
+      if (d.type === 'node') return 4
+      if (d.type === 'subnet') return 5
+      return 30
+    })
     .attr('text-anchor', 'middle')
-    .attr('font-size', d => d.type === 'node' ? '12px' : '10px')
-    .attr('font-weight', d => d.type === 'node' ? '600' : '400')
-    .attr('fill', d => d.type === 'node' ? '#fff' : '#333')
-    .text(d => d.name)
+    .attr('font-size', d => d.type === 'subnet' ? '11px' : d.type === 'node' ? '12px' : '10px')
+    .attr('font-weight', d => d.type === 'subnet' ? '600' : d.type === 'node' ? '600' : '400')
+    .attr('fill', d => {
+      if (d.type === 'node') return '#fff'
+      if (d.type === 'subnet') return getSubnetColor(d.address || '')
+      return '#333'
+    })
+    .text(d => d.type === 'subnet' ? d.name : d.name)
+
+  // 子网接口数量标签
+  node.filter(d => d.type === 'subnet')
+    .append('text')
+    .attr('dy', 20)
+    .attr('text-anchor', 'middle')
+    .attr('font-size', '9px')
+    .attr('fill', '#999')
+    .text(d => `${d.ifaceCount} ifaces`)
 
   // IP 地址标签（接口）
   node.filter(d => d.type === 'iface' && d.address)
@@ -525,6 +644,10 @@ onUnmounted(() => {
 .legend-item.is-hidden { opacity: .4; }
 .legend-item.is-hidden .legend-dot { background: #c0c4cc !important; }
 .legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; transition: all .2s; }
+.legend-dot-ring {
+  width: 8px; height: 8px; border: 2px solid currentColor; background: transparent !important;
+  box-sizing: content-box;
+}
 .legend-sep { width: 1px; height: 16px; background: var(--border-color); padding: 0; cursor: default; }
 .legend-static { cursor: default; }
 .legend-static:hover { background: transparent; }

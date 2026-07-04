@@ -498,6 +498,7 @@ export default {
     legendPhysical: '物理 NIC',
     legendBridge: 'ブリッジ (Bridge)',
     legendBond: 'Bond アグリゲーション',
+    legendSubnet: 'IP サブネット',
     legendOther: 'その他',
     layerMgmt: '管理ネットワーク',
     layerAgg: 'アグリゲーションネットワーク',

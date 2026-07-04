@@ -505,6 +505,7 @@ export default {
     legendPhysical: 'Porta física',
     legendBridge: 'Bridge',
     legendBond: 'Bond de agregação',
+    legendSubnet: 'Sub-rede IP',
     legendOther: 'Outros',
     layerMgmt: 'Segmento de gerenciamento',
     layerAgg: 'Segmento de agregação',

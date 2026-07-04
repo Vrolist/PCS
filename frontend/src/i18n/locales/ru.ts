@@ -505,6 +505,7 @@ export default {
     legendPhysical: 'Физический порт',
     legendBridge: 'Мост (Bridge)',
     legendBond: 'Агрегация Bond',
+    legendSubnet: 'IP-подсеть',
     legendOther: 'Прочее',
     layerMgmt: 'Управляющий сегмент',
     layerAgg: 'Сегмент агрегации',
