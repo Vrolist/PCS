@@ -963,10 +963,10 @@ def level_2_dual_node():
     ]
     # L2 网络: vmbr0→eno1 (管理), vmbr1→eno2 (存储)
     n2["networks"] = [
-        _gen_eth("eno1", 1000, ip="192.168.21.10/24", gateway="192.168.21.1"),
+        _gen_eth("eno1", 1000, ip="192.168.20.11/24", gateway="192.168.20.1"),
         _gen_eth("eno2", 1000, ip="10.0.0.11/24"),
-        _gen_network("vmbr0", "bridge", "192.168.21.10/24",
-                     gateway="192.168.21.1", speed=1000, bridge_ports="eno1"),
+        _gen_network("vmbr0", "bridge", "192.168.20.11/24",
+                     gateway="192.168.20.1", speed=1000, bridge_ports="eno1"),
         _gen_network("vmbr1", "bridge", "10.0.0.11/24",
                      speed=1000, bridge_ports="eno2"),
     ]
@@ -1074,12 +1074,12 @@ def level_3_triple_node():
 
         # L3 网络: vmbr0→eno1 (1G 管理), bond0→enp0s31f6+enp0s17f6 (2×10G 应用)
         n["networks"] = [
-            _gen_eth("eno1", 1000, ip=f"192.168.{ip}.10/24", gateway=f"192.168.{ip}.1"),
+            _gen_eth("eno1", 1000, ip=f"192.168.30.{10 + i}/24", gateway="192.168.30.1"),
             _gen_eth("enp0s31f6", 10000),
             _gen_eth("enp0s17f6", 10000),
-            _gen_network("vmbr0", "bridge", f"192.168.{ip}.10/24",
-                         gateway=f"192.168.{ip}.1", speed=1000, bridge_ports="eno1"),
-            _gen_network("bond0", "bond", f"10.0.{i}.10/24", speed=20000,
+            _gen_network("vmbr0", "bridge", f"192.168.30.{10 + i}/24",
+                         gateway="192.168.30.1", speed=1000, bridge_ports="eno1"),
+            _gen_network("bond0", "bond", f"10.0.0.{10 + i}/24", speed=20000,
                          bond_mode="802.3ad", bond_slaves="enp0s31f6 enp0s17f6"),
         ]
         vm_base += len(n["vms"])
@@ -1187,15 +1187,15 @@ def level_4_ceph_cluster():
         # L4 网络: vmbr0→eno1 (1G), vmbr1→enp0s31f6 (10G Ceph public),
         #          bond0→enp3s0f0+enp3s0f1 (2×25G Ceph cluster)
         n["networks"] = [
-            _gen_eth("eno1", 1000, ip=f"192.168.{ip}.10/24", gateway=f"192.168.{ip}.1"),
+            _gen_eth("eno1", 1000, ip=f"192.168.40.{10 + i}/24", gateway="192.168.40.1"),
             _gen_eth("enp0s31f6", 10000),
             _gen_eth("enp3s0f0", 25000),
             _gen_eth("enp3s0f1", 25000),
-            _gen_network("vmbr0", "bridge", f"192.168.{ip}.10/24",
-                         gateway=f"192.168.{ip}.1", speed=1000, bridge_ports="eno1"),
-            _gen_network("vmbr1", "bridge", f"10.10.{i}.10/24",
+            _gen_network("vmbr0", "bridge", f"192.168.40.{10 + i}/24",
+                         gateway="192.168.40.1", speed=1000, bridge_ports="eno1"),
+            _gen_network("vmbr1", "bridge", f"10.10.0.{10 + i}/24",
                          speed=10000, bridge_ports="enp0s31f6"),
-            _gen_network("bond0", "bond", f"172.16.{i}.10/24", speed=50000,
+            _gen_network("bond0", "bond", f"172.16.0.{10 + i}/24", speed=50000,
                          bond_mode="802.3ad", bond_slaves="enp3s0f0 enp3s0f1"),
         ]
         vm_base += len(n["vms"])
@@ -1351,15 +1351,15 @@ def level_5_enterprise():
         # L5 网络: vmbr0→eno1 (1G), vmbr1→enp0s31f6 (10G Ceph public),
         #          bond0→enp3s0f0+enp3s0f1 (2×25G 应用)
         n["networks"] = [
-            _gen_eth("eno1", 1000, ip=f"192.168.{ip}.10/24", gateway=f"192.168.{ip}.1"),
+            _gen_eth("eno1", 1000, ip=f"192.168.50.{10 + i}/24", gateway="192.168.50.1"),
             _gen_eth("enp0s31f6", 10000),
             _gen_eth("enp3s0f0", 25000),
             _gen_eth("enp3s0f1", 25000),
-            _gen_network("vmbr0", "bridge", f"192.168.{ip}.10/24",
-                         gateway=f"192.168.{ip}.1", speed=1000, bridge_ports="eno1"),
+            _gen_network("vmbr0", "bridge", f"192.168.50.{10 + i}/24",
+                         gateway="192.168.50.1", speed=1000, bridge_ports="eno1"),
             _gen_network("vmbr1", "bridge", f"10.10.0.{10 + i}/24",
                          speed=10000, bridge_ports="enp0s31f6"),
-            _gen_network("bond0", "bond", f"172.16.{i}.10/24", speed=50000,
+            _gen_network("bond0", "bond", f"172.16.0.{10 + i}/24", speed=50000,
                          bond_mode="802.3ad",
                          bond_slaves="enp3s0f0 enp3s0f1"),
         ]
