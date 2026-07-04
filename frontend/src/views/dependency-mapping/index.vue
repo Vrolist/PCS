@@ -239,8 +239,8 @@ const clusterPos = computed(() => {
 })
 
 const resourceOptions = computed(() => {
-  if (selectedResourceType.value === 'vm') return vmList.value.map(vm => ({ id: vm.id, name: vm.name, vmid: vm.vmid }))
-  if (selectedResourceType.value === 'container') return containerList.value.map(ct => ({ id: ct.id, name: ct.name, vmid: ct.vmid }))
+  if (selectedResourceType.value === 'vm') return vmList.value.map(vm => ({ id: vm.id, name: vm.name, vmid: vm.vmid })).sort((a, b) => a.vmid - b.vmid)
+  if (selectedResourceType.value === 'container') return containerList.value.map(ct => ({ id: ct.id, name: ct.name, vmid: ct.vmid })).sort((a, b) => a.vmid - b.vmid)
   return []
 })
 
