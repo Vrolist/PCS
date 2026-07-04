@@ -709,8 +709,30 @@ export default {
 
   // Report Center
   reportCenter: {
-    complianceReport: { title: 'Compliance Audit Report', subtitle: 'Generate compliance audit reports by node/cluster', comingSoon: 'Compliance report coming soon' },
+    complianceReport: { title: 'Compliance Audit Report', subtitle: 'Generate compliance audit reports by node/cluster' },
     healthReport: { title: 'Periodic Health Report', subtitle: 'Auto-generate weekly/monthly reports with resource trends and risk alerts' },
+  },
+
+  // Compliance Report
+  compliance: {
+    subtitle: 'Multi-dimension compliance assessment covering HA, backup, firewall, storage, network and alerts',
+    exportPdf: 'Export PDF',
+    exportError: 'Export failed',
+    totalChecks: 'Total Checks',
+    passed: 'Passed',
+    passRate: 'Pass Rate',
+    compliantCategories: 'Compliant',
+    categoryBreakdown: 'Compliance Breakdown',
+    passedLabel: 'Passed',
+    recommendations: 'Recommendations',
+    improve: 'Improve',
+    generatedAt: 'Generated At',
+    grades: {
+      compliant: 'Compliant',
+      mostly: 'Mostly',
+      partial: 'Partial',
+      nonCompliant: 'Non-Compliant',
+    },
   },
 
   // Health Report

@@ -198,3 +198,38 @@ export function getDRScore(clusterId?: number) {
   if (clusterId) params.cluster_id = clusterId
   return request.get<any, DRScoreData>('/dashboard/dr-score/', { params })
 }
+
+// ── 合规审计报告 ──
+export interface ComplianceCategory {
+  name: string
+  label: string
+  weight: number
+  score: number
+  grade: 'compliant' | 'mostly' | 'partial' | 'non_compliant'
+  total_checks: number
+  passed_checks: number
+  issues: string[]
+  details: Record<string, any>
+}
+
+export interface ComplianceData {
+  overall_score: number
+  overall_grade: 'compliant' | 'mostly' | 'partial' | 'non_compliant'
+  summary: {
+    total_checks: number
+    passed_checks: number
+    pass_rate: number
+    categories_count: number
+    compliant: number
+    non_compliant: number
+  }
+  categories: ComplianceCategory[]
+  recommendations: string[]
+  generated_at: string
+}
+
+export function getComplianceReport(clusterId?: number) {
+  const params: Record<string, any> = {}
+  if (clusterId) params.cluster_id = clusterId
+  return request.get<any, ComplianceData>('/dashboard/compliance/', { params })
+}

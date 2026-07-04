@@ -716,8 +716,30 @@ export default {
 
   // 报告中心
   reportCenter: {
-    complianceReport: { title: '合规审计报告', subtitle: '按节点/集群维度生成合规审计报告', comingSoon: '合规审计报告功能开发中' },
+    complianceReport: { title: '合规审计报告', subtitle: '按节点/集群维度生成合规审计报告' },
     healthReport: { title: '定期健康报告', subtitle: '自动生成周报/月报，含资源趋势与风险预警' },
+  },
+
+  // 合规审计报告
+  compliance: {
+    subtitle: '多维度合规评估，覆盖高可用、备份、防火墙、存储、网络及告警',
+    exportPdf: '导出 PDF',
+    exportError: '导出失败',
+    totalChecks: '总检查项',
+    passed: '通过项',
+    passRate: '通过率',
+    compliantCategories: '达标维度',
+    categoryBreakdown: '合规维度详情',
+    passedLabel: '通过',
+    recommendations: '改进建议',
+    improve: '待改进',
+    generatedAt: '报告生成时间',
+    grades: {
+      compliant: '达标',
+      mostly: '基本达标',
+      partial: '部分达标',
+      nonCompliant: '不达标',
+    },
   },
 
   // 健康报告
