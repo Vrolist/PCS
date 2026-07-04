@@ -28,4 +28,5 @@ urlpatterns = [
     path("firewall/aliases/", views.FirewallAliasesView.as_view(), name="scanner-firewall-aliases"),
     path("firewall/options/", views.FirewallOptionsView.as_view(), name="scanner-firewall-options"),
     path("firewall/security-groups/", views.FirewallSecurityGroupsView.as_view(), name="scanner-firewall-security-groups"),
+    path("dependency/", views.DependencyGraphView.as_view(), name="scanner-dependency"),
 ]

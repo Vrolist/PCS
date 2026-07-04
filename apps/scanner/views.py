@@ -1426,3 +1426,324 @@ class FirewallSecurityGroupsView(APIView):
             })
 
         return Response(list(groups.values()))
+
+
+class DependencyGraphView(APIView):
+    """GET /api/scanner/dependency/ — 依赖关系图数据"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        cluster_filter = request.query_params.get("cluster_id")
+        cluster_ids = _user_cluster_ids(request.user)
+        if cluster_filter:
+            cluster_ids = [int(cluster_filter)]
+
+        nodes_list = []
+        edges_list = []
+
+        # 1. 集群节点
+        clusters = Cluster.objects.filter(id__in=cluster_ids)
+        for c in clusters:
+            nodes_list.append({
+                "id": f"cluster-{c.id}",
+                "type": "cluster",
+                "name": c.name,
+                "cluster_id": c.id,
+            })
+
+        # 2. 物理节点
+        node_ids = _latest_node_ids(request.user)
+        if cluster_filter:
+            node_ids = [
+                nid for nid in node_ids
+                if ClusterNode.objects.filter(pk=nid, cluster_id=cluster_filter).exists()
+            ]
+        pve_nodes = ClusterNode.objects.filter(pk__in=node_ids).select_related("cluster")
+        for n in pve_nodes:
+            nodes_list.append({
+                "id": f"node-{n.id}",
+                "type": "node",
+                "name": n.node_name,
+                "status": n.status,
+                "cpu_load": n.cpu_load,
+                "memory_usage_pct": n.memory_usage_pct,
+                "ip_address": n.ip_address,
+                "cluster_id": n.cluster_id,
+            })
+            edges_list.append({
+                "source": f"cluster-{n.cluster_id}",
+                "target": f"node-{n.id}",
+                "type": "cluster-node",
+            })
+
+        # 3. VM（每个节点每个 vmid 取最新）
+        vm_qs = VM.objects.filter(node_id__in=node_ids).select_related("node").order_by("node_id", "vmid", "-scanned_at")
+        seen_vms = set()
+        for vm in vm_qs:
+            vm_key = f"{vm.node_id}-{vm.vmid}"
+            if vm_key in seen_vms:
+                continue
+            seen_vms.add(vm_key)
+            vm_id = f"vm-{vm.node_id}-{vm.vmid}"
+            nodes_list.append({
+                "id": vm_id,
+                "type": "vm",
+                "name": vm.name or f"VM {vm.vmid}",
+                "vmid": vm.vmid,
+                "status": vm.status,
+                "cpu_cores": vm.cpu_cores,
+                "memory_mb": vm.memory_mb,
+                "node_id": vm.node_id,
+            })
+            edges_list.append({
+                "source": f"node-{vm.node_id}",
+                "target": vm_id,
+                "type": "node-vm",
+            })
+
+        # 4. LXC 容器
+        lxc_qs = LXC.objects.filter(node_id__in=node_ids).select_related("node").order_by("node_id", "vmid", "-scanned_at")
+        seen_containers = set()
+        for ct in lxc_qs:
+            ct_key = f"{ct.node_id}-{ct.vmid}"
+            if ct_key in seen_containers:
+                continue
+            seen_containers.add(ct_key)
+            ct_id = f"ct-{ct.node_id}-{ct.vmid}"
+            nodes_list.append({
+                "id": ct_id,
+                "type": "container",
+                "name": ct.name or f"CT {ct.vmid}",
+                "vmid": ct.vmid,
+                "status": ct.status,
+                "cpu_cores": ct.cpu_cores,
+                "memory_mb": ct.memory_mb,
+                "node_id": ct.node_id,
+            })
+            edges_list.append({
+                "source": f"node-{ct.node_id}",
+                "target": ct_id,
+                "type": "node-container",
+            })
+
+        # 5. 存储
+        storage_qs = Storage.objects.filter(node_id__in=node_ids).order_by("node_id", "storage_name", "-scanned_at")
+        seen_storages = set()
+        for s in storage_qs:
+            storage_key = f"{s.node_id}-{s.storage_name}"
+            if storage_key in seen_storages:
+                continue
+            seen_storages.add(storage_key)
+            storage_id = f"storage-{s.node_id}-{s.storage_name}"
+            nodes_list.append({
+                "id": storage_id,
+                "type": "storage",
+                "name": s.storage_name,
+                "storage_type": s.type,
+                "total_gb": s.total_gb,
+                "used_gb": s.used_gb,
+                "shared": s.shared,
+                "node_id": s.node_id,
+            })
+            edges_list.append({
+                "source": f"node-{s.node_id}",
+                "target": storage_id,
+                "type": "node-storage",
+            })
+
+        # 6. 网络接口
+        net_qs = NetworkInterface.objects.filter(node_id__in=node_ids).order_by("node_id", "name", "-scanned_at")
+        seen_nets = set()
+        for ni in net_qs:
+            net_key = f"{ni.node_id}-{ni.name}"
+            if net_key in seen_nets:
+                continue
+            seen_nets.add(net_key)
+            net_id = f"net-{ni.node_id}-{ni.name}"
+            nodes_list.append({
+                "id": net_id,
+                "type": "network",
+                "name": ni.name,
+                "net_type": ni.type,
+                "address": ni.address,
+                "active": ni.active,
+                "bridge_ports": ni.bridge_ports,
+                "bond_slaves": ni.bond_slaves,
+                "node_id": ni.node_id,
+            })
+            edges_list.append({
+                "source": f"node-{ni.node_id}",
+                "target": net_id,
+                "type": "node-network",
+            })
+
+        # 7. VM/容器 → 网络（通过 VMConfig.net_devices / LXCConfig.net_devices 的 bridge 字段）
+        vm_ids = [vm.id for vm in vm_qs]
+        if vm_ids:
+            vm_configs = VMConfig.objects.filter(vm_id__in=vm_ids)
+            for cfg in vm_configs:
+                vm_obj = next((v for v in vm_qs if v.id == cfg.vm_id), None)
+                if not vm_obj:
+                    continue
+                vm_node_id = f"vm-{vm_obj.node_id}-{vm_obj.vmid}"
+                for nd in (cfg.net_devices or []):
+                    bridge = nd.get("bridge", "")
+                    if bridge:
+                        net_id = f"net-{vm_obj.node_id}-{bridge}"
+                        # 只添加有效连接
+                        if any(n["id"] == net_id for n in nodes_list):
+                            edges_list.append({
+                                "source": vm_node_id,
+                                "target": net_id,
+                                "type": "vm-network",
+                            })
+
+        ct_ids = [ct.id for ct in lxc_qs]
+        if ct_ids:
+            ct_configs = LXCConfig.objects.filter(container_id__in=ct_ids)
+            for cfg in ct_configs:
+                ct_obj = next((c for c in lxc_qs if c.id == cfg.container_id), None)
+                if not ct_obj:
+                    continue
+                ct_node_id = f"ct-{ct_obj.node_id}-{ct_obj.vmid}"
+                for nd in (cfg.net_devices or []):
+                    bridge = nd.get("bridge", "")
+                    if bridge:
+                        net_id = f"net-{ct_obj.node_id}-{bridge}"
+                        if any(n["id"] == net_id for n in nodes_list):
+                            edges_list.append({
+                                "source": ct_node_id,
+                                "target": net_id,
+                                "type": "container-network",
+                            })
+
+        # 8. Ceph 状态
+        ceph_qs = CephStatus.objects.filter(cluster_id__in=cluster_ids).order_by("cluster_id", "-scanned_at")
+        seen_ceph = set()
+        for cs in ceph_qs:
+            ceph_key = str(cs.cluster_id)
+            if ceph_key in seen_ceph:
+                continue
+            seen_ceph.add(ceph_key)
+            ceph_id = f"ceph-{cs.cluster_id}"
+            nodes_list.append({
+                "id": ceph_id,
+                "type": "ceph",
+                "name": "Ceph 存储",
+                "health": cs.health,
+                "total_osds": cs.total_osds,
+                "up_osds": cs.up_osds,
+                "cluster_id": cs.cluster_id,
+            })
+            edges_list.append({
+                "source": f"cluster-{cs.cluster_id}",
+                "target": ceph_id,
+                "type": "cluster-ceph",
+            })
+
+        # 9. HA 资源
+        ha_qs = HAResource.objects.filter(cluster_id__in=cluster_ids).select_related("cluster").order_by("sid", "-scanned_at")
+        seen_ha = set()
+        for ha in ha_qs:
+            ha_key = ha.sid
+            if ha_key in seen_ha:
+                continue
+            seen_ha.add(ha_key)
+            ha_id = f"ha-{ha.cluster_id}-{ha.sid}"
+            nodes_list.append({
+                "id": ha_id,
+                "type": "ha",
+                "name": ha.sid,
+                "resource_type": ha.resource_type,
+                "vmid": ha.vmid,
+                "state": ha.state,
+                "ha_group": ha.ha_group,
+                "cluster_id": ha.cluster_id,
+            })
+            # HA → 节点（优先用 node_name，否则通过 vmid 关联 VM/LXC）
+            if ha.node_name:
+                target_node = next(
+                    (n for n in nodes_list if n["type"] == "node" and n["name"] == ha.node_name),
+                    None
+                )
+                if target_node:
+                    edges_list.append({
+                        "source": target_node["id"],
+                        "target": ha_id,
+                        "type": "node-ha",
+                    })
+            elif ha.vmid:
+                # 通过 vmid 查找对应的 VM 或 LXC
+                target_vm = next(
+                    (n for n in nodes_list if n["type"] == "vm" and n.get("vmid") == ha.vmid),
+                    None
+                )
+                target_ct = next(
+                    (n for n in nodes_list if n["type"] == "container" and n.get("vmid") == ha.vmid),
+                    None
+                )
+                target_resource = target_vm or target_ct
+                if target_resource:
+                    edges_list.append({
+                        "source": target_resource["id"],
+                        "target": ha_id,
+                        "type": "resource-ha",
+                    })
+
+        # 10. SDN
+        sdn_zones = SDNZone.objects.filter(cluster_id__in=cluster_ids)
+        for zone in sdn_zones:
+            zone_id = f"sdn-zone-{zone.cluster_id}-{zone.zone}"
+            nodes_list.append({
+                "id": zone_id,
+                "type": "sdn_zone",
+                "name": zone.zone,
+                "zone_type": zone.zone_type,
+                "nodes": zone.nodes,
+                "cluster_id": zone.cluster_id,
+            })
+            edges_list.append({
+                "source": f"cluster-{zone.cluster_id}",
+                "target": zone_id,
+                "type": "cluster-sdn",
+            })
+
+        sdn_vnets = SDNVNet.objects.filter(cluster_id__in=cluster_ids).select_related("zone")
+        for vnet in sdn_vnets:
+            vnet_id = f"sdn-vnet-{vnet.cluster_id}-{vnet.vnet}"
+            nodes_list.append({
+                "id": vnet_id,
+                "type": "sdn_vnet",
+                "name": vnet.vnet,
+                "vnet_type": vnet.vnet_type,
+                "vlan": vnet.vlan,
+                "cluster_id": vnet.cluster_id,
+            })
+            if vnet.zone:
+                zone_id = f"sdn-zone-{vnet.cluster_id}-{vnet.zone.zone}"
+                edges_list.append({
+                    "source": zone_id,
+                    "target": vnet_id,
+                    "type": "zone-vnet",
+                })
+
+        sdn_subnets = SDNSubnet.objects.filter(cluster_id__in=cluster_ids).select_related("vnet")
+        for subnet in sdn_subnets:
+            subnet_id = f"sdn-subnet-{subnet.cluster_id}-{subnet.subnet}"
+            nodes_list.append({
+                "id": subnet_id,
+                "type": "sdn_subnet",
+                "name": subnet.subnet,
+                "gateway": subnet.gateway,
+                "dns_server": subnet.dns_server,
+                "cluster_id": subnet.cluster_id,
+            })
+            if subnet.vnet:
+                vnet_id = f"sdn-vnet-{subnet.cluster_id}-{subnet.vnet.vnet}"
+                edges_list.append({
+                    "source": vnet_id,
+                    "target": subnet_id,
+                    "type": "vnet-subnet",
+                })
+
+        return Response({"nodes": nodes_list, "edges": edges_list})
