@@ -62,6 +62,8 @@ const zoomLevel = ref(1)
 
 // 图例过滤
 const hiddenTypes = ref(new Set<string>())
+// 子网高亮
+const highlightedSubnet = ref<string | null>(null)
 const legendItems = computed(() => [
   { type: 'node', label: t('networkTopology.legendNode'), color: '#4f46e5' },
   { type: 'subnet', label: t('networkTopology.legendSubnet'), color: '#0ea5e9' },
@@ -433,6 +435,13 @@ function updateGraph() {
       return 'none'
     })
 
+  // 点击空白处取消高亮
+  svg.on('click', (event) => {
+    if (event.target === svg.node()) {
+      applyHighlight(null)
+    }
+  })
+
   // 创建节点组
   const node = g.append('g')
     .attr('class', 'nodes')
@@ -441,11 +450,20 @@ function updateGraph() {
     .enter()
     .append('g')
     .attr('class', 'node')
+    .attr('data-type', d => d.type)
+    .attr('data-subnet', d => d.subnet || '')
+    .attr('data-node-name', d => d.nodeName || '')
     .call(d3.drag<SVGGElement, GraphNode>()
       .on('start', dragstarted)
       .on('drag', dragged)
       .on('end', dragended)
     )
+    .on('click', (event, d) => {
+      event.stopPropagation()
+      if (d.type === 'subnet') {
+        applyHighlight(d.address || null)
+      }
+    })
 
   // 节点圆形
   node.append('circle')
@@ -557,6 +575,77 @@ function dragended(event: d3.D3DragEvent<SVGGElement, GraphNode, GraphNode>, d: 
   d.fy = null
 }
 
+/** 子网高亮：点击子网节点后，关联元素高亮，其余变暗 */
+function applyHighlight(subnet: string | null) {
+  highlightedSubnet.value = subnet
+
+  if (!g) return
+
+  if (!subnet) {
+    // 取消高亮，恢复所有元素
+    g.selectAll('.node').transition().duration(300)
+      .style('opacity', 1)
+    g.selectAll('.links line').transition().duration(300)
+      .style('opacity', null)
+    return
+  }
+
+  // 收集需要高亮的节点 ID
+  const highlightNodeIds = new Set<string>()
+  const { nodes, links } = graphData.value
+
+  // 找到子网节点
+  const subnetNode = nodes.find(n => n.type === 'subnet' && n.address === subnet)
+  if (!subnetNode) return
+  highlightNodeIds.add(subnetNode.id)
+
+  // 找到子网连接的接口及其父节点
+  links.forEach(l => {
+    if (l.type !== 'subnet-iface') return
+    const src = typeof l.source === 'string' ? l.source : (l.source as GraphNode).id
+    const tgt = typeof l.target === 'string' ? l.target : (l.target as GraphNode).id
+    if (src === subnetNode.id) {
+      highlightNodeIds.add(tgt)
+      // 找接口的父节点
+      const ifaceNode = nodes.find(n => n.id === tgt)
+      if (ifaceNode?.nodeName) {
+        const parentNode = nodes.find(n => n.type === 'node' && n.name === ifaceNode.nodeName)
+        if (parentNode) highlightNodeIds.add(parentNode.id)
+      }
+    }
+    if (tgt === subnetNode.id) {
+      highlightNodeIds.add(src)
+      const ifaceNode = nodes.find(n => n.id === src)
+      if (ifaceNode?.nodeName) {
+        const parentNode = nodes.find(n => n.type === 'node' && n.name === ifaceNode.nodeName)
+        if (parentNode) highlightNodeIds.add(parentNode.id)
+      }
+    }
+  })
+
+  // 也高亮这些节点之间的 bridge-port / bond-slave 连接涉及的节点
+  links.forEach(l => {
+    if (l.type !== 'bridge-port' && l.type !== 'bond-slave') return
+    const src = typeof l.source === 'string' ? l.source : (l.source as GraphNode).id
+    const tgt = typeof l.target === 'string' ? l.target : (l.target as GraphNode).id
+    if (highlightNodeIds.has(src)) highlightNodeIds.add(tgt)
+    if (highlightNodeIds.has(tgt)) highlightNodeIds.add(src)
+  })
+
+  // 应用高亮/变暗
+  g.selectAll('.node').transition().duration(300)
+    .style('opacity', (d) => highlightNodeIds.has((d as GraphNode).id) ? 1 : 0.12)
+
+  g.selectAll('.links line').transition().duration(300)
+    .style('opacity', (d) => {
+      const link = d as GraphLink
+      const sid = typeof link.source === 'string' ? link.source : (link.source as GraphNode).id
+      const tid = typeof link.target === 'string' ? link.target : (link.target as GraphNode).id
+      if (highlightNodeIds.has(sid) && highlightNodeIds.has(tid)) return 0.8
+      return 0.05
+    })
+}
+
 // 缩放控制
 function zoomIn() {
   svg.transition().duration(300).call(zoomBehavior.scaleBy, 1.2)
@@ -587,6 +676,7 @@ watch(filteredData, () => {
 })
 
 watch(() => clusterStore.currentClusterId, () => {
+  highlightedSubnet.value = null
   updateGraph()
 })
 
