@@ -1480,6 +1480,7 @@ class DependencyGraphView(APIView):
             nodes_list.append({
                 "id": f"node-{n.id}",
                 "type": "node",
+                "node_id": n.id,
                 "name": n.node_name,
                 "status": n.status,
                 "cpu_load": n.cpu_load,

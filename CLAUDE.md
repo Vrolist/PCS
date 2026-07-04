@@ -531,6 +531,7 @@ GET /api/scanner/containers/1/detail/
 | `/dashboard/ceph` | Ceph 存储 | Ceph 集群状态 | ✅ |
 | `/dashboard/sdn` | 软件定义网络 | SDN 区域/虚拟网络/子网 (3 Tab 表格) | ✅ |
 | `/dashboard/network-topology` | 网络拓扑 | SVG 节点-网络拓扑图（复杂网络可视化） | ✅ |
+| `/dashboard/dependency-mapping` | 依赖链路 | SVG 节点内嵌依赖图（VM/LXC→节点→存储→网络），含拖拽/缩放/自动扩充 | ✅ |
 | `/dashboard/alerts` | 告警中心 | 告警记录表格（按集群筛选） | ✅ |
 | `/dashboard/ha` | 高可用管理 | HA 资源统计卡片 + 表格 | ✅ |
 | `/dashboard/services` | 运维服务 | HA 资源状态表格 | ✅ |
@@ -775,5 +776,77 @@ VM、LXC、VMConfig、LXCConfig、SDNZone、SDNVNet、SDNSubnet 使用 **原地�
 13. ~~Agent 版本更新提示~~ ✅ 已完成（前端 agent 表格显示「最新」/「可更新」标签）
 14. ~~SDN 数据采集与展示~~ ✅ 已完成（SDNZone/VNet/Subnet 模型 + Agent 采集 v0.6.0 + 前端 Tab 页面）
 15. ~~网络拓扑可视化~~ ✅ 已完成（SVG 节点-网络连接图 + 图例筛选 + IP 网段图层）
-16. 自动检测引擎
-17. 仪表盘真实数据进一步接入（告警、趋势数据源）
+16. ~~依赖链路可视化~~ ✅ 已完成（SVG 节点内嵌依赖图 + 拖拽/缩放/自动扩充 + 布局居中）
+17. 自动检测引擎
+18. 仪表盘真实数据进一步接入（告警、趋势数据源）
+
+## 依赖链路可视化（dependency-mapping）
+
+`/dashboard/dependency-mapping` 页面使用纯 SVG 实现三层递进式依赖关系图。
+
+### 三层架构
+
+```
+集群（cluster）→ 节点容器（node）→ 子节点（VM/容器/存储/网络）
+```
+
+- **集群**（cluster）：最外层，内含所有节点
+- **节点容器**（node）：矩形容器，内部排列子节点。子节点类型用不同边框色区分：VM（绿色）、容器（蓝色）、存储（红色）、网络（紫色）
+- **子节点**（vm/container/storage/network）：固定尺寸卡片，存储固定在底部行，网络固定在右侧列
+
+### autoLayout 布局算法
+
+```
+节点起始 Y = 120（保留集群标题空间）
+间距：padding=28, cardW=170, cardH=52, gapX=gapY=16
+
+节点容器内布局：
+  VM/容器行：从 (nx + padding, contentY) 开始水平排列
+  存储行：VM 行下方，左对齐（不足时容器宽度自适应）
+  网络列：与 VM/容器行同 Y，靠右对齐（widthAuto 时居右剩余空间）
+
+布局后自动居中到 SVG 画布（包围盒 + 80px 边距偏移）
+SVG 尺寸：max(1200, contentW+160) × max(800, contentH+160)
+```
+
+### 边线路由
+
+| 边类型 | 方向 | 路径 |
+|--------|------|------|
+| cluster→node | 垂直 | 集群底部 → 节点顶部，贝塞尔曲线 |
+| vm→storage | 垂直 | VM 底部 → 存储顶部，同列 |
+| vm→network | 水平 | VM 右边缘 → 网络左边缘，水平贝塞尔 |
+| container→storage | 垂直 | 容器底部 → 存储顶部 |
+| container→network | 水平 | 容器右边缘 → 网络左边缘 |
+
+节点→子节点的边（node-vm/node-container/node-storage/node-network）被跳过，通过**视觉包含**体现归属关系。
+
+### 交互功能
+
+| 交互 | 行为 |
+|------|------|
+| **拖拽子节点** | 所有同组子节点同步移动，触及时自动扩充父节点宽度/高度（padding=28） |
+| **拖拽父节点** | 所有子节点跟随移动 |
+| **画布拖拽** | 移动整个场景 |
+| **滚轮缩放** | zoomIn/zoomOut（0.3~3.0），viewBox 实时计算 |
+| **双指缩放** | 触控板手势缩放 |
+| **点击节点** | 右侧显示节点详情面板（调用对应详情 API） |
+| **复位视图** | resetView() 将 scale 重置为 1 并重新 autoLayout |
+
+### 拖动坐标校正
+
+使用 `screenToSvg()` 将 `clientX/clientY` 映射到 SVG viewBox 坐标空间，避免缩放后抖动。
+
+### 切换集群全量重置
+
+`watch(clusterStore.currentClusterId)` 时自动：
+1. `scale=1`、清空 graphData/nodePositions
+2. 清空资源选择器和详情面板
+3. 刷新新集群的 VM/容器下拉列表
+
+### SVG 特效
+
+- `filter="url(#node-shadow)"` — 所有节点卡片阴影
+- `filter="url(#edge-glow)"` — 边线 hover 发光
+- `.node-group:hover rect` — 亮度提升 + stroke 加粗
+- `.edge-path:hover` — 加粗 + 发光

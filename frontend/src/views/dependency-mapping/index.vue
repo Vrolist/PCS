@@ -57,22 +57,44 @@
           @mousedown.prevent="onCanvasMouseDown"
           @mousemove="onMouseMove" @mouseup="onMouseUp" @mouseleave="onMouseUp"
           @wheel.prevent="onWheel">
+          <!-- 节点容器（大区域） -->
+          <g v-for="node in renderedNodeContainers" :key="'nc-' + node.id"
+            class="node-group" :class="{ dragging: draggingId === node.id }"
+            :transform="`translate(${node.x}, ${node.y})`"
+            @mousedown.prevent="onNodeMouseDown($event, node)"
+            @click="selectNode(node)">
+            <rect :width="node.nodeW" :height="node.nodeH" rx="16"
+              :fill="getNodeFill(node.type)" :stroke="getNodeStroke(node.type)"
+              stroke-width="2" class="node-rect node-container-box"
+              filter="url(#node-shadow)" />
+            <text :x="node.nodeW / 2" :y="22" text-anchor="middle"
+              class="node-label node-container-label">{{ node.name }}</text>
+            <line v-if="node.subLabel" :x1="16" :y1="34" :x2="node.nodeW - 16" :y2="34"
+              :stroke="getNodeStroke(node.type)" stroke-width="1" opacity="0.3" />
+            <text v-if="node.subLabel" :x="node.nodeW / 2" :y="48" text-anchor="middle"
+              class="node-sub">{{ node.subLabel }}</text>
+            <circle v-if="node.statusDot" :cx="node.nodeW - 14" cy="14" r="5"
+              :fill="node.statusDot === 'online' || node.statusDot === 'running' ? '#67c23a' : '#f56c6c'" />
+          </g>
+
           <!-- 连线 -->
           <g class="edges">
             <path v-for="(edge, idx) in renderedEdges" :key="'edge-' + idx"
               :d="edge.path" :stroke="edge.color" stroke-width="2" fill="none"
               :stroke-dasharray="edge.dashed ? '6,3' : ''"
-              marker-end="url(#arrowhead)" />
+              marker-end="url(#arrowhead)" class="edge-path" />
           </g>
-          <!-- 节点 -->
-          <g v-for="node in renderedNodes" :key="node.id"
+
+          <!-- 子节点（VM/容器/存储/网络/HA/Ceph/SDN） -->
+          <g v-for="node in renderedChildNodes" :key="node.id"
             class="node-group" :class="{ dragging: draggingId === node.id }"
             :transform="`translate(${node.x}, ${node.y})`"
             @mousedown.prevent="onNodeMouseDown($event, node)"
             @click="selectNode(node)">
             <rect :width="node.width" :height="node.height" rx="10"
               :fill="getNodeFill(node.type)" :stroke="getNodeStroke(node.type)"
-              stroke-width="2" :class="['node-rect', `node-${node.type}`]" />
+              stroke-width="2" :class="['node-rect', `node-${node.type}`]"
+              filter="url(#node-shadow)" />
             <text :x="node.width / 2" :y="node.height / 2 - 6" text-anchor="middle"
               class="node-label">{{ node.name }}</text>
             <text v-if="node.subLabel" :x="node.width / 2" :y="node.height / 2 + 12"
@@ -80,11 +102,21 @@
             <circle v-if="node.statusDot" :cx="node.width - 10" cy="10" r="5"
               :fill="node.statusDot === 'online' || node.statusDot === 'running' ? '#67c23a' : '#f56c6c'" />
           </g>
-          <!-- 箭头标记 -->
+          <!-- 滤镜定义 -->
           <defs>
-            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
-              <polygon points="0 0, 10 3.5, 0 7" fill="var(--text-muted, #909399)" />
+            <marker id="arrowhead" markerWidth="12" markerHeight="8" refX="12" refY="4" orient="auto">
+              <polygon points="0 0, 12 4, 0 8" fill="var(--text-muted, #909399)" />
             </marker>
+            <filter id="node-shadow" x="-10%" y="-10%" width="130%" height="130%">
+              <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="rgba(0,0,0,0.12)" />
+            </filter>
+            <filter id="edge-glow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="2" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
           </defs>
         </svg>
       </div>
@@ -120,7 +152,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { getDependencyGraph, type DependencyNode, type DependencyGraph } from '@/api/dependency'
+import { getDependencyGraph, type DependencyGraph } from '@/api/dependency'
 import { useClusterStore } from '@/stores/cluster'
 import { getVMs, type VMInfo } from '@/api/vms'
 import { getContainers, type ContainerInfo } from '@/api/containers'
@@ -194,10 +226,10 @@ function toggleType(type: string) {
 const nodeSizes: Record<string, { width: number; height: number }> = {
   cluster: { width: 160, height: 60 },
   node: { width: 150, height: 56 },
-  vm: { width: 140, height: 50 },
-  container: { width: 140, height: 50 },
-  storage: { width: 130, height: 46 },
-  network: { width: 130, height: 46 },
+  vm: { width: 170, height: 50 },
+  container: { width: 170, height: 50 },
+  storage: { width: 170, height: 50 },
+  network: { width: 170, height: 50 },
   ceph: { width: 140, height: 50 },
   ha: { width: 130, height: 46 },
   sdn_zone: { width: 130, height: 46 },
@@ -205,43 +237,55 @@ const nodeSizes: Record<string, { width: number; height: number }> = {
   sdn_subnet: { width: 120, height: 42 },
 }
 
-// 渲染的节点
-const renderedNodes = computed(() => {
+function getNodeSubLabel(node: any): { subLabel: string; statusDot: string } {
+  let subLabel = ''
+  let statusDot = ''
+  if (node.type === 'node') {
+    subLabel = `${node.cpu_load ? (node.cpu_load * 100).toFixed(0) + '%' : ''} ${node.ip_address || ''}`
+    statusDot = node.status || 'unknown'
+  } else if (node.type === 'vm' || node.type === 'container') {
+    subLabel = `${node.cpu_cores || 0}核 ${node.memory_mb ? (node.memory_mb / 1024).toFixed(0) + 'G' : ''}`
+    statusDot = node.status || 'unknown'
+  } else if (node.type === 'storage') {
+    subLabel = `${node.total_gb || 0}GB ${node.storage_type || ''}`
+  } else if (node.type === 'network') {
+    subLabel = `${node.net_type || ''} ${node.address || ''}`
+  } else if (node.type === 'ceph') {
+    subLabel = `${node.health || ''} ${node.total_osds || 0} OSD`
+    statusDot = node.health === 'HEALTH_OK' ? 'online' : 'offline'
+  } else if (node.type === 'ha') {
+    subLabel = `${node.state || ''} ${node.ha_group || ''}`
+  }
+  return { subLabel, statusDot }
+}
+
+// 渲染的节点容器（集群 + 节点大区域）
+const renderedNodeContainers = computed(() => {
   const nodes: any[] = []
   graphData.value.nodes.forEach(node => {
+    if (node.type !== 'cluster' && node.type !== 'node') return
+    if (hiddenTypes.value.has(node.type)) return
+    const pos = nodePositions.value.get(node.id)
+    if (!pos) return
+    const { subLabel, statusDot } = getNodeSubLabel(node)
+    const nodeW = (node as any).nodeW || 160
+    const nodeH = (node as any).nodeH || 60
+    nodes.push({ ...node, x: pos.x, y: pos.y, nodeW, nodeH, subLabel, statusDot })
+  })
+  return nodes
+})
+
+// 渲染的子节点（VM/容器/存储/网络/HA/Ceph/SDN）
+const renderedChildNodes = computed(() => {
+  const nodes: any[] = []
+  graphData.value.nodes.forEach(node => {
+    if (node.type === 'cluster' || node.type === 'node') return
     if (hiddenTypes.value.has(node.type)) return
     const pos = nodePositions.value.get(node.id)
     if (!pos) return
     const size = nodeSizes[node.type] || { width: 120, height: 42 }
-    let subLabel = ''
-    let statusDot = ''
-
-    if (node.type === 'node') {
-      subLabel = `${node.cpu_load ? (node.cpu_load * 100).toFixed(0) + '%' : ''} ${node.ip_address || ''}`
-      statusDot = node.status || 'unknown'
-    } else if (node.type === 'vm' || node.type === 'container') {
-      subLabel = `${node.cpu_cores || 0}核 ${node.memory_mb ? (node.memory_mb / 1024).toFixed(0) + 'G' : ''}`
-      statusDot = node.status || 'unknown'
-    } else if (node.type === 'storage') {
-      subLabel = `${node.total_gb || 0}GB ${node.storage_type || ''}`
-    } else if (node.type === 'network') {
-      subLabel = `${node.net_type || ''} ${node.address || ''}`
-    } else if (node.type === 'ceph') {
-      subLabel = `${node.health || ''} ${node.total_osds || 0} OSD`
-      statusDot = node.health === 'HEALTH_OK' ? 'online' : 'offline'
-    } else if (node.type === 'ha') {
-      subLabel = `${node.state || ''} ${node.ha_group || ''}`
-    }
-
-    nodes.push({
-      ...node,
-      x: pos.x,
-      y: pos.y,
-      width: size.width,
-      height: size.height,
-      subLabel,
-      statusDot,
-    })
+    const { subLabel, statusDot } = getNodeSubLabel(node)
+    nodes.push({ ...node, x: pos.x, y: pos.y, width: size.width, height: size.height, subLabel, statusDot })
   })
   return nodes
 })
@@ -250,6 +294,10 @@ const renderedNodes = computed(() => {
 const renderedEdges = computed(() => {
   const edges: any[] = []
   graphData.value.edges.forEach(edge => {
+    // 跳过节点到子节点的连线（子节点已在节点容器内部，靠视觉包含体现关系）
+    if (edge.type === 'node-storage' || edge.type === 'node-network' ||
+        edge.type === 'node-vm' || edge.type === 'node-container') return
+
     const sourcePos = nodePositions.value.get(edge.source)
     const targetPos = nodePositions.value.get(edge.target)
     if (!sourcePos || !targetPos) return
@@ -263,13 +311,32 @@ const renderedEdges = computed(() => {
     const sourceSize = nodeSizes[sourceNode.type] || { width: 120, height: 42 }
     const targetSize = nodeSizes[targetNode.type] || { width: 120, height: 42 }
 
-    const sx = sourcePos.x + sourceSize.width / 2
-    const sy = sourcePos.y + sourceSize.height
-    const tx = targetPos.x + targetSize.width / 2
-    const ty = targetPos.y
+    // 对于节点容器，使用 nodeW/nodeH
+    const sw = sourceNode.type === 'node' ? (sourceNode as any).nodeW || sourceSize.width : sourceSize.width
+    const sh = sourceNode.type === 'node' ? (sourceNode as any).nodeH || sourceSize.height : sourceSize.height
 
-    const midY = (sy + ty) / 2
-    const path = `M${sx},${sy} C${sx},${midY} ${tx},${midY} ${tx},${ty}`
+    // 判断是否为水平连接（VM/容器 → 网络，目标在源右侧）
+    const isHorizontal = (targetPos.x > sourcePos.x + sw / 2 + 20)
+
+    let sx: number, sy: number, tx: number, ty: number, path: string
+
+    if (isHorizontal) {
+      // 水平连接：源右侧 → 目标左侧
+      sx = sourcePos.x + sw
+      sy = sourcePos.y + sourceSize.height / 2
+      tx = targetPos.x
+      ty = targetPos.y + targetSize.height / 2
+      const midX = (sx + tx) / 2
+      path = `M${sx},${sy} C${midX},${sy} ${midX},${ty} ${tx},${ty}`
+    } else {
+      // 垂直连接：源底部 → 目标顶部
+      sx = sourcePos.x + sw / 2
+      sy = sourcePos.y + sh
+      tx = targetPos.x + targetSize.width / 2
+      ty = targetPos.y
+      const midY = (sy + ty) / 2
+      path = `M${sx},${sy} C${sx},${midY} ${tx},${midY} ${tx},${ty}`
+    }
 
     let color = 'var(--text-muted, #909399)'
     let dashed = false
@@ -277,8 +344,6 @@ const renderedEdges = computed(() => {
     if (edge.type === 'cluster-node') color = '#409eff'
     else if (edge.type === 'node-vm') color = '#67c23a'
     else if (edge.type === 'node-container') color = '#e6a23c'
-    else if (edge.type === 'node-storage') color = '#f56c6c'
-    else if (edge.type === 'node-network') color = '#8b5cf6'
     else if (edge.type === 'vm-network' || edge.type === 'container-network') { color = '#8b5cf6'; dashed = true }
     else if (edge.type === 'vm-storage' || edge.type === 'container-storage') { color = '#f56c6c'; dashed = true }
     else if (edge.type === 'cluster-ceph') color = '#06b6d4'
@@ -298,71 +363,168 @@ const currentViewBox = computed(() => {
   return `${x} ${y} ${w} ${h}`
 })
 
-// 自动布局
-function autoLayout() {
-  const positions = new Map<string, { x: number; y: number }>()
-  const { nodes, edges } = graphData.value
+// 自动布局 - 节点内嵌布局
+// 子节点相对父节点的偏移量（用于拖动）
+const childOffsets = new Map<string, { dx: number; dy: number }>()
 
+function autoLayout() {
+  const { nodes } = graphData.value
   if (!nodes.length) {
-    nodePositions.value = positions
+    nodePositions.value = new Map()
     return
   }
+  const positions = new Map<string, { x: number; y: number }>()
+  childOffsets.clear()
 
-  // 1. 构建邻接表（用 edges 自动推导父子关系）
-  const children = new Map<string, string[]>()
-  const parents = new Map<string, string>()
-  const nodeMap = new Map(nodes.map(n => [n.id, n]))
+  const cluster = nodes.find(n => n.type === 'cluster')
+  const nodeNodes = nodes.filter(n => n.type === 'node')
+  const vmNodes = nodes.filter(n => n.type === 'vm')
+  const ctNodes = nodes.filter(n => n.type === 'container')
+  const storageNodes = nodes.filter(n => n.type === 'storage')
+  const networkNodes = nodes.filter(n => n.type === 'network')
+  const haNodes = nodes.filter(n => n.type === 'ha')
+  const cephNodes = nodes.filter(n => n.type === 'ceph')
+  const sdnNodes = nodes.filter(n => n.type === 'sdn_zone' || n.type === 'sdn_vnet' || n.type === 'sdn_subnet')
 
-  edges.forEach(e => {
-    if (!children.has(e.source)) children.set(e.source, [])
-    children.get(e.source)!.push(e.target)
-    parents.set(e.target, e.source)
+  const padding = 28
+  const cardW = 170
+  const cardH = 52
+  const gapX = 16
+  const gapY = 16
+  const headerH = 42
+
+  // 1. 每个节点作为一个大区域，水平排列
+  let nodeStartX = 0
+  const nodeStartY = 120
+  const nodeGapX = 40
+
+  nodeNodes.forEach((node) => {
+    const nodeId = node.id
+    const vms = vmNodes.filter(n => n.node_id === node.node_id)
+    const cts = ctNodes.filter(n => n.node_id === node.node_id)
+    const storages = storageNodes.filter(n => n.node_id === node.node_id)
+    const networks = networkNodes.filter(n => n.node_id === node.node_id)
+
+    const centerItems = [...vms, ...cts]
+    const hasStorage = storages.length > 0
+    const hasNetwork = networks.length > 0
+
+    // 各区域宽度
+    const centerW = Math.max(centerItems.length, 1) * (cardW + gapX) - gapX
+    const storageW = hasStorage ? storages.length * (cardW + gapX) - gapX : 0
+    const networkW = hasNetwork ? networks.length * (cardW + gapX) - gapX : 0
+
+    // 内容区总宽度（如果右侧有网络，加上间距和网络宽度）
+    const contentW = centerW + (hasNetwork ? gapX * 2 + networkW : 0)
+
+    // 计算节点区域尺寸
+    const nodeW = Math.max(320, contentW + padding * 2, storageW + padding * 2 + 40)
+    let nodeH = headerH + padding + cardH + padding + 6
+    if (hasStorage) nodeH += cardH + gapY + 8
+
+    const nx = nodeStartX
+    const ny = nodeStartY
+    positions.set(nodeId, { x: nx, y: ny })
+
+    // 各 Y 坐标
+    const contentY = ny + headerH + 10
+
+    // VM/容器在节点内左上区域
+    const centerStartX = nx + padding
+    centerItems.forEach((item, i) => {
+      const ix = centerStartX + i * (cardW + gapX)
+      const iy = contentY
+      positions.set(item.id, { x: ix, y: iy })
+      childOffsets.set(item.id, { dx: ix - nx, dy: iy - ny })
+    })
+
+    // 存储在节点内底部（换行）
+    let storageContentY = contentY
+    if (hasStorage) {
+      storageContentY = contentY + cardH + gapY + 10
+      const storageStartX = nx + padding
+      storages.forEach((item, i) => {
+        const ix = storageStartX + i * (cardW + gapX)
+        const iy = storageContentY
+        positions.set(item.id, { x: ix, y: iy })
+        childOffsets.set(item.id, { dx: ix - nx, dy: iy - ny })
+      })
+    }
+
+    // 网络在节点内右侧（与 VM/容器同行）
+    let networkStartX = nx + nodeW - padding - networkW
+    if (hasNetwork) {
+      networks.forEach((item, i) => {
+        const ix = networkStartX + i * (cardW + gapX)
+        const iy = contentY
+        positions.set(item.id, { x: ix, y: iy })
+        childOffsets.set(item.id, { dx: ix - nx, dy: iy - ny })
+      })
+    }
+
+    // 区域尺寸元数据
+    ;(node as any).nodeW = nodeW
+    ;(node as any).nodeH = nodeH
+
+    nodeStartX += nodeW + nodeGapX
   })
 
-  // 2. 找根节点（没有父节点的）
-  const roots = nodes.filter(n => !parents.has(n.id))
-
-  // 3. BFS 分层
-  const layers: string[][] = []
-  let frontier = roots.map(n => n.id)
-  const visited = new Set<string>()
-
-  while (frontier.length) {
-    layers.push(frontier)
-    frontier.forEach(id => visited.add(id))
-    const next: string[] = []
-    frontier.forEach(id => {
-      (children.get(id) || []).forEach(cid => {
-        if (!visited.has(cid)) next.push(cid)
-      })
-    })
-    // 去重
-    frontier = [...new Set(next)]
+  // 2. 集群居中于所有节点上方
+  if (cluster && nodeNodes.length > 0) {
+    const firstPos = positions.get(nodeNodes[0].id)!
+    const lastNode = nodeNodes[nodeNodes.length - 1]
+    const lastPos = positions.get(lastNode.id)!
+    const centerX = (firstPos.x + lastPos.x + (lastNode as any).nodeW) / 2
+    positions.set(cluster.id, { x: centerX - 80, y: 20 })
   }
 
-  // 4. 每层水平居中布局
-  const gapY = 140
-  const gapX = 170
-  const baseY = 40
-
-  layers.forEach((layer, layerIdx) => {
-    const totalWidth = layer.length * gapX
-    const startX = (initialSvgWidth.value - totalWidth) / 2 + gapX / 2
-    layer.forEach((id, i) => {
-      positions.set(id, { x: startX + i * gapX, y: baseY + layerIdx * gapY })
+  // 3. HA、Ceph、SDN 在节点区域下方
+  const extraItems = [...haNodes, ...cephNodes, ...sdnNodes]
+  if (extraItems.length > 0) {
+    const extraY = nodeStartY + 320
+    const totalW = extraItems.length * (cardW + gapX) - gapX
+    let startX = 0
+    if (nodeNodes.length > 0) {
+      const firstPos = positions.get(nodeNodes[0].id)!
+      const lastNode = nodeNodes[nodeNodes.length - 1]
+      const lastPos = positions.get(lastNode.id)!
+      startX = (firstPos.x + lastPos.x + (lastNode as any).nodeW) / 2 - totalW / 2
+    }
+    extraItems.forEach((item, i) => {
+      positions.set(item.id, { x: startX + i * (cardW + gapX), y: extraY })
     })
+  }
+
+  // 4. 计算内容边界，居中所有节点
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  positions.forEach((pos, id) => {
+    const node = nodes.find(n => n.id === id)
+    if (!node) return
+    const w = (node.type === 'node' || node.type === 'cluster')
+      ? ((node as any).nodeW || 160)
+      : (nodeSizes[node.type]?.width || 120)
+    const h = (node.type === 'node' || node.type === 'cluster')
+      ? ((node as any).nodeH || 60)
+      : (nodeSizes[node.type]?.height || 42)
+    minX = Math.min(minX, pos.x)
+    minY = Math.min(minY, pos.y)
+    maxX = Math.max(maxX, pos.x + w)
+    maxY = Math.max(maxY, pos.y + h)
   })
 
+  const contentPad = 80
+  const svgW = Math.max(1200, maxX - minX + contentPad * 2)
+  const svgH = Math.max(800, maxY - minY + contentPad * 2)
+  const offsetX = (svgW - (maxX - minX)) / 2 - minX
+  const offsetY = (svgH - (maxY - minY)) / 2 - minY
+
+  positions.forEach((pos, id) => {
+    positions.set(id, { x: pos.x + offsetX, y: pos.y + offsetY })
+  })
+
+  initialSvgWidth.value = svgW
+  initialSvgHeight.value = svgH
   nodePositions.value = positions
-
-  // 动态计算 SVG 尺寸
-  let maxX = 0, maxY = 0
-  positions.forEach(pos => {
-    maxX = Math.max(maxX, pos.x + 200)
-    maxY = Math.max(maxY, pos.y + 100)
-  })
-  initialSvgWidth.value = Math.max(1200, maxX + 100)
-  initialSvgHeight.value = Math.max(800, maxY + 100)
 }
 
 // 节点颜色
@@ -401,41 +563,160 @@ function getNodeStroke(type: string): string {
 }
 
 // 拖动
+// 拖动中的节点 ID 及其子节点 IDs
+const draggingChildren = ref<string[]>([])
+
+// 将屏幕坐标转换为 SVG viewBox 坐标（适配缩放）
+function screenToSvg(clientX: number, clientY: number): { x: number; y: number } {
+  const svg = document.querySelector('.graph-svg') as SVGSVGElement
+  if (!svg) return { x: clientX, y: clientY }
+  const rect = svg.getBoundingClientRect()
+  const vb = svg.viewBox.baseVal
+  return {
+    x: (clientX - rect.left) * (vb.width / rect.width) + vb.x,
+    y: (clientY - rect.top) * (vb.height / rect.height) + vb.y,
+  }
+}
+
 function onNodeMouseDown(e: MouseEvent, node: any) {
+  const pt = screenToSvg(e.clientX, e.clientY)
   draggingId.value = node.id
-  dragOffset.x = e.clientX - node.x
-  dragOffset.y = e.clientY - node.y
+  dragOffset.x = pt.x - node.x
+  dragOffset.y = pt.y - node.y
+  // 找出该节点的所有子节点
+  const children: string[] = []
+  childOffsets.forEach((_, childId) => {
+    const childNode = graphData.value.nodes.find(n => n.id === childId)
+    if (childNode && String(childNode.node_id) === String(node.node_id)) {
+      children.push(childId)
+    }
+  })
+  draggingChildren.value = children
 }
 
 function onCanvasMouseDown(e: MouseEvent) {
   if ((e.target as Element).tagName !== 'svg') return
   draggingId.value = 'canvas'
-  dragOffset.x = e.clientX
-  dragOffset.y = e.clientY
+  const pt = screenToSvg(e.clientX, e.clientY)
+  dragOffset.x = pt.x
+  dragOffset.y = pt.y
 }
 
 function onMouseMove(e: MouseEvent) {
+  const pt = screenToSvg(e.clientX, e.clientY)
   if (draggingId.value === 'canvas') {
-    const dx = e.clientX - dragOffset.x
-    const dy = e.clientY - dragOffset.y
+    const dx = pt.x - dragOffset.x
+    const dy = pt.y - dragOffset.y
     const newPositions = new Map(nodePositions.value)
     newPositions.forEach((pos, key) => {
       newPositions.set(key, { x: pos.x + dx, y: pos.y + dy })
     })
     nodePositions.value = newPositions
-    dragOffset.x = e.clientX
-    dragOffset.y = e.clientY
+    dragOffset.x = pt.x
+    dragOffset.y = pt.y
   } else if (draggingId.value) {
     const pos = nodePositions.value.get(draggingId.value)
     if (pos) {
+      const newX = pt.x - dragOffset.x
+      const newY = pt.y - dragOffset.y
+      const dx = newX - pos.x
+      const dy = newY - pos.y
       const newPositions = new Map(nodePositions.value)
-      newPositions.set(draggingId.value, {
-        x: e.clientX - dragOffset.x,
-        y: e.clientY - dragOffset.y,
+      // 移动父节点
+      newPositions.set(draggingId.value, { x: newX, y: newY })
+      // 移动子节点
+      draggingChildren.value.forEach(childId => {
+        const childPos = newPositions.get(childId)
+        if (childPos) {
+          newPositions.set(childId, { x: childPos.x + dx, y: childPos.y + dy })
+        }
       })
+      // 子节点边界约束：防止拖出父节点，自动扩充父节点
+      enforceChildBounds(newPositions, draggingId.value)
       nodePositions.value = newPositions
     }
   }
+}
+
+/** 子节点边界约束：防止内部元素移出父节点，触边时自动扩充 */
+function enforceChildBounds(positions: Map<string, { x: number; y: number }>, movedId: string) {
+  const nodeSizesLocal = nodeSizes
+  const padding = 28
+  const headerH = 42
+
+  // 收集所有本次移动的子节点（含被拖节点 + 同组子节点）
+  const movedIds = new Set([movedId, ...draggingChildren.value])
+
+  // 找到每个子节点对应的父节点，统一扩充
+  const parentExpansions = new Map<string, { right: number; bottom: number }>()
+
+  movedIds.forEach(childId => {
+    // 只处理子节点类型（vm/container/storage/network）
+    const childNode = graphData.value.nodes.find(n => n.id === childId)
+    if (!childNode || childNode.type === 'node' || childNode.type === 'cluster') return
+
+    // 查找父节点
+    const parentNode = graphData.value.nodes.find(n => n.type === 'node' && n.node_id === childNode.node_id)
+    if (!parentNode) return
+    const parentPos = positions.get(parentNode.id)
+    if (!parentPos) return
+    const childPos = positions.get(childId)
+    if (!childPos) return
+
+    const childW = nodeSizesLocal[childNode.type]?.width || 170
+    const childH = nodeSizesLocal[childNode.type]?.height || 50
+    const parentW = (parentNode as any).nodeW || 320
+    const parentH = (parentNode as any).nodeH || 120
+
+    // 右边界溢出 → 需要扩充宽度
+    const maxX = parentPos.x + parentW - padding - childW
+    const maxY = parentPos.y + parentH - padding - childH
+    let needRight = 0
+    let needBottom = 0
+
+    if (childPos.x > maxX) {
+      needRight = Math.max(needRight, childPos.x + childW + padding - parentPos.x - parentW)
+    }
+    if (childPos.y > maxY) {
+      needBottom = Math.max(needBottom, childPos.y + childH + padding - parentPos.y - parentH)
+    }
+
+    if (needRight > 0 || needBottom > 0) {
+      const existing = parentExpansions.get(parentNode.id) || { right: 0, bottom: 0 }
+      parentExpansions.set(parentNode.id, {
+        right: Math.max(existing.right, needRight),
+        bottom: Math.max(existing.bottom, needBottom),
+      })
+    }
+  })
+
+  // 执行扩充
+  parentExpansions.forEach((expansion, parentId) => {
+    const parentNode = graphData.value.nodes.find(n => n.id === parentId)
+    if (!parentNode) return
+    const parentPos = positions.get(parentId)
+    if (!parentPos) return
+
+    ;(parentNode as any).nodeW = ((parentNode as any).nodeW || 320) + Math.ceil(expansion.right)
+    ;(parentNode as any).nodeH = ((parentNode as any).nodeH || 120) + Math.ceil(expansion.bottom)
+    const parentW = (parentNode as any).nodeW
+    const parentH = (parentNode as any).nodeH
+
+    // 重新束缚该父节点下所有子节点位置
+    movedIds.forEach(childId => {
+      const childNode = graphData.value.nodes.find(n => n.id === childId)
+      if (!childNode || childNode.type === 'node' || childNode.type === 'cluster') return
+      if (childNode.node_id !== parentNode.node_id) return
+
+      const childPos = positions.get(childId)
+      if (!childPos) return
+      const childW = nodeSizesLocal[childNode.type]?.width || 170
+      const childH = nodeSizesLocal[childNode.type]?.height || 50
+
+      childPos.x = Math.min(childPos.x, parentPos.x + parentW - padding - childW)
+      childPos.y = Math.min(childPos.y, parentPos.y + parentH - padding - childH)
+    })
+  })
 }
 
 function onMouseUp() {
@@ -578,11 +859,14 @@ onMounted(async () => {
 })
 
 watch(() => clusterStore.currentClusterId, async () => {
+  // 切换集群时全量重置 SVG
+  scale.value = 1
+  selectedNode.value = null
+  graphData.value = { nodes: [], edges: [] }
+  nodePositions.value = new Map()
+  selectedResourceType.value = ''
+  selectedResourceId.value = undefined
   await loadResourceLists()
-  // 如果已选择资源类型和具体资源，才加载数据
-  if (selectedResourceType.value && selectedResourceId.value) {
-    await loadData()
-  }
 })
 </script>
 
@@ -786,14 +1070,35 @@ watch(() => clusterStore.currentClusterId, async () => {
 }
 
 .node-group:hover rect {
-  filter: brightness(1.05);
+  filter: brightness(1.1);
   stroke-width: 3;
+  transition: filter 0.2s, stroke-width 0.2s;
+}
+
+/* 边 hover 发光效果 */
+.edge-path {
+  transition: stroke-width 0.2s, filter 0.2s;
+  cursor: pointer;
+}
+
+.edge-path:hover {
+  stroke-width: 3;
+  filter: url(#edge-glow);
 }
 
 .node-label {
   font-size: 12px;
   font-weight: 600;
   fill: var(--text-heading, #303133);
+}
+
+.node-container-label {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.node-container-box {
+  stroke-dasharray: none;
 }
 
 .node-sub {
