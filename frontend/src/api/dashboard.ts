@@ -159,3 +159,42 @@ export function getHealthReport(clusterId?: number, days = 0) {
   if (clusterId) params.cluster_id = clusterId
   return request.get<any, HealthReportData>('/dashboard/health-report/', { params })
 }
+
+// === 灾备就绪评分 (DR Score) ===
+export interface DRScoreResource {
+  type: 'vm' | 'lxc'
+  vmid: number
+  name: string
+  node: string
+  status: string
+  score: number
+  grade: 'excellent' | 'good' | 'fair' | 'danger'
+  breakdown: {
+    ha: number
+    snapshot: number
+    backup: number
+    agent: number
+    network: number
+  }
+  missing: string[]
+}
+
+export interface DRScoreData {
+  cluster_score: number
+  cluster_grade: 'excellent' | 'good' | 'fair' | 'danger'
+  summary: {
+    total_resources: number
+    excellent: number
+    good: number
+    fair: number
+    danger: number
+  }
+  resources: DRScoreResource[]
+  recommendations: string[]
+}
+
+export function getDRScore(clusterId?: number) {
+  const params: Record<string, any> = {}
+  if (clusterId) params.cluster_id = clusterId
+  return request.get<any, DRScoreData>('/dashboard/dr-score/', { params })
+}
