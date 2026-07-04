@@ -7,9 +7,9 @@
       </div>
       <div class="toolbar">
         <div class="toolbar-group">
-          <button class="toolbar-btn" @click="zoomOut" :title="t('networkTopology.zoomOut')">−</button>
-          <span class="toolbar-zoom-val">{{ Math.round(scale * 100) }}%</span>
           <button class="toolbar-btn" @click="zoomIn" :title="t('networkTopology.zoomIn')">+</button>
+          <span class="toolbar-zoom-val">{{ Math.round(zoomLevel * 100) }}%</span>
+          <button class="toolbar-btn" @click="zoomOut" :title="t('networkTopology.zoomOut')">-</button>
         </div>
         <span class="toolbar-divider"></span>
         <div class="toolbar-group">
@@ -19,118 +19,24 @@
     </div>
 
     <div class="topology-container" v-loading="loading">
-      <div v-if="!loading && !topologyData.length" class="empty-state">
+      <div v-if="!loading && !graphData.nodes.length" class="empty-state">
         <el-empty :description="t('networkTopology.emptyDesc')" />
       </div>
-      <div v-else class="topology-canvas">
-        <svg :viewBox="currentViewBox" class="topology-svg"
-          preserveAspectRatio="xMidYMin meet"
-          @mousedown.prevent="onCanvasMouseDown"
-          @mousemove="onMouseMove" @mouseup="onMouseUp" @mouseleave="onMouseUp"
-          @wheel.prevent="onWheel">
-          <!-- 网络段色带 -->
-          <g v-if="showSegments" class="segment-bands">
-            <g v-for="seg in networkSegments" :key="'seg-' + seg.cidr"
-              :transform="`translate(${segmentOffsetsX[seg.cidr] || 0}, ${segmentOffsets[seg.cidr] || 0})`"
-              style="cursor: grab"
-              @mousedown.prevent="onSegmentMouseDown($event, seg.cidr)">
-              <rect :x="seg.bounds.x" :y="seg.bounds.y"
-                :width="seg.bounds.width" :height="seg.bounds.height"
-                :fill="seg.fillColor" :stroke="seg.strokeColor"
-                stroke-width="1" rx="10" stroke-dasharray="8,4" />
-            </g>
-          </g>
-          <!-- 连线 -->
-          <g class="connections">
-            <line v-for="(conn, idx) in connections" :key="'conn-' + idx"
-              :x1="conn.x1" :y1="conn.y1" :x2="conn.x2" :y2="conn.y2"
-              :stroke="conn.color" stroke-width="2" stroke-dasharray="5,3" />
-          </g>
-          <!-- 节点 -->
-          <g v-for="node in nodePositions" :key="'node-' + node.name"
-            class="node-group" :class="{ dragging: dragType === 'node' && draggingId === node.name }"
-            :transform="`translate(${node.x}, ${node.y})`"
-            @mousedown.prevent="onNodeMouseDown($event, node)">
-            <rect x="0" y="0" :width="nodeWidth" :height="nodeHeight" rx="12"
-              :fill="nodeFill" :stroke="nodeStroke" stroke-width="2" />
-            <text :x="nodeWidth / 2" y="24" text-anchor="middle" class="node-label">{{ node.name }}</text>
-            <text :x="nodeWidth / 2" y="42" text-anchor="middle" class="node-sub">{{ node.ifaceCount }} {{ t('networkTopology.interfaces') }}</text>
-          </g>
-          <!-- 接口 -->
-          <g v-for="iface in interfacePositions" :key="'iface-' + iface.id"
-            class="iface-group" :class="{ dragging: dragType === 'iface' && draggingId === iface.id }"
-            :transform="`translate(${iface.x + getIfaceSegOffsetX(iface)}, ${iface.y + getIfaceSegOffset(iface)})`"
-            @mousedown.prevent="onIfaceMouseDown($event, iface)">
-            <rect x="0" y="0" :width="ifaceWidth" :height="ifaceHeight" rx="8"
-              :fill="getIfaceFill(iface.type)" :stroke="getIfaceStroke(iface.type)" stroke-width="1.5" />
-            <text :x="ifaceWidth / 2" y="16" text-anchor="middle" class="iface-label">{{ iface.name }}</text>
-            <text :x="ifaceWidth / 2" y="29" text-anchor="middle" class="iface-type">
-              <template v-if="iface.type === 'bridge' && iface.bridge_ports">bridge · {{ (iface.bridge_ports || '').split(/\s+/).length }} ports</template>
-              <template v-else-if="iface.type === 'bond'">bond · {{ iface.bond_mode || 'balance-rr' }}<template v-if="iface.bond_slaves"> · {{ iface.bond_slaves.split(/\s+/).length }} nics</template></template>
-              <template v-else-if="getIfaceBondOwner(iface)">{{ iface.type }} · {{ getIfaceBondOwner(iface) }} slave</template>
-              <template v-else>{{ iface.type }}</template>
-            </text>
-            <text v-if="iface.address" :x="ifaceWidth / 2" y="41" text-anchor="middle" class="iface-ip">{{ iface.address.split('/')[0] }}</text>
-            <circle :cx="ifaceWidth - 8" cy="8" r="4" :fill="iface.status === 'up' ? '#67c23a' : '#f56c6c'" />
-          </g>
-          <!-- IP 网段图层 -->
-          <g v-if="showSubnetLayer" class="subnet-bands">
-            <g v-for="sub in subnetSegments" :key="'sub-' + sub.cidr"
-              :transform="`translate(${subnetOffsetsX[sub.cidr] || 0}, ${subnetOffsets[sub.cidr] || 0})`"
-              style="cursor: grab"
-              @mousedown.prevent="onSubnetMouseDown($event, sub.cidr)">
-              <rect :x="sub.bounds.x" :y="sub.bounds.y"
-                :width="sub.bounds.width" :height="sub.bounds.height"
-                :fill="sub.fillColor" :stroke="sub.strokeColor"
-                stroke-width="1" rx="8" stroke-dasharray="6,3" />
-            </g>
-          </g>
-          <!-- 段标签（在接口之后渲染，确保不被遮挡） -->
-          <g class="segment-labels">
-            <g v-if="showSegments" v-for="seg in networkSegments" :key="'label-' + seg.cidr"
-              :transform="`translate(${segmentOffsetsX[seg.cidr] || 0}, ${segmentOffsets[seg.cidr] || 0})`">
-              <text :x="seg.bounds.x + seg.bounds.width / 2" :y="seg.bounds.y + 10"
-                text-anchor="middle" class="segment-label" :fill="seg.labelColor">
-                {{ seg.label }}
-              </text>
-            </g>
-            <g v-if="showSubnetLayer" v-for="sub in subnetSegments" :key="'sublabel-' + sub.cidr">
-              <text :x="sub.bounds.x + sub.bounds.width / 2" :y="sub.bounds.y + sub.bounds.height - 6"
-                text-anchor="middle" class="subnet-label" :fill="sub.labelColor">
-                {{ sub.label }}
-              </text>
-            </g>
-          </g>
-        </svg>
-      </div>
+      <div v-else ref="svgContainer" class="topology-canvas"></div>
     </div>
 
-    <!-- 图例（左静态 / 中可过滤 / 右不存在） -->
+    <!-- 图例 -->
     <div class="legend-bar">
-      <!-- 左侧：不可隐藏的静态项 -->
-      <span class="legend-item legend-static"><span class="legend-dot" style="background:#4f46e5"></span>{{ t('networkTopology.legendNode') }}</span>
-      <span class="legend-item" :class="{ 'is-hidden': !showSegments }" @click="showSegments = !showSegments">
-        <span class="legend-band"></span>{{ t('networkTopology.legendSegment') }}
+      <span class="legend-item legend-static">
+        <span class="legend-dot" style="background:#4f46e5"></span>{{ t('networkTopology.legendNode') }}
       </span>
-      <span class="legend-item legend-sep"></span>
-      <span class="legend-item" :class="{ 'is-hidden': !showSubnetLayer }" @click="showSubnetLayer = !showSubnetLayer">
-        <span class="legend-dot" style="background: #f97316"></span>{{ t('networkTopology.legendSubnet') }}
-      </span>
-      <span class="legend-item legend-sep"></span>
-      <!-- 中间：当前集群存在、可点击过滤 -->
+      <span class="legend-sep"></span>
       <template v-for="item in legendItems" :key="item.type">
-        <span v-if="item.type !== 'node' && existingTypes.has(item.type)"
+        <span v-if="item.type !== 'node'"
           class="legend-item"
           :class="{ 'is-hidden': hiddenTypes.has(item.type) }"
           @click="toggleType(item.type)">
           <span class="legend-dot" :style="{ background: item.color }"></span>{{ item.label }}
-        </span>
-      </template>
-      <!-- 右侧：当前集群不存在的类型（灰色禁用） -->
-      <template v-for="item in legendItems" :key="'abs-'+item.type">
-        <span v-if="item.type !== 'node' && !existingTypes.has(item.type)"
-          class="legend-item legend-absent">
-          <span class="legend-dot"></span>{{ item.label }}
         </span>
       </template>
     </div>
@@ -138,8 +44,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
+import * as d3 from 'd3'
 import { getNetworkList, type NetworkInterface } from '@/api/networks'
 import { useClusterStore } from '@/stores/cluster'
 
@@ -147,66 +54,364 @@ const { t } = useI18n()
 const clusterStore = useClusterStore()
 
 const loading = ref(true)
-const topologyData = ref<NetworkInterface[]>([])
-// 网络段分组 / IP 网段图层开关
-const showSegments = ref(true)
-const showSubnetLayer = ref(false)
-// 图例过滤：点击可隐藏/显示某类接口
+const svgContainer = ref<HTMLElement>()
+const zoomLevel = ref(1)
+
+// 图例过滤
 const hiddenTypes = ref(new Set<string>())
 const legendItems = computed(() => [
-    { type: 'node', label: t('networkTopology.legendNode'), color: '#4f46e5' },
-    { type: 'eth', label: t('networkTopology.legendPhysical'), color: '#409eff' },
-    { type: 'bridge', label: t('networkTopology.legendBridge'), color: '#67c23a' },
-    { type: 'bond', label: t('networkTopology.legendBond'), color: '#e6a23c' },
-    { type: 'vlan', label: 'VLAN', color: '#8b5cf6' },
-    { type: 'other', label: t('networkTopology.legendOther'), color: '#909399' },
-  ])
-// 当前集群中存在的接口类型集合
-const existingTypes = computed(() => {
-  const types = new Set<string>()
-  topologyData.value.forEach(i => types.add(i.type))
-  return types
-})
+  { type: 'node', label: t('networkTopology.legendNode'), color: '#4f46e5' },
+  { type: 'eth', label: t('networkTopology.legendPhysical'), color: '#409eff' },
+  { type: 'bridge', label: t('networkTopology.legendBridge'), color: '#67c23a' },
+  { type: 'bond', label: t('networkTopology.legendBond'), color: '#e6a23c' },
+  { type: 'vlan', label: 'VLAN', color: '#8b5cf6' },
+  { type: 'other', label: t('networkTopology.legendOther'), color: '#909399' }
+])
+
 function toggleType(type: string) {
   const s = new Set(hiddenTypes.value)
-  if (s.has(type)) s.delete(type); else s.add(type)
+  if (s.has(type)) s.delete(type)
+  else s.add(type)
   hiddenTypes.value = s
-}
-function isTypeHidden(type: string): boolean {
-  const known = ['eth', 'bridge', 'bond', 'vlan']
-  return hiddenTypes.value.has(known.includes(type) ? type : 'other')
+  updateGraph()
 }
 
-const nodeWidth = 140
-const nodeHeight = 56
-const ifaceWidth = 120
-const ifaceHeight = 52
-const ifaceGapY = 56
+// 图数据结构
+interface GraphNode extends d3.SimulationNodeDatum {
+  id: string
+  name: string
+  type: 'node' | 'iface'
+  ifaceType?: string
+  nodeName?: string
+  address?: string
+  status?: string
+  bridgePorts?: string
+  bondSlaves?: string
+  radius: number
+}
 
-// 拖动状态
-const dragType = ref<'node' | 'iface' | 'canvas' | 'segment' | ''>('')
-const draggingId = ref<string | number>('')
-const dragOffset = { x: 0, y: 0 }
-// 段拖动：记录每段的 X/Y 偏移
-const segmentOffsets = ref<Record<string, number>>({})
-const segmentOffsetsX = ref<Record<string, number>>({})
-const segmentDragStartX = ref(0)
-const segmentDragStartY = ref(0)
-const segmentDragBaseOffsetX = ref(0)
-const segmentDragBaseOffset = ref(0)
-// 子网段拖动
-const subnetOffsets = ref<Record<string, number>>({})
-const subnetOffsetsX = ref<Record<string, number>>({})
+interface GraphLink extends d3.SimulationLinkDatum<GraphNode> {
+  source: string | GraphNode
+  target: string | GraphNode
+  type: 'node-iface' | 'bridge-port' | 'bond-slave'
+}
 
-// 缩放状态
-const scale = ref(1)
-const minScale = 0.3
-const maxScale = 3
+const graphData = ref<{ nodes: GraphNode[]; links: GraphLink[] }>({ nodes: [], links: [] })
 
-// 固定的初始 SVG 尺寸（加载时计算，拖动时不变）
-const initialSvgWidth = ref(400)
-const initialSvgHeight = ref(200)
+// D3 元素引用
+let svg: d3.Selection<SVGSVGElement, unknown, null, undefined>
+let g: d3.Selection<SVGGElement, unknown, null, undefined>
+let simulation: d3.Simulation<GraphNode, GraphLink>
+let zoomBehavior: d3.ZoomBehavior<SVGSVGElement, unknown>
 
+// 颜色映射
+const ifaceColors: Record<string, string> = {
+  eth: '#409eff',
+  bridge: '#67c23a',
+  bond: '#e6a23c',
+  vlan: '#8b5cf6',
+  other: '#909399'
+}
+
+/** 构建图数据 */
+function buildGraph(data: NetworkInterface[]) {
+  const nodes: GraphNode[] = []
+  const links: GraphLink[] = []
+  const nodeMap = new Map<string, GraphNode>()
+  const ifaceMap = new Map<string, GraphNode>()
+
+  // 按节点分组
+  const groups = new Map<string, NetworkInterface[]>()
+  data.forEach(iface => {
+    const list = groups.get(iface.node_name) || []
+    list.push(iface)
+    groups.set(iface.node_name, list)
+  })
+
+  // 创建节点
+  groups.forEach((ifaces, nodeName) => {
+    const node: GraphNode = {
+      id: `node-${nodeName}`,
+      name: nodeName,
+      type: 'node',
+      radius: 30
+    }
+    nodes.push(node)
+    nodeMap.set(nodeName, node)
+
+    // 创建接口
+    ifaces.forEach(iface => {
+      if (hiddenTypes.value.has(iface.type === 'eth' ? 'eth' : iface.type)) return
+      
+      const ifaceNode: GraphNode = {
+        id: `iface-${iface.id}`,
+        name: iface.name,
+        type: 'iface',
+        ifaceType: iface.type,
+        nodeName: iface.node_name,
+        address: iface.address,
+        status: iface.status,
+        bridgePorts: iface.bridge_ports,
+        bondSlaves: iface.bond_slaves,
+        radius: 15
+      }
+      nodes.push(ifaceNode)
+      ifaceMap.set(`${nodeName}-${iface.name}`, ifaceNode)
+
+      // 节点到接口的连接
+      links.push({
+        source: `node-${nodeName}`,
+        target: `iface-${iface.id}`,
+        type: 'node-iface'
+      })
+    })
+
+    // 处理 bridge -> ports 连接
+    ifaces.filter(i => i.type === 'bridge').forEach(bridge => {
+      const ports = (bridge.bridge_ports || '').split(/\s+/).filter(Boolean)
+      ports.forEach(portName => {
+        const portIface = ifaceMap.get(`${nodeName}-${portName}`)
+        if (portIface) {
+          links.push({
+            source: `iface-${bridge.id}`,
+            target: `iface-${portIface.id}`,
+            type: 'bridge-port'
+          })
+        }
+      })
+    })
+
+    // 处理 bond -> slaves 连接
+    ifaces.filter(i => i.type === 'bond').forEach(bond => {
+      const slaves = (bond.bond_slaves || '').split(/\s+/).filter(Boolean)
+      slaves.forEach(slaveName => {
+        const slaveIface = ifaceMap.get(`${nodeName}-${slaveName}`)
+        if (slaveIface) {
+          links.push({
+            source: `iface-${bond.id}`,
+            target: `iface-${slaveIface.id}`,
+            type: 'bond-slave'
+          })
+        }
+      })
+    })
+  })
+
+  // 过滤掉引用不存在节点的连线（避免 D3 force 模拟报错）
+  const validNodeIds = new Set(nodes.map(n => n.id))
+  const validLinks = links.filter(l => {
+    const sid = typeof l.source === 'string' ? l.source : (l.source as GraphNode).id
+    const tid = typeof l.target === 'string' ? l.target : (l.target as GraphNode).id
+    return validNodeIds.has(sid) && validNodeIds.has(tid)
+  })
+
+  graphData.value = { nodes, links: validLinks }
+}
+
+/** 初始化 SVG */
+function initSvg() {
+  if (!svgContainer.value) return
+
+  const container = svgContainer.value
+  const width = container.clientWidth
+  const height = container.clientHeight
+
+  // 清空容器
+  d3.select(container).selectAll('*').remove()
+
+  // 创建 SVG
+  svg = d3.select(container)
+    .append('svg')
+    .attr('width', '100%')
+    .attr('height', '100%')
+    .attr('viewBox', `0 0 ${width} ${height}`)
+
+  // 创建缩放组
+  g = svg.append('g')
+
+  // 定义缩放行为
+  zoomBehavior = d3.zoom<SVGSVGElement, unknown>()
+    .scaleExtent([0.3, 3])
+    .on('zoom', (event) => {
+      g.attr('transform', event.transform)
+      zoomLevel.value = event.transform.k
+    })
+
+  svg.call(zoomBehavior)
+
+  // 创建力导向模拟
+  simulation = d3.forceSimulation<GraphNode>()
+    .force('link', d3.forceLink<GraphNode, GraphLink>().id(d => d.id).distance(100))
+    .force('charge', d3.forceManyBody().strength(-300))
+    .force('center', d3.forceCenter(width / 2, height / 2))
+    .force('collision', d3.forceCollide().radius(d => (d as GraphNode).radius + 10))
+    .force('x', d3.forceX(width / 2).strength(0.1))
+    .force('y', d3.forceY(height / 2).strength(0.1))
+
+  // 添加箭头定义
+  svg.append('defs').append('marker')
+    .attr('id', 'arrowhead')
+    .attr('viewBox', '-0 -5 10 10')
+    .attr('refX', 20)
+    .attr('refY', 0)
+    .attr('orient', 'auto')
+    .attr('markerWidth', 6)
+    .attr('markerHeight', 6)
+    .append('path')
+    .attr('d', 'M0,-5L10,0L0,5')
+    .attr('fill', '#999')
+}
+
+/** 更新图 */
+function updateGraph() {
+  if (!g || !simulation) return
+
+  // 先停止旧模拟，防止 D3 内部残留引用
+  simulation.stop()
+  simulation.on('tick', null)
+
+  buildGraph(filteredData.value)
+  const { nodes, links } = graphData.value
+
+  // 清空现有元素
+  g.selectAll('*').remove()
+
+  // 创建连线
+  const link = g.append('g')
+    .attr('class', 'links')
+    .selectAll('line')
+    .data(links)
+    .enter()
+    .append('line')
+    .attr('stroke', d => {
+      if (d.type === 'bridge-port') return '#67c23a'
+      if (d.type === 'bond-slave') return '#e6a23c'
+      return '#999'
+    })
+    .attr('stroke-opacity', 0.6)
+    .attr('stroke-width', 2)
+    .attr('stroke-dasharray', d => d.type === 'node-iface' ? '5,5' : 'none')
+
+  // 创建节点组
+  const node = g.append('g')
+    .attr('class', 'nodes')
+    .selectAll('g')
+    .data(nodes)
+    .enter()
+    .append('g')
+    .attr('class', 'node')
+    .call(d3.drag<SVGGElement, GraphNode>()
+      .on('start', dragstarted)
+      .on('drag', dragged)
+      .on('end', dragended)
+    )
+
+  // 节点圆形
+  node.append('circle')
+    .attr('r', d => d.radius)
+    .attr('fill', d => {
+      if (d.type === 'node') return '#4f46e5'
+      return ifaceColors[d.ifaceType || 'other'] || '#909399'
+    })
+    .attr('stroke', '#fff')
+    .attr('stroke-width', 2)
+    .attr('cursor', 'pointer')
+    .on('mouseover', function(event, d) {
+      d3.select(this)
+        .transition()
+        .duration(200)
+        .attr('r', d.radius * 1.2)
+        .attr('stroke-width', 3)
+    })
+    .on('mouseout', function(event, d) {
+      d3.select(this)
+        .transition()
+        .duration(200)
+        .attr('r', d.radius)
+        .attr('stroke-width', 2)
+    })
+
+  // 状态指示器（接口）
+  node.filter(d => d.type === 'iface' && d.status)
+    .append('circle')
+    .attr('cx', d => d.radius * 0.7)
+    .attr('cy', d => -d.radius * 0.7)
+    .attr('r', 5)
+    .attr('fill', d => d.status === 'up' ? '#67c23a' : '#f56c6c')
+    .attr('stroke', '#fff')
+    .attr('stroke-width', 1.5)
+
+  // 节点标签
+  node.append('text')
+    .attr('dy', d => d.type === 'node' ? 4 : 30)
+    .attr('text-anchor', 'middle')
+    .attr('font-size', d => d.type === 'node' ? '12px' : '10px')
+    .attr('font-weight', d => d.type === 'node' ? '600' : '400')
+    .attr('fill', d => d.type === 'node' ? '#fff' : '#333')
+    .text(d => d.name)
+
+  // IP 地址标签（接口）
+  node.filter(d => d.type === 'iface' && d.address)
+    .append('text')
+    .attr('dy', 42)
+    .attr('text-anchor', 'middle')
+    .attr('font-size', '9px')
+    .attr('fill', '#666')
+    .text(d => d.address?.split('/')[0] || '')
+
+  // 更新模拟
+  simulation.nodes(nodes)
+  simulation.force<d3.ForceLink<GraphNode, GraphLink>>('link')!.links(links)
+  simulation.alpha(1).restart()
+
+  // 更新位置
+  simulation.on('tick', () => {
+    link
+      .attr('x1', d => (d.source as GraphNode).x!)
+      .attr('y1', d => (d.source as GraphNode).y!)
+      .attr('x2', d => (d.target as GraphNode).x!)
+      .attr('y2', d => (d.target as GraphNode).y!)
+
+    node.attr('transform', d => `translate(${d.x},${d.y})`)
+  })
+}
+
+// 拖拽函数
+function dragstarted(event: d3.D3DragEvent<SVGGElement, GraphNode, GraphNode>, d: GraphNode) {
+  if (!event.active) simulation.alphaTarget(0.3).restart()
+  d.fx = d.x
+  d.fy = d.y
+}
+
+function dragged(event: d3.D3DragEvent<SVGGElement, GraphNode, GraphNode>, d: GraphNode) {
+  d.fx = event.x
+  d.fy = event.y
+}
+
+function dragended(event: d3.D3DragEvent<SVGGElement, GraphNode, GraphNode>, d: GraphNode) {
+  if (!event.active) simulation.alphaTarget(0)
+  d.fx = null
+  d.fy = null
+}
+
+// 缩放控制
+function zoomIn() {
+  svg.transition().duration(300).call(zoomBehavior.scaleBy, 1.2)
+}
+
+function zoomOut() {
+  svg.transition().duration(300).call(zoomBehavior.scaleBy, 0.8)
+}
+
+function resetView() {
+  svg.transition().duration(500).call(
+    zoomBehavior.transform,
+    d3.zoomIdentity
+  )
+  simulation.alpha(1).restart()
+}
+
+const topologyData = ref<NetworkInterface[]>([])
 const filteredData = computed(() => {
   if (!clusterStore.currentClusterId) return topologyData.value
   const name = clusterStore.currentCluster?.name
@@ -214,541 +419,22 @@ const filteredData = computed(() => {
   return topologyData.value.filter(n => n.cluster_name === name)
 })
 
-// 集群切换或图例过滤时重新布局
-watch(filteredData, () => { segmentOffsets.value = {}; segmentOffsetsX.value = {}; subnetOffsets.value = {}; subnetOffsetsX.value = {}; initPositions() })
-watch(hiddenTypes, () => { initPositions() }, { deep: true })
-
-const nodeFill = 'var(--bg-card, #fff)'
-const nodeStroke = '#4f46e5'
-
-interface NodePos { name: string; x: number; y: number; ifaceCount: number }
-interface IfacePos extends NetworkInterface { x: number; y: number; nodeName: string }
-
-const nodePositions = ref<NodePos[]>([])
-const interfacePositions = ref<IfacePos[]>([])
-
-/** 接口类型排序权重：bridge → bond → vlan → eth → 其他 */
-function ifaceSortOrder(i: NetworkInterface): number {
-  if (i.type === 'bridge') return 0
-  if (i.type === 'bond') return 1
-  if (i.type === 'vlan') return 2
-  return 3
-}
-
-/** 递归布局子接口，返回子接口列表和下一个 Y 坐标 */
-function layoutChildren(
-  parentX: number, startY: number, children: NetworkInterface[],
-  depth: number, bondChildMap: Map<string, NetworkInterface[]>,
-  bridgeChildMap: Map<string, NetworkInterface[]>, nodeName: string
-): { ifaces: IfacePos[]; nextY: number } {
-  const indent = 30
-  const result: IfacePos[] = []
-  let curY = startY
-
-  children
-    .sort((a, b) => ifaceSortOrder(a) - ifaceSortOrder(b) || a.name.localeCompare(b.name))
-    .forEach(child => {
-      // 图例过滤：跳过
-      if (isTypeHidden(child.type)) return
-
-      const childX = parentX + indent * depth
-      result.push({ ...child, x: childX, y: curY, nodeName })
-      curY += ifaceGapY
-
-      // bond → 展开 bond_slaves（嵌套）
-      if (child.type === 'bond' && bondChildMap.has(child.name)) {
-        const sub = layoutChildren(childX, curY, bondChildMap.get(child.name)!, depth + 1, bondChildMap, bridgeChildMap, nodeName)
-        result.push(...sub.ifaces)
-        curY = sub.nextY
-      }
-      // bridge → 展开 bridge_ports（桥上桥场景）
-      if (child.type === 'bridge' && bridgeChildMap.has(child.name)) {
-        const sub = layoutChildren(childX, curY, bridgeChildMap.get(child.name)!, depth + 1, bondChildMap, bridgeChildMap, nodeName)
-        result.push(...sub.ifaces)
-        curY = sub.nextY
-      }
-    })
-
-  return { ifaces: result, nextY: curY }
-}
-
-function initPositions() {
-  const groups = new Map<string, NetworkInterface[]>()
-  filteredData.value.forEach(iface => {
-    const list = groups.get(iface.node_name) || []
-    list.push(iface)
-    groups.set(iface.node_name, list)
-  })
-
-  const nodeEntries = Array.from(groups.entries())
-  const nodeSpacing = 380
-
-  const nodes: NodePos[] = []
-  const ifaces: IfacePos[] = []
-
-  nodeEntries.forEach(([nodeName, allIfaces], idx) => {
-    const x = 60 + idx * nodeSpacing
-    nodes.push({ name: nodeName, x, y: 40, ifaceCount: allIfaces.length })
-
-    // ── 构建层级映射 ──
-    // bridge → ports（bridge_ports 中可能包含 bond 名称，形成嵌套）
-    const bridges = allIfaces.filter(i => i.type === 'bridge')
-    const bridgeChildMap = new Map<string, NetworkInterface[]>()
-    const bridgePortNames = new Set<string>()
-
-    bridges.forEach(b => {
-      const ports = (b.bridge_ports || '').split(/\s+/).filter(Boolean)
-      const children = allIfaces.filter(i => ports.includes(i.name))
-      bridgeChildMap.set(b.name, children)
-      children.forEach(c => bridgePortNames.add(c.name))
-    })
-
-    // bond → slaves（bond_slaves 中是物理接口名）
-    const bonds = allIfaces.filter(i => i.type === 'bond')
-    const bondChildMap = new Map<string, NetworkInterface[]>()
-    const bondSlaveNames = new Set<string>()
-
-    bonds.forEach(b => {
-      const slaves = (b.bond_slaves || '').split(/\s+/).filter(Boolean)
-      const children = allIfaces.filter(i => slaves.includes(i.name))
-      bondChildMap.set(b.name, children)
-      children.forEach(c => bondSlaveNames.add(c.name))
-    })
-
-    // 顶层接口：排除已被 bridge 或 bond 收纳的接口
-    const topLevel = allIfaces.filter(i => {
-      // 图例过滤：跳过被隐藏的类型
-      if (isTypeHidden(i.type)) return false
-      if (i.type === 'bridge') return true
-      // bond：如果已被某个 bridge 的 bridge_ports 包含，不算顶层
-      if (i.type === 'bond' && !bridgePortNames.has(i.name)) return true
-      // 其他：未被任何 bridge/bond 收纳才算顶层
-      if (i.type !== 'bridge' && i.type !== 'bond' && !bridgePortNames.has(i.name) && !bondSlaveNames.has(i.name)) return true
-      return false
-    })
-
-    let curY = nodes[idx].y + nodeHeight + 30
-
-    // 先画 bridge（含嵌套 bond），再画 bond（顶层独立 bond），再画其余
-    const sortedTop = topLevel
-      .sort((a, b) => ifaceSortOrder(a) - ifaceSortOrder(b) || a.name.localeCompare(b.name))
-
-    sortedTop.forEach(iface => {
-      ifaces.push({ ...iface, x, y: curY, nodeName })
-      curY += ifaceGapY
-
-      // bridge → 展开 bridge_ports
-      if (iface.type === 'bridge' && bridgeChildMap.has(iface.name)) {
-        const children = bridgeChildMap.get(iface.name)!
-        // 子接口中属于 bond 的会自动展开 bond_slaves
-        const sub = layoutChildren(x, curY, children, 1, bondChildMap, bridgeChildMap, nodeName)
-        ifaces.push(...sub.ifaces)
-        curY = sub.nextY
-      }
-
-      // bond → 展开 bond_slaves（独立 bond，不在 bridge 下）
-      if (iface.type === 'bond' && bondChildMap.has(iface.name)) {
-        // 检查是否已经被某个 bridge 展开过（即 bridge_ports 包含此 bond）
-        const isInsideBridge = bridgePortNames.has(iface.name)
-        if (!isInsideBridge) {
-          const sub = layoutChildren(x, curY, bondChildMap.get(iface.name)!, 1, bondChildMap, bridgeChildMap, nodeName)
-          ifaces.push(...sub.ifaces)
-          curY = sub.nextY
-        }
-      }
-    })
-  })
-
-  nodePositions.value = nodes
-  interfacePositions.value = ifaces
-
-  initialSvgWidth.value = nodes.length > 0
-    ? nodes[nodes.length - 1].x + nodeWidth + 120
-    : 400
-  initialSvgHeight.value = ifaces.length > 0
-    ? Math.max(...ifaces.map(i => i.y)) + ifaceHeight + 60
-    : 200
-}
-
-const currentViewBox = computed(() => {
-  const w = initialSvgWidth.value / scale.value
-  const h = initialSvgHeight.value / scale.value
-  const x = (initialSvgWidth.value - w) / 2
-  const y = (initialSvgHeight.value - h) / 2
-  return `${x} ${y} ${w} ${h}`
+watch(filteredData, () => {
+  updateGraph()
 })
 
-interface Connection { x1: number; y1: number; x2: number; y2: number; color: string }
-
-const connections = computed<Connection[]>(() => {
-  const conns: Connection[] = []
-  nodePositions.value.forEach(np => {
-    const ifaces = interfacePositions.value.filter(i => i.node_name === np.name)
-    ifaces.forEach(iface => {
-      const so = getIfaceSegOffset(iface)
-      // 优先查找 bond 父级（bond_slaves 包含该接口名）
-      const parentBond = ifaces.find(
-        i => i.type === 'bond' && (i.bond_slaves || '').split(/\s+/).includes(iface.name)
-      )
-      if (parentBond) {
-        const pso = getIfaceSegOffset(parentBond)
-        const psoX = getIfaceSegOffsetX(parentBond)
-        conns.push({
-          x1: parentBond.x + psoX + ifaceWidth / 2, y1: parentBond.y + pso + ifaceHeight,
-          x2: iface.x + getIfaceSegOffsetX(iface) + ifaceWidth / 2, y2: iface.y + so,
-          color: getIfaceColor('bond')
-        })
-        return
-      }
-
-      // 其次查找 bridge 父级（bridge_ports 包含该接口名）
-      const parentBridge = ifaces.find(
-        i => i.type === 'bridge' && (i.bridge_ports || '').split(/\s+/).includes(iface.name)
-      )
-      if (parentBridge) {
-        const pso = getIfaceSegOffset(parentBridge)
-        const psoX = getIfaceSegOffsetX(parentBridge)
-        conns.push({
-          x1: parentBridge.x + psoX + ifaceWidth / 2, y1: parentBridge.y + pso + ifaceHeight,
-          x2: iface.x + getIfaceSegOffsetX(iface) + ifaceWidth / 2, y2: iface.y + so,
-          color: getIfaceColor('bridge')
-        })
-        return
-      }
-
-      // 顶层接口：连到节点
-      conns.push({
-        x1: np.x + nodeWidth / 2, y1: np.y + nodeHeight,
-        x2: iface.x + getIfaceSegOffsetX(iface) + ifaceWidth / 2, y2: iface.y + so,
-        color: getIfaceColor(iface.type)
-      })
-    })
-  })
-  return conns
+watch(() => clusterStore.currentClusterId, () => {
+  updateGraph()
 })
 
-// ── 跨节点网络段分组 ──
-interface SegmentBounds { x: number; y: number; width: number; height: number }
-interface NetworkSegment {
-  cidr: string
-  label: string
-  fillColor: string
-  strokeColor: string
-  labelColor: string
-  bounds: SegmentBounds
-  ifaces: IfacePos[]
-}
-
-/** 从 IP 地址提取子网前缀。 */
-function toNetworkCidr(address: string): string | null {
-  const cidrMatch = address.match(/^(\d+\.\d+\.\d+)\.\d+\/(\d+)$/)
-  if (cidrMatch) {
-    const prefix = cidrMatch[1]
-    const bits = parseInt(cidrMatch[2])
-    if (bits >= 24) return `${prefix}.0/24`
-    if (bits >= 16) return `${prefix.split('.')[0]}.${prefix.split('.')[1]}.0.0/16`
-    return `${prefix}.0.0.0/8`
-  }
-  const bareMatch = address.match(/^(\d+\.\d+\.\d+)\.\d+$/)
-  if (bareMatch) return `${bareMatch[1]}.0/24`
-  return null
-}
-
-/** 接口层级 key：bridge/vlan → 管理层, bond → 聚合层, eth/其他 → 物理层 */
-function getIfaceLayerKey(iface: IfacePos): string {
-  if (iface.type === 'bridge' || iface.type === 'vlan') return 'layer-management'
-  if (iface.type === 'bond') return 'layer-bond'
-  return 'layer-physical'
-}
-
-// 获取接口所属段的 Y 偏移（用于段拖动）
-function getIfaceSegOffset(iface: IfacePos): number {
-  return segmentOffsets.value[getIfaceLayerKey(iface)] || 0
-}
-
-// 获取接口所属段的 X 偏移（用于段拖动）
-function getIfaceSegOffsetX(iface: IfacePos): number {
-  return segmentOffsetsX.value[getIfaceLayerKey(iface)] || 0
-}
-
-/** 三层配色：管理(蓝) / 聚合(橙) / 物理(绿) */
-const layerColors: Record<string, { fill: string; stroke: string; label: string }> = {
-  'layer-management': { fill: 'rgba(64, 158, 255, 0.08)',  stroke: 'rgba(64, 158, 255, 0.35)',  label: 'rgba(64, 158, 255, 0.8)' },
-  'layer-bond':       { fill: 'rgba(230, 162, 60, 0.08)',  stroke: 'rgba(230, 162, 60, 0.35)',  label: 'rgba(230, 162, 60, 0.8)' },
-  'layer-physical':   { fill: 'rgba(103, 194, 58, 0.08)',  stroke: 'rgba(103, 194, 58, 0.35)',  label: 'rgba(103, 194, 58, 0.8)' },
-}
-
-/** 层级标签 */
-const layerLabels = computed<Record<string, string>>(() => ({
-  'layer-management': t('networkTopology.layerMgmt'),
-  'layer-bond': t('networkTopology.layerAgg'),
-  'layer-physical': t('networkTopology.layerPhysical'),
-}))
-
-const networkSegments = computed<NetworkSegment[]>(() => {
-  const allIfaces = interfacePositions.value
-  if (!allIfaces.length) return []
-
-  // 按层级分组（所有接口都参与，不管有没有 IP 地址）
-  const layerMap = new Map<string, IfacePos[]>()
-  allIfaces.forEach(iface => {
-    const key = getIfaceLayerKey(iface)
-    if (!layerMap.has(key)) layerMap.set(key, [])
-    layerMap.get(key)!.push(iface)
-  })
-
-  // 只保留跨 ≥2 个节点的层级
-  const multiNodeLayers = Array.from(layerMap.entries()).filter(([, group]) => {
-    const nodeNames = new Set(group.map(i => i.node_name))
-    return nodeNames.size >= 2
-  })
-
-  // 按层级顺序排列：管理 → 聚合 → 物理
-  const layerOrder = ['layer-management', 'layer-bond', 'layer-physical']
-  multiNodeLayers.sort((a, b) => layerOrder.indexOf(a[0]) - layerOrder.indexOf(b[0]))
-
-  const padding = 12
-  const segMinHeight = ifaceHeight + 32
-  const segments: NetworkSegment[] = []
-
-  multiNodeLayers.forEach(([layerKey, group]) => {
-    const minX = Math.min(...group.map(i => i.x)) - padding
-    const maxX = Math.max(...group.map(i => i.x)) + ifaceWidth + padding
-    const width = maxX - minX
-    const minY = Math.min(...group.map(i => i.y)) - padding
-
-    const contentHeight = Math.max(...group.map(i => i.y)) - Math.min(...group.map(i => i.y)) + ifaceHeight + padding
-    const height = Math.max(contentHeight, segMinHeight)
-
-    const colors = layerColors[layerKey] || layerColors['layer-physical']
-    const label = layerLabels.value[layerKey] || '网络段'
-
-    segments.push({
-      cidr: layerKey,
-      label,
-      fillColor: colors.fill,
-      strokeColor: colors.stroke,
-      labelColor: colors.label,
-      bounds: { x: minX, y: minY, width, height },
-      ifaces: group,
-    })
-  })
-
-  return segments
-})
-
-// ── IP 网段分组图层 ──
-interface SubnetSegment {
-  cidr: string
-  label: string
-  fillColor: string
-  strokeColor: string
-  labelColor: string
-  bounds: SegmentBounds
-}
-
-/** 网段配色（暖色系，与层级冷色形成对比） */
-const subnetColors: Record<string, { fill: string; stroke: string; label: string }> = {
-  '192.168': { fill: 'rgba(249, 115, 22, 0.06)',  stroke: 'rgba(249, 115, 22, 0.30)',  label: 'rgba(249, 115, 22, 0.85)' },
-  '10':      { fill: 'rgba(236, 72, 153, 0.06)',  stroke: 'rgba(236, 72, 153, 0.30)',  label: 'rgba(236, 72, 153, 0.85)' },
-  '172':     { fill: 'rgba(168, 85, 247, 0.06)',  stroke: 'rgba(168, 85, 247, 0.30)',  label: 'rgba(168, 85, 247, 0.85)' },
-}
-
-const subnetSegments = computed<SubnetSegment[]>(() => {
-  if (!showSubnetLayer.value) return []
-  const allIfaces = interfacePositions.value
-  if (!allIfaces.length) return []
-
-  // 按 CIDR 分组, 使用视觉位置（补偿 segment 偏移）
-  const cidrMap = new Map<string, { iface: IfacePos; vx: number; vy: number }[]>()
-  allIfaces.forEach(iface => {
-    if (!iface.address) return
-    const cidr = toNetworkCidr(iface.address)
-    if (!cidr) return
-    const vx = iface.x + getIfaceSegOffsetX(iface)
-    const vy = iface.y + getIfaceSegOffset(iface)
-    if (!cidrMap.has(cidr)) cidrMap.set(cidr, [])
-    cidrMap.get(cidr)!.push({ iface, vx, vy })
-  })
-
-  const padding = 16
-  const segments: SubnetSegment[] = []
-  let colorIdx = 0
-  const warmColors = Object.values(subnetColors)
-
-  cidrMap.forEach((group, cidr) => {
-    // 只显示跨 ≥2 个节点的网段
-    const nodeNames = new Set(group.map(i => i.iface.node_name))
-    if (nodeNames.size < 2) return
-
-    const minX = Math.min(...group.map(i => i.vx)) - padding
-    const maxX = Math.max(...group.map(i => i.vx)) + ifaceWidth + padding
-    const minY = Math.min(...group.map(i => i.vy)) - padding
-    const maxY = Math.max(...group.map(i => i.vy)) + ifaceHeight + padding
-    const width = maxX - minX
-    const height = maxY - minY
-
-    // 根据网段前缀选色
-    const prefix = cidr.split('.')[0]
-    const colors = subnetColors[prefix] || warmColors[colorIdx % warmColors.length]
-    colorIdx++
-
-    segments.push({
-      cidr,
-      label: cidr,
-      fillColor: colors.fill,
-      strokeColor: colors.stroke,
-      labelColor: colors.label,
-      bounds: { x: minX, y: minY, width, height },
-    })
-  })
-
-  return segments
-})
-
-/** 查找接口所属的 bond 父级名称（模板用） */
-function getIfaceBondOwner(iface: IfacePos): string {
-  const owner = interfacePositions.value.find(
-    i => i.type === 'bond' && i.node_name === iface.node_name
-      && (i.bond_slaves || '').split(/\s+/).includes(iface.name)
-  )
-  return owner?.name || ''
-}
-
-// 节点拖动
-function onNodeMouseDown(e: MouseEvent, node: NodePos) {
-  dragType.value = 'node'
-  draggingId.value = node.name
-  dragOffset.x = e.clientX - node.x
-  dragOffset.y = e.clientY - node.y
-}
-
-// 接口拖动
-function onIfaceMouseDown(e: MouseEvent, iface: IfacePos) {
-  dragType.value = 'iface'
-  draggingId.value = iface.id
-  dragOffset.x = e.clientX - iface.x
-  dragOffset.y = e.clientY - iface.y
-}
-
-// 画布拖动
-function onCanvasMouseDown(e: MouseEvent) {
-  // 只在点击空白区域时触发（检查目标是否是 SVG 本身）
-  if ((e.target as Element).tagName !== 'svg') return
-  dragType.value = 'canvas'
-  draggingId.value = 'canvas'
-  dragOffset.x = e.clientX
-  dragOffset.y = e.clientY
-}
-
-// 子网段色带拖动
-function onSubnetMouseDown(e: MouseEvent, cidr: string) {
-  dragType.value = 'segment'
-  draggingId.value = 'sub:' + cidr
-  segmentDragStartX.value = e.clientX
-  segmentDragStartY.value = e.clientY
-  segmentDragBaseOffsetX.value = subnetOffsetsX.value[cidr] || 0
-  segmentDragBaseOffset.value = subnetOffsets.value[cidr] || 0
-}
-
-// 段色带拖动
-function onSegmentMouseDown(e: MouseEvent, segCidr: string) {
-  dragType.value = 'segment'
-  draggingId.value = segCidr
-  segmentDragStartX.value = e.clientX
-  segmentDragStartY.value = e.clientY
-  segmentDragBaseOffsetX.value = segmentOffsetsX.value[segCidr] || 0
-  segmentDragBaseOffset.value = segmentOffsets.value[segCidr] || 0
-}
-
-function onMouseMove(e: MouseEvent) {
-  if (dragType.value === 'canvas') {
-    const dx = e.clientX - dragOffset.x
-    const dy = e.clientY - dragOffset.y
-    // 移动所有节点和接口（替换数组触发响应式）
-    nodePositions.value = nodePositions.value.map(n => ({ ...n, x: n.x + dx, y: n.y + dy }))
-    interfacePositions.value = interfacePositions.value.map(i => ({ ...i, x: i.x + dx, y: i.y + dy }))
-    dragOffset.x = e.clientX
-    dragOffset.y = e.clientY
-  } else if (dragType.value === 'node') {
-    const node = nodePositions.value.find(n => n.name === draggingId.value)
-    if (!node) return
-    node.x = e.clientX - dragOffset.x
-    node.y = e.clientY - dragOffset.y
-  } else if (dragType.value === 'iface') {
-    interfacePositions.value = interfacePositions.value.map(i =>
-      i.id === draggingId.value ? { ...i, x: e.clientX - dragOffset.x, y: e.clientY - dragOffset.y } : i
-    )
-  } else if (dragType.value === 'segment') {
-    const dx = e.clientX - segmentDragStartX.value
-    const dy = e.clientY - segmentDragStartY.value
-    const id = draggingId.value as string
-    if (id.startsWith('sub:')) {
-      const cidr = id.slice(4)
-      subnetOffsetsX.value = { ...subnetOffsetsX.value, [cidr]: segmentDragBaseOffsetX.value + dx }
-      subnetOffsets.value = { ...subnetOffsets.value, [cidr]: segmentDragBaseOffset.value + dy }
-    } else {
-      segmentOffsetsX.value = { ...segmentOffsetsX.value, [id]: segmentDragBaseOffsetX.value + dx }
-      segmentOffsets.value = { ...segmentOffsets.value, [id]: segmentDragBaseOffset.value + dy }
-    }
-  }
-}
-
-function onMouseUp() {
-  dragType.value = ''
-  draggingId.value = ''
-}
-
-function onWheel(e: WheelEvent) {
-  const delta = e.deltaY > 0 ? -0.1 : 0.1
-  const newScale = Math.min(Math.max(scale.value + delta, minScale), maxScale)
-  scale.value = newScale
-}
-
-function zoomIn() {
-  scale.value = Math.min(scale.value + 0.1, maxScale)
-}
-
-function zoomOut() {
-  scale.value = Math.max(scale.value - 0.1, minScale)
-}
-
-function resetView() {
-  scale.value = 1
-  segmentOffsets.value = {}
-  subnetOffsets.value = {}
-  subnetOffsetsX.value = {}
-  initPositions()
-}
-
-function getIfaceColor(type: string): string {
-  switch (type) {
-    case 'eth': return '#409eff'
-    case 'bridge': return '#67c23a'
-    case 'bond': return '#e6a23c'
-    case 'vlan': return '#8b5cf6'
-    default: return '#909399'
-  }
-}
-
-function getIfaceFill(type: string): string {
-  switch (type) {
-    case 'eth': return 'rgba(64, 158, 255, 0.1)'
-    case 'bridge': return 'rgba(103, 194, 58, 0.1)'
-    case 'bond': return 'rgba(230, 162, 60, 0.1)'
-    case 'vlan': return 'rgba(139, 92, 246, 0.1)'
-    default: return 'rgba(144, 147, 153, 0.1)'
-  }
-}
-
-function getIfaceStroke(type: string): string {
-  switch (type) {
-    case 'eth': return '#409eff'
-    case 'bridge': return '#67c23a'
-    case 'bond': return '#e6a23c'
-    case 'vlan': return '#8b5cf6'
-    default: return '#909399'
-  }
+// 窗口大小变化时重新初始化
+let resizeTimer: ReturnType<typeof setTimeout>
+function handleResize() {
+  clearTimeout(resizeTimer)
+  resizeTimer = setTimeout(() => {
+    initSvg()
+    updateGraph()
+  }, 200)
 }
 
 onMounted(async () => {
@@ -756,13 +442,22 @@ onMounted(async () => {
   try {
     if (!clusterStore.clusterList.length) await clusterStore.fetchClusters()
     topologyData.value = await getNetworkList()
-    initPositions()
-  } catch {} finally {
+    await nextTick()
+    initSvg()
+    updateGraph()
+  } catch (e) {
+    console.error('Failed to load topology:', e)
+  } finally {
     loading.value = false
   }
+
+  window.addEventListener('resize', handleResize)
 })
 
-watch(() => clusterStore.currentClusterId, () => { initPositions() })
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+  if (simulation) simulation.stop()
+})
 </script>
 
 <style scoped>
@@ -770,7 +465,8 @@ watch(() => clusterStore.currentClusterId, () => { initPositions() })
 .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
 .page-title { font-size: 24px; font-weight: 700; color: var(--text-heading); margin: 0; }
 .page-desc { font-size: 14px; color: var(--text-muted); margin: 4px 0 0; }
-/* ── 工具栏 ── */
+
+/* 工具栏 */
 .toolbar {
   display: flex; align-items: center; gap: 0;
   background: var(--bg-secondary, #f5f7fa);
@@ -811,33 +507,9 @@ watch(() => clusterStore.currentClusterId, () => { initPositions() })
   overflow: hidden;
 }
 .empty-state { display: flex; align-items: center; justify-content: center; flex: 1; }
-
 .topology-canvas { width: 100%; flex: 1; min-height: 0; }
-.topology-svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-  user-select: none;
-}
 
-.node-label { font-size: 14px; font-weight: 600; fill: var(--text-heading); }
-.node-sub { font-size: 11px; fill: var(--text-muted); }
-.iface-label { font-size: 12px; font-weight: 500; fill: var(--text-primary); }
-.iface-type { font-size: 10px; fill: var(--text-muted); }
-.iface-ip { font-size: 9px; fill: var(--text-muted); opacity: .75; }
-
-.node-group { cursor: grab; }
-.node-group:active { cursor: grabbing; }
-.node-group.dragging { cursor: grabbing; }
-.node-group.dragging rect { stroke-width: 3; filter: brightness(1.05); }
-.node-group:hover rect { filter: brightness(1.05); stroke-width: 3; }
-
-.iface-group { cursor: grab; }
-.iface-group:active { cursor: grabbing; }
-.iface-group.dragging { cursor: grabbing; }
-.iface-group.dragging rect { stroke-width: 2.5; filter: brightness(1.1); }
-.iface-group:hover rect { filter: brightness(1.1); stroke-width: 2; }
-
+/* 图例 */
 .legend-bar {
   display: flex; align-items: center; gap: 6px; margin-top: 16px; padding: 8px 14px;
   background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px;
@@ -852,18 +524,8 @@ watch(() => clusterStore.currentClusterId, () => { initPositions() })
 .legend-item:hover { background: rgba(64,158,255,.06); }
 .legend-item.is-hidden { opacity: .4; }
 .legend-item.is-hidden .legend-dot { background: #c0c4cc !important; }
-.legend-item.is-hidden .legend-band { opacity: .3; }
-.legend-item.is-hidden .legend-dot::after { content: ''; position: absolute; width: 12px; height: 1.5px; background: #c0c4cc; transform: rotate(-45deg); top: 4.25px; left: -1px; }
-.legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; position: relative; transition: all .2s; }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; transition: all .2s; }
 .legend-sep { width: 1px; height: 16px; background: var(--border-color); padding: 0; cursor: default; }
-.legend-sep:hover { background: var(--border-color); }
 .legend-static { cursor: default; }
 .legend-static:hover { background: transparent; }
-.legend-absent { opacity: .35; cursor: not-allowed; pointer-events: none; }
-.legend-absent .legend-dot { background: #c0c4cc !important; }
-.legend-band { width: 16px; height: 8px; border-radius: 3px; display: inline-block;
-  background: repeating-linear-gradient(45deg, rgba(103,194,58,0.15), rgba(103,194,58,0.15) 2px, rgba(103,194,58,0.3) 2px, rgba(103,194,58,0.3) 4px);
-  border: 1px dashed rgba(103,194,58,0.5); }
-.segment-label { font-size: 10px; font-weight: 600; }
-.subnet-label { font-size: 10px; font-weight: 700; }
 </style>
