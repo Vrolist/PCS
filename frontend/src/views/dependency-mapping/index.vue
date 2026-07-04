@@ -85,7 +85,7 @@
               :width="getPos(nd.id)?.w ?? nd.width" :height="getPos(nd.id)?.h ?? nd.height"
               rx="14" :fill="getColors('node').fill" :stroke="getColors('node').stroke"
               stroke-width="2" stroke-dasharray="6,3" />
-            <text text-anchor="middle" :y="(getPos(nd.id)?.h ?? nd.height)/2 - 5"
+            <text text-anchor="middle" y="0" dy="0.35em"
               fill="var(--text-heading)" font-size="13" font-weight="700" class="svg-text-primary">
               {{ nd.name }} {{ getSubLabel(nd) }}
             </text>
@@ -258,7 +258,7 @@ function toggleType(type: string) {
 }
 
 function getSubLabel(n: any): string {
-  if (n.type === 'node') return `${n.cpu_load ? (n.cpu_load * 100).toFixed(0) + '%' : ''} ${n.ip_address || ''}`.trim()
+  if (n.type === 'node') return `${n.cpu_load != null ? Number(n.cpu_load).toFixed(0) + '%' : ''} ${n.ip_address || ''}`.trim()
   if (n.type === 'vm' || n.type === 'container') {
     const b = `${n.cpu_cores || 0}核 ${n.memory_mb ? (n.memory_mb / 1024).toFixed(0) + 'G' : ''}`
     return n.ha_enabled ? `${b} · HA:${n.ha_group}` : b
@@ -782,7 +782,7 @@ function onLeafClick(leafId: string) {
 function showDetails(node: HNode) {
   const d: Record<string, string> = {}
   if (node.type === 'node') {
-    d[t('smartAnalysis.dependencyMapping.cpuLoad')] = node.cpu_load ? `${(node.cpu_load * 100).toFixed(1)}%` : '-'
+    d[t('smartAnalysis.dependencyMapping.cpuLoad')] = node.cpu_load != null ? `${Number(node.cpu_load).toFixed(1)}%` : '-'
     d[t('smartAnalysis.dependencyMapping.memory')] = node.memory_usage_pct ? `${node.memory_usage_pct.toFixed(1)}%` : '-'
     d[t('smartAnalysis.dependencyMapping.ip')] = node.ip_address || '-'
     d[t('smartAnalysis.dependencyMapping.status')] = node.status || '-'
