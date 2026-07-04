@@ -462,6 +462,8 @@ function updateGraph() {
       event.stopPropagation()
       if (d.type === 'subnet') {
         applyHighlight(d.address || null)
+      } else if (d.type === 'node' || d.type === 'iface') {
+        applyNodeHighlight(d)
       }
     })
 
@@ -642,6 +644,72 @@ function applyHighlight(subnet: string | null) {
       const sid = typeof link.source === 'string' ? link.source : (link.source as GraphNode).id
       const tid = typeof link.target === 'string' ? link.target : (link.target as GraphNode).id
       if (highlightNodeIds.has(sid) && highlightNodeIds.has(tid)) return 0.8
+      return 0.05
+    })
+}
+
+/** 节点高亮：点击节点/接口后，路径到子网全亮，其余变暗 */
+function applyNodeHighlight(clickedNode: GraphNode) {
+  highlightedSubnet.value = null
+
+  if (!g) return
+
+  const { nodes, links } = graphData.value
+  const highlightIds = new Set<string>()
+  highlightIds.add(clickedNode.id)
+
+  if (clickedNode.type === 'node') {
+    // 点击 PVE 节点 → 高亮所有子接口 + 接口所属子网 + bridge/bond 链路
+    const childIfaces = nodes.filter(n => n.type === 'iface' && n.nodeName === clickedNode.name)
+    childIfaces.forEach(iface => {
+      highlightIds.add(iface.id)
+      // bridge/bond 链路
+      links.forEach(l => {
+        if (l.type !== 'bridge-port' && l.type !== 'bond-slave') return
+        const sid = typeof l.source === 'string' ? l.source : (l.source as GraphNode).id
+        const tid = typeof l.target === 'string' ? l.target : (l.target as GraphNode).id
+        if (sid === iface.id) highlightIds.add(tid)
+        if (tid === iface.id) highlightIds.add(sid)
+      })
+    })
+    // 接口所属子网
+    highlightIds.forEach(id => {
+      const n = nodes.find(n => n.id === id)
+      if (n?.subnet) {
+        const subnetNode = nodes.find(s => s.type === 'subnet' && s.address === n.subnet)
+        if (subnetNode) highlightIds.add(subnetNode.id)
+      }
+    })
+  } else if (clickedNode.type === 'iface') {
+    // 点击接口 → 高亮父节点 + 所属子网 + bridge/bond 链路
+    if (clickedNode.nodeName) {
+      const parent = nodes.find(n => n.type === 'node' && n.name === clickedNode.nodeName)
+      if (parent) highlightIds.add(parent.id)
+    }
+    if (clickedNode.subnet) {
+      const subnetNode = nodes.find(n => n.type === 'subnet' && n.address === clickedNode.subnet)
+      if (subnetNode) highlightIds.add(subnetNode.id)
+    }
+    // bridge/bond 链路
+    links.forEach(l => {
+      if (l.type !== 'bridge-port' && l.type !== 'bond-slave') return
+      const sid = typeof l.source === 'string' ? l.source : (l.source as GraphNode).id
+      const tid = typeof l.target === 'string' ? l.target : (l.target as GraphNode).id
+      if (sid === clickedNode.id) highlightIds.add(tid)
+      if (tid === clickedNode.id) highlightIds.add(sid)
+    })
+  }
+
+  // 应用高亮/变暗
+  g.selectAll('.node').transition().duration(300)
+    .style('opacity', (d) => highlightIds.has((d as GraphNode).id) ? 1 : 0.12)
+
+  g.selectAll('.links line').transition().duration(300)
+    .style('opacity', (d) => {
+      const link = d as GraphLink
+      const sid = typeof link.source === 'string' ? link.source : (link.source as GraphNode).id
+      const tid = typeof link.target === 'string' ? link.target : (link.target as GraphNode).id
+      if (highlightIds.has(sid) && highlightIds.has(tid)) return 0.8
       return 0.05
     })
 }
