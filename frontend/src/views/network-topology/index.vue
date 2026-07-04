@@ -126,10 +126,19 @@ const subnetColors = [
 let subnetColorMap = new Map<string, string>()
 let subnetColorIdx = 0
 
-/** 从 CIDR 地址提取子网（如 192.168.1.100/24 → 192.168.1.0/24） */
+/** 从地址中提取子网（如 192.168.1.100/24 → 192.168.1.0/24，10.0.0.5 → 10.0.0.0/24） */
 function extractSubnet(address?: string): string | null {
   if (!address) return null
   const parts = address.split('/')
+  
+  if (parts.length === 1) {
+    // 没有 CIDR 标记，降级处理：假设 /24
+    const ipParts = parts[0].split('.')
+    if (ipParts.length !== 4) return null
+    // 简单验证并返回 /24 子网
+    return `${ipParts[0]}.${ipParts[1]}.${ipParts[2]}.0/24`
+  }
+
   if (parts.length !== 2) return null
   const ipParts = parts[0].split('.')
   const prefix = parseInt(parts[1], 10)
