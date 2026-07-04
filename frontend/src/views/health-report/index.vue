@@ -14,6 +14,9 @@
           <el-option :label="t('healthReport.last30Days')" :value="30" />
         </el-select>
         <el-button @click="loadData" :icon="Refresh" circle />
+        <el-button @click="exportPDF" :icon="Download" :loading="exporting">
+          {{ t('healthReport.exportPDF') }}
+        </el-button>
       </div>
     </div>
 
@@ -205,7 +208,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import * as echarts from 'echarts'
 import VChart from 'vue-echarts'
-import { Refresh, Cpu, Monitor, Box, Coin, Bell, FolderOpened, DataAnalysis } from '@element-plus/icons-vue'
+import { Refresh, Cpu, Monitor, Box, Coin, Bell, FolderOpened, DataAnalysis, Download } from '@element-plus/icons-vue'
 import { useThemeStore } from '@/stores/theme'
 import { useClusterStore } from '@/stores/cluster'
 import { getHealthReport, type HealthReportData } from '@/api/dashboard'
@@ -214,6 +217,7 @@ const { t } = useI18n()
 const themeStore = useThemeStore()
 const clusterStore = useClusterStore()
 const loading = ref(false)
+const exporting = ref(false)
 const timeRange = ref(0)
 const report = ref<HealthReportData | null>(null)
 
@@ -226,6 +230,37 @@ async function loadData() {
     report.value = null
   } finally {
     loading.value = false
+  }
+}
+
+async function exportPDF() {
+  if (!report.value) return
+
+  exporting.value = true
+  try {
+    const html2pdf = (await import('html2pdf.js')).default
+    const element = document.querySelector('.page-container')
+    if (!element) return
+
+    const clusterName = clusterStore.currentClusterName || 'all'
+    const date = new Date().toISOString().slice(0, 10)
+    const filename = `health-report-${clusterName}-${date}.pdf`
+
+    const opt = {
+      margin: [10, 10, 10, 10],
+      filename,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, logging: false },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
+      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+    }
+
+    await html2pdf().set(opt).from(element).save()
+  } catch (err) {
+    console.error('Export PDF failed:', err)
+    ElMessage.error(t('healthReport.exportFailed'))
+  } finally {
+    exporting.value = false
   }
 }
 

@@ -747,6 +747,8 @@ export default {
     adequacyLimitedDesc: 'Only {days} days of data available. Trend analysis may not be accurate. Recommend 7+ days for full report.',
     adequacyModerate: 'Moderate Data',
     adequacyModerateDesc: '{days} days of data available. Report has reference value. 14+ days recommended for accurate trend prediction.',
+    exportPDF: 'Export PDF',
+    exportFailed: 'Export PDF failed, please try again',
   },
 
   // Advanced Info Placeholder Pages
