@@ -754,8 +754,9 @@ export default {
     adequacyLimitedDesc: '当前仅有 {days} 天数据，趋势分析可能不够准确。建议持续采集 7 天以上后查看完整报告。',
     adequacyModerate: '数据适中',
     adequacyModerateDesc: '当前有 {days} 天数据，报告已具备参考价值。持续采集 14 天以上可获得更准确的趋势预测。',
-    exportPDF: '导出 PDF',
-    exportFailed: '导出 PDF 失败，请重试',
+    exportPDF: '导出报告',
+    exportSuccess: '报告导出成功',
+    exportFailed: '导出失败，请重试',
   },
 
   // 进阶信息占位页
