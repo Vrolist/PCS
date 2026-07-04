@@ -1461,20 +1461,7 @@ class DependencyGraphView(APIView):
                 if ClusterNode.objects.filter(pk=nid, cluster_id=cluster_filter).exists()
             ]
 
-        # 如果选择了特定资源，只显示该资源所在的节点
-        if resource_id and resource_type:
-            resource_node_id = None
-            if resource_type == "vm":
-                vm_obj = VM.objects.filter(pk=resource_id).first()
-                if vm_obj:
-                    resource_node_id = vm_obj.node_id
-            elif resource_type == "container":
-                ct_obj = LXC.objects.filter(pk=resource_id).first()
-                if ct_obj:
-                    resource_node_id = ct_obj.node_id
-            if resource_node_id:
-                node_ids = [resource_node_id]
-
+        # 始终显示集群中的所有节点
         pve_nodes = ClusterNode.objects.filter(pk__in=node_ids).select_related("cluster")
         for n in pve_nodes:
             nodes_list.append({
@@ -1494,13 +1481,12 @@ class DependencyGraphView(APIView):
                 "type": "cluster-node",
             })
 
+        # 未选择特定资源时，只返回集群+节点
+        if not (resource_type and resource_id):
+            return Response({"nodes": nodes_list, "edges": edges_list})
+
         # 3. VM（每个节点每个 vmid 取最新）
         vm_qs = VM.objects.filter(node_id__in=node_ids).select_related("node").order_by("node_id", "vmid", "-scanned_at")
-        if resource_type == "vm" and resource_id:
-            vm_qs = vm_qs.filter(pk=resource_id)
-        elif resource_type == "container" and resource_id:
-            # 选择了容器，不显示任何 VM
-            vm_qs = vm_qs.none()
         seen_vms = set()
         vm_entries = []  # (vm_obj, node_dict)
         for vm in vm_qs:
@@ -1531,11 +1517,6 @@ class DependencyGraphView(APIView):
 
         # 4. LXC 容器
         lxc_qs = LXC.objects.filter(node_id__in=node_ids).select_related("node").order_by("node_id", "vmid", "-scanned_at")
-        if resource_type == "container" and resource_id:
-            lxc_qs = lxc_qs.filter(pk=resource_id)
-        elif resource_type == "vm" and resource_id:
-            # 选择了 VM，不显示任何容器
-            lxc_qs = lxc_qs.none()
         seen_containers = set()
         ct_entries = []  # (lxc_obj, node_dict)
         for ct in lxc_qs:
