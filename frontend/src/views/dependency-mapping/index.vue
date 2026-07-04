@@ -115,6 +115,26 @@
               <text x="14" y="11" text-anchor="middle" font-size="8" font-weight="700" fill="#fff">HA</text>
             </g>
           </g>
+
+          <!-- 5️⃣ 高亮脉冲动画（选中资源时显示） -->
+          <g v-if="highlightedLeafId" class="highlight-pulse"
+            :transform="`translate(${getPos(highlightedLeafId)?.x ?? 0}, ${getPos(highlightedLeafId)?.y ?? 0})`">
+            <rect :x="-(getLeafWidth(highlightedLeafId))/2 - 6"
+              :y="-(getLeafHeight(highlightedLeafId))/2 - 6"
+              :width="getLeafWidth(highlightedLeafId) + 12"
+              :height="getLeafHeight(highlightedLeafId) + 12"
+              rx="14" fill="none" stroke="#409eff" stroke-width="3" opacity="0.8">
+              <animate attributeName="stroke-width" values="3;6;3" dur="1.5s" repeatCount="indefinite" />
+              <animate attributeName="opacity" values="0.8;0.3;0.8" dur="1.5s" repeatCount="indefinite" />
+            </rect>
+            <rect :x="-(getLeafWidth(highlightedLeafId))/2 - 10"
+              :y="-(getLeafHeight(highlightedLeafId))/2 - 10"
+              :width="getLeafWidth(highlightedLeafId) + 20"
+              :height="getLeafHeight(highlightedLeafId) + 20"
+              rx="16" fill="none" stroke="#409eff" stroke-width="2" opacity="0">
+              <animate attributeName="opacity" values="0;0.4;0" dur="1.5s" repeatCount="indefinite" />
+            </rect>
+          </g>
         </g>
       </svg>
     </div>
@@ -168,6 +188,7 @@ const selectedResourceId = ref<number | undefined>(undefined)
 const vmList = ref<VMInfo[]>([])
 const containerList = ref<ContainerInfo[]>([])
 const hiddenTypes = ref(new Set<string>())
+const highlightedLeafId = ref<string>('')
 
 // ─── 缩放/平移状态 ───
 const scale = ref(1)
@@ -276,6 +297,15 @@ function truncatedName(node: HNode): string {
   return node.name.length > approxChars ? node.name.slice(0, approxChars - 3) + '...' : node.name
 }
 
+function getLeafWidth(id: string): number {
+  const lf = leafList.value.find(l => l.id === id)
+  return lf?.width ?? 170
+}
+function getLeafHeight(id: string): number {
+  const lf = leafList.value.find(l => l.id === id)
+  return lf?.height ?? 48
+}
+
 // ─── 层次结构构建（纯算法，不涉及 DOM） ───
 const nodeSizes: Record<string, [number, number]> = {
   cluster: [160, 56], node: [150, 52], vm: [170, 48], container: [170, 48],
@@ -304,7 +334,7 @@ function buildHierarchy(apiData: DependencyGraph) {
     if (n.type === 'ha') { haList.push(hNode); return }
     nonHaLeafs.push(hNode)
     if (n.node_id != null) {
-      const parent = nodes.find(nd => nd.node_id === n.node_id)
+      const parent = nodes.find(nd => String(nd.node_id) === String(n.node_id))
       if (parent) { parent.leafs.push(hNode); return }
     }
     if (cluster) nodeMap.get(cluster.id)!.leafs.push(hNode)
@@ -495,6 +525,26 @@ function layoutGraph() {
       w: ha.width, h: ha.height,
     }
   })
+
+  // 集群级叶子（未附着到任何节点的 storage/network/容器等）放在集群底部
+  const clusterLeafs = leafList.value.filter(lf => !nodeParentMap.value.has(lf.id))
+  if (clusterLeafs.length > 0) {
+    const cp = positions[clusterNode.value!.id]
+    const startY = cp.y + cp.h - pad - childH / 2
+    clusterLeafs.forEach((lf, i) => {
+      const cols = Math.max(1, Math.min(clusterLeafs.length, 3))
+      const row = Math.floor(i / cols), col = i % cols
+      const totalW = Math.min(cols, clusterLeafs.length) * (childW + gap) - gap
+      const startX = cp.x + (cp.w - totalW) / 2
+      positions[lf.id] = {
+        x: startX + col * (childW + gap) + childW / 2,
+        y: startY - row * (childH + gap),
+        w: lf.width, h: lf.height,
+      }
+    })
+    // 集群自动扩大以容纳这些叶子
+    shrinkClusterToFit()
+  }
 
   // 确保所有节点和子节点都被正确包含
   pveNodes.value.forEach(nd => recalcParent(nd.id))
@@ -867,12 +917,34 @@ function onWheel(e: WheelEvent) {
   scale.value = newScale
 }
 
-// ─── 数据加载 ───
+// ─── 资源选择 ───
 function onResourceTypeChange() {
   selectedResourceId.value = undefined
+  highlightedLeafId.value = ''
+  // 仅重置下拉列表，不刷新图
+}
+
+/** 选择具体资源 → 加载图（只包含该资源）并高亮 */
+function onResourceChange() {
+  if (!selectedResourceId.value) {
+    // 清空选择 → 回到只有集群+节点的图
+    highlightedLeafId.value = ''
+    loadData()
+    return
+  }
   loadData()
 }
-function onResourceChange() { loadData() }
+
+/** 平移视图使指定叶子节点居中显示 */
+function panToLeaf(leafId: string) {
+  const pos = getPos(leafId)
+  if (!pos || !svgRef.value) return
+  const rect = svgRef.value.getBoundingClientRect()
+  const cx = rect.width / 2
+  const cy = rect.height / 2
+  panX.value = cx - pos.x * scale.value
+  panY.value = cy - pos.y * scale.value
+}
 
 async function loadResourceLists() {
   const cid = clusterStore.currentClusterId
@@ -886,6 +958,8 @@ async function loadResourceLists() {
 async function loadData() {
   loading.value = true
   initDone.value = false
+  highlightedLeafId.value = ''
+  selectedNode.value = null
   // 清理旧数据
   Object.keys(positions).forEach(k => delete positions[k])
   edgeData.value = []
@@ -913,9 +987,20 @@ async function loadData() {
     await nextTick()
     layoutGraph()
     initDone.value = true
-    // 自适应
-    await nextTick()
-    setTimeout(() => fitView(), 100)
+    // 加载了具体资源时，自动高亮并平移到该资源
+    if (selectedResourceType.value && selectedResourceId.value) {
+      await nextTick()
+      const leaf = leafList.value[0] // API 只返回一个资源节点
+      if (leaf) {
+        highlightedLeafId.value = leaf.id
+        panToLeaf(leaf.id)
+        showDetails(leaf)
+      }
+    } else {
+      // 自适应
+      await nextTick()
+      setTimeout(() => fitView(), 100)
+    }
   } catch (e) { console.error(e) }
   finally { loading.value = false }
 }
@@ -936,6 +1021,7 @@ watch(() => clusterStore.currentClusterId, async () => {
   selectedNode.value = null
   selectedResourceType.value = ''
   selectedResourceId.value = undefined
+  highlightedLeafId.value = ''
   await loadResourceLists()
   await loadData()
 })

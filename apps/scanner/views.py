@@ -1481,69 +1481,86 @@ class DependencyGraphView(APIView):
                 "type": "cluster-node",
             })
 
-        # 未选择特定资源时，只返回集群+节点
+        # 未选择特定资源时，只返回集群+节点（快速加载）
         if not (resource_type and resource_id):
             return Response({"nodes": nodes_list, "edges": edges_list})
 
-        # 3. VM（每个节点每个 vmid 取最新）
-        vm_qs = VM.objects.filter(node_id__in=node_ids).select_related("node").order_by("node_id", "vmid", "-scanned_at")
-        seen_vms = set()
-        vm_entries = []  # (vm_obj, node_dict)
-        for vm in vm_qs:
-            vm_key = f"{vm.node_id}-{vm.vmid}"
-            if vm_key in seen_vms:
-                continue
-            seen_vms.add(vm_key)
-            vm_id = f"vm-{vm.node_id}-{vm.vmid}"
-            vm_node = {
-                "id": vm_id,
-                "type": "vm",
-                "name": vm.name or f"VM {vm.vmid}",
-                "vmid": vm.vmid,
-                "status": vm.status,
-                "cpu_cores": vm.cpu_cores,
-                "memory_mb": vm.memory_mb,
-                "node_id": vm.node_id,
-                "ha_enabled": False,
-                "ha_group": "",
-            }
-            nodes_list.append(vm_node)
-            vm_entries.append((vm, vm_node))
-            edges_list.append({
-                "source": f"node-{vm.node_id}",
-                "target": vm_id,
-                "type": "node-vm",
-            })
+        vm_entries = []   # (vm_obj, node_dict)
+        ct_entries = []   # (lxc_obj, node_dict)
+        vm_qs = VM.objects.none()
+        lxc_qs = LXC.objects.none()
 
-        # 4. LXC 容器
-        lxc_qs = LXC.objects.filter(node_id__in=node_ids).select_related("node").order_by("node_id", "vmid", "-scanned_at")
-        seen_containers = set()
-        ct_entries = []  # (lxc_obj, node_dict)
-        for ct in lxc_qs:
-            ct_key = f"{ct.node_id}-{ct.vmid}"
-            if ct_key in seen_containers:
-                continue
-            seen_containers.add(ct_key)
-            ct_id = f"ct-{ct.node_id}-{ct.vmid}"
-            ct_node = {
-                "id": ct_id,
-                "type": "container",
-                "name": ct.name or f"CT {ct.vmid}",
-                "vmid": ct.vmid,
-                "status": ct.status,
-                "cpu_cores": ct.cpu_cores,
-                "memory_mb": ct.memory_mb,
-                "node_id": ct.node_id,
-                "ha_enabled": False,
-                "ha_group": "",
-            }
-            nodes_list.append(ct_node)
-            ct_entries.append((ct, ct_node))
-            edges_list.append({
-                "source": f"node-{ct.node_id}",
-                "target": ct_id,
-                "type": "node-container",
-            })
+        # 3. VM（仅在选择 VM 时加载）
+        if resource_type == "vm":
+            vm_qs = VM.objects.filter(node_id__in=node_ids).select_related("node").order_by("node_id", "vmid", "-scanned_at")
+            if resource_id:
+                try:
+                    vm_ref = VM.objects.get(pk=resource_id)
+                    vm_qs = vm_qs.filter(node_id=vm_ref.node_id, vmid=vm_ref.vmid)
+                except VM.DoesNotExist:
+                    vm_qs = vm_qs.none()
+            seen_vms = set()
+            for vm in vm_qs:
+                vm_key = f"{vm.node_id}-{vm.vmid}"
+                if vm_key in seen_vms:
+                    continue
+                seen_vms.add(vm_key)
+                vm_id = f"vm-{vm.node_id}-{vm.vmid}"
+                vm_node = {
+                    "id": vm_id,
+                    "type": "vm",
+                    "name": vm.name or f"VM {vm.vmid}",
+                    "vmid": vm.vmid,
+                    "status": vm.status,
+                    "cpu_cores": vm.cpu_cores,
+                    "memory_mb": vm.memory_mb,
+                    "node_id": vm.node_id,
+                    "ha_enabled": False,
+                    "ha_group": "",
+                }
+                nodes_list.append(vm_node)
+                vm_entries.append((vm, vm_node))
+                edges_list.append({
+                    "source": f"node-{vm.node_id}",
+                    "target": vm_id,
+                    "type": "node-vm",
+                })
+
+        # 4. LXC 容器（仅在选择容器时加载）
+        if resource_type == "container":
+            lxc_qs = LXC.objects.filter(node_id__in=node_ids).select_related("node").order_by("node_id", "vmid", "-scanned_at")
+            if resource_id:
+                try:
+                    ct_ref = LXC.objects.get(pk=resource_id)
+                    lxc_qs = lxc_qs.filter(node_id=ct_ref.node_id, vmid=ct_ref.vmid)
+                except LXC.DoesNotExist:
+                    lxc_qs = lxc_qs.none()
+            seen_containers = set()
+            for ct in lxc_qs:
+                ct_key = f"{ct.node_id}-{ct.vmid}"
+                if ct_key in seen_containers:
+                    continue
+                seen_containers.add(ct_key)
+                ct_id = f"ct-{ct.node_id}-{ct.vmid}"
+                ct_node = {
+                    "id": ct_id,
+                    "type": "container",
+                    "name": ct.name or f"CT {ct.vmid}",
+                    "vmid": ct.vmid,
+                    "status": ct.status,
+                    "cpu_cores": ct.cpu_cores,
+                    "memory_mb": ct.memory_mb,
+                    "node_id": ct.node_id,
+                    "ha_enabled": False,
+                    "ha_group": "",
+                }
+                nodes_list.append(ct_node)
+                ct_entries.append((ct, ct_node))
+                edges_list.append({
+                    "source": f"node-{ct.node_id}",
+                    "target": ct_id,
+                    "type": "node-container",
+                })
 
         # 3.1 通过 HAResource 补充 VM/容器的 HA 信息
         # 4.1 通过 HAResource 补充容器的 HA 信息
