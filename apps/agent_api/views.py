@@ -1041,6 +1041,21 @@ class ScanUploadView(APIView):
         used_mem = sum(mem_used) if mem_used else 0
         avg_mem = round(used_mem / total_mem, 2) if total_mem > 0 else 0
 
+        # 存储聚合
+        total_storage_gb = 0.0
+        used_storage_gb = 0.0
+        for n in nodes_data:
+            for s in n.get("storages", []):
+                total_storage_gb += float(s.get("total_gb") or 0)
+                used_storage_gb += float(s.get("used_gb") or 0)
+
+        # 根分区聚合
+        total_rootfs_gb = 0.0
+        used_rootfs_gb = 0.0
+        for n in nodes_data:
+            total_rootfs_gb += float(n.get("rootfs_total_gb") or 0)
+            used_rootfs_gb += float(n.get("rootfs_used_gb") or 0)
+
         ScanHistory.objects.create(
             cluster=cluster,
             scan=scan_task,
@@ -1053,6 +1068,10 @@ class ScanUploadView(APIView):
                 "avg_memory_usage": avg_mem,
                 "total_memory_mb": total_mem,
                 "used_memory_mb": used_mem,
+                "total_storage_gb": round(total_storage_gb, 2),
+                "used_storage_gb": round(used_storage_gb, 2),
+                "total_rootfs_gb": round(total_rootfs_gb, 2),
+                "used_rootfs_gb": round(used_rootfs_gb, 2),
             },
             scanned_at=scanned_at,
         )

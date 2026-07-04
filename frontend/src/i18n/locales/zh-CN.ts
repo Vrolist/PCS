@@ -635,7 +635,23 @@ export default {
 
   // 智能分析
   smartAnalysis: {
-    capacityPlanning: { title: '容量规划与趋势预测', subtitle: '基于历史数据预测资源使用趋势与满载日期', comingSoon: '容量规划功能开发中' },
+    capacityPlanning: {
+      title: '容量规划与趋势预测',
+      subtitle: '基于历史数据预测资源使用趋势与满载日期',
+      comingSoon: '容量规划功能开发中',
+      memory: '内存',
+      storage: '存储',
+      rootfs: '根分区',
+      trendRising: '上升',
+      trendDeclining: '下降',
+      trendStable: '稳定',
+      daysUntilFull: '预计 {days} 天后满载',
+      noPrediction: '数据不足，暂无法预测',
+      perDay: '每日',
+      prediction: '预测',
+      trendChart: '资源趋势与容量预测',
+      chartNote: '实线为历史数据，虚线为线性回归预测趋势；橙色虚线为 85% 告警阈值，红色虚线为 95% 危险阈值',
+    },
     changeTracking: { title: '变更追踪', subtitle: '对比相邻扫描差异，追踪集群资源变化', comingSoon: '变更追踪功能开发中' },
     resourceReclamation: { title: '资源回收建议', subtitle: '检测僵尸 VM、未使用磁盘等可回收资源', comingSoon: '资源回收功能开发中' },
     drScore: { title: '灾备就绪评分', subtitle: '评估集群灾备能力，提供改进建议', comingSoon: '灾备评分功能开发中' },

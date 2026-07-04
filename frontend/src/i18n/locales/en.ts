@@ -628,7 +628,23 @@ export default {
 
   // Smart Analysis
   smartAnalysis: {
-    capacityPlanning: { title: 'Capacity Planning & Trend Prediction', subtitle: 'Predict resource usage trends and full-load dates based on historical data', comingSoon: 'Capacity planning coming soon' },
+    capacityPlanning: {
+      title: 'Capacity Planning & Trend Prediction',
+      subtitle: 'Predict resource usage trends and full-load dates based on historical data',
+      comingSoon: 'Capacity planning coming soon',
+      memory: 'Memory',
+      storage: 'Storage',
+      rootfs: 'Root FS',
+      trendRising: 'Rising',
+      trendDeclining: 'Declining',
+      trendStable: 'Stable',
+      daysUntilFull: 'Full in ~{days} days',
+      noPrediction: 'Insufficient data for prediction',
+      perDay: 'Per day',
+      prediction: 'Predicted',
+      trendChart: 'Resource Trend & Capacity Forecast',
+      chartNote: 'Solid lines are historical data, dashed lines are linear regression predictions; orange dashed = 85% warning, red dashed = 95% critical',
+    },
     changeTracking: { title: 'Change Tracking', subtitle: 'Compare adjacent scan diffs to track cluster resource changes', comingSoon: 'Change tracking coming soon' },
     resourceReclamation: { title: 'Resource Reclamation', subtitle: 'Detect zombie VMs, unused disks and other reclaimable resources', comingSoon: 'Resource reclamation coming soon' },
     drScore: { title: 'DR Readiness Score', subtitle: 'Assess cluster disaster recovery capability with improvement suggestions', comingSoon: 'DR score coming soon' },

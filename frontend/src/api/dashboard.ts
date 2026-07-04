@@ -63,3 +63,37 @@ export function getDashboardNodes(clusterId?: number) {
   if (clusterId) params.cluster_id = clusterId
   return request.get<any, DashboardNode[]>('/dashboard/nodes/', { params })
 }
+
+export interface PredictionDimension {
+  current: number | null
+  current_pct: number | null
+  current_used_gb?: number | null
+  total_gb?: number
+  total_mb?: number
+  trend: 'rising' | 'declining' | 'stable' | 'unknown'
+  slope_per_day: number | null
+  slope_gb_per_day?: number | null
+  days_until_full: number | null
+  predicted_full_date: string | null
+  data_points: number
+  history_days: number
+  chart: {
+    dates: string[]
+    values: number[]
+    predicted_dates: string[]
+    predicted_values: number[]
+  }
+}
+
+export interface Predictions {
+  cpu: PredictionDimension
+  memory: PredictionDimension
+  storage: PredictionDimension
+  rootfs: PredictionDimension
+}
+
+export function getPredictions(clusterId?: number, days = 30) {
+  const params: Record<string, any> = { days }
+  if (clusterId) params.cluster_id = clusterId
+  return request.get<any, Predictions>('/dashboard/predictions/', { params })
+}
