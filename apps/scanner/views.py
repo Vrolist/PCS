@@ -1502,13 +1502,14 @@ class DependencyGraphView(APIView):
             # 选择了容器，不显示任何 VM
             vm_qs = vm_qs.none()
         seen_vms = set()
+        vm_entries = []  # (vm_obj, node_dict)
         for vm in vm_qs:
             vm_key = f"{vm.node_id}-{vm.vmid}"
             if vm_key in seen_vms:
                 continue
             seen_vms.add(vm_key)
             vm_id = f"vm-{vm.node_id}-{vm.vmid}"
-            nodes_list.append({
+            vm_node = {
                 "id": vm_id,
                 "type": "vm",
                 "name": vm.name or f"VM {vm.vmid}",
@@ -1517,7 +1518,11 @@ class DependencyGraphView(APIView):
                 "cpu_cores": vm.cpu_cores,
                 "memory_mb": vm.memory_mb,
                 "node_id": vm.node_id,
-            })
+                "ha_enabled": False,
+                "ha_group": "",
+            }
+            nodes_list.append(vm_node)
+            vm_entries.append((vm, vm_node))
             edges_list.append({
                 "source": f"node-{vm.node_id}",
                 "target": vm_id,
@@ -1532,13 +1537,14 @@ class DependencyGraphView(APIView):
             # 选择了 VM，不显示任何容器
             lxc_qs = lxc_qs.none()
         seen_containers = set()
+        ct_entries = []  # (lxc_obj, node_dict)
         for ct in lxc_qs:
             ct_key = f"{ct.node_id}-{ct.vmid}"
             if ct_key in seen_containers:
                 continue
             seen_containers.add(ct_key)
             ct_id = f"ct-{ct.node_id}-{ct.vmid}"
-            nodes_list.append({
+            ct_node = {
                 "id": ct_id,
                 "type": "container",
                 "name": ct.name or f"CT {ct.vmid}",
@@ -1547,12 +1553,61 @@ class DependencyGraphView(APIView):
                 "cpu_cores": ct.cpu_cores,
                 "memory_mb": ct.memory_mb,
                 "node_id": ct.node_id,
-            })
+                "ha_enabled": False,
+                "ha_group": "",
+            }
+            nodes_list.append(ct_node)
+            ct_entries.append((ct, ct_node))
             edges_list.append({
                 "source": f"node-{ct.node_id}",
                 "target": ct_id,
                 "type": "node-container",
             })
+
+        # 3.1 通过 HAResource 补充 VM/容器的 HA 信息
+        # 4.1 通过 HAResource 补充容器的 HA 信息
+        # 4.2 HA 组节点（跨节点的 HA 组关系）
+        # 统一从 HAResource 查询 HA 信息（HAResource 是 HA 配置的权威来源）
+        ha_resource_qs = HAResource.objects.filter(cluster_id__in=cluster_ids)
+        ha_map: dict[tuple[str, int], str] = {}  # (resource_type, vmid) -> ha_group
+        for hr in ha_resource_qs:
+            if hr.vmid:
+                group = hr.ha_group or (hr.raw_data or {}).get("group", "")
+                if group:
+                    ha_map[(hr.resource_type, hr.vmid)] = group
+
+        for vm_obj, vm_node in vm_entries:
+            group = ha_map.get(("vm", vm_obj.vmid), "")
+            vm_node["ha_enabled"] = bool(group)
+            vm_node["ha_group"] = group
+
+        for ct_obj, ct_node in ct_entries:
+            group = ha_map.get(("ct", ct_obj.vmid), "")
+            ct_node["ha_enabled"] = bool(group)
+            ct_node["ha_group"] = group
+
+        # 4.2 HA 组节点（跨节点的 HA 组关系）
+        ha_group_members: dict[str, list[str]] = {}
+        for node in nodes_list:
+            if node.get("ha_enabled") and node.get("ha_group"):
+                group = node["ha_group"]
+                ha_group_members.setdefault(group, []).append(node["id"])
+
+        for group_name, member_ids in ha_group_members.items():
+            ha_group_id = f"ha-group-{group_name}"
+            nodes_list.append({
+                "id": ha_group_id,
+                "type": "ha",
+                "name": group_name,
+                "ha_group": group_name,
+                "member_count": len(member_ids),
+            })
+            for mid in member_ids:
+                edges_list.append({
+                    "source": ha_group_id,
+                    "target": mid,
+                    "type": "ha-resource",
+                })
 
         # 5. 存储 - 选择特定资源时只显示该资源使用的存储
         storage_node_ids = node_ids

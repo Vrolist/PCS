@@ -57,6 +57,17 @@
           @mousedown.prevent="onCanvasMouseDown"
           @mousemove="onMouseMove" @mouseup="onMouseUp" @mouseleave="onMouseUp"
           @wheel.prevent="onWheel">
+          <!-- HA 组覆盖层矩形（Phase 3） -->
+          <g v-for="rect in haOverlayRects" :key="rect.id" class="ha-overlay">
+            <rect :x="rect.x" :y="rect.y" :width="rect.width" :height="rect.height"
+              rx="12" fill="rgba(249, 115, 22, 0.04)" stroke="#f97316"
+              stroke-width="1.5" stroke-dasharray="8,4" opacity="0.6" />
+            <text :x="rect.x + 10" :y="rect.y - 6" class="ha-overlay-label"
+              fill="#f97316" font-size="11" font-weight="600">
+              {{ rect.name }} ({{ rect.memberCount }})
+            </text>
+          </g>
+
           <!-- 节点容器（大区域） -->
           <g v-for="node in renderedNodeContainers" :key="'nc-' + node.id"
             class="node-group" :class="{ dragging: draggingId === node.id }"
@@ -101,6 +112,11 @@
               text-anchor="middle" class="node-sub">{{ node.subLabel }}</text>
             <circle v-if="node.statusDot" :cx="node.width - 10" cy="10" r="5"
               :fill="node.statusDot === 'online' || node.statusDot === 'running' ? '#67c23a' : '#f56c6c'" />
+            <!-- HA 徽章 -->
+            <g v-if="node.ha_enabled" transform="translate(6, 5)">
+              <rect width="28" height="14" rx="3" fill="#f97316" opacity="0.9" />
+              <text x="14" y="11" text-anchor="middle" font-size="8" font-weight="700" fill="#fff">HA</text>
+            </g>
           </g>
           <!-- 滤镜定义 -->
           <defs>
@@ -244,7 +260,8 @@ function getNodeSubLabel(node: any): { subLabel: string; statusDot: string } {
     subLabel = `${node.cpu_load ? (node.cpu_load * 100).toFixed(0) + '%' : ''} ${node.ip_address || ''}`
     statusDot = node.status || 'unknown'
   } else if (node.type === 'vm' || node.type === 'container') {
-    subLabel = `${node.cpu_cores || 0}核 ${node.memory_mb ? (node.memory_mb / 1024).toFixed(0) + 'G' : ''}`
+    const baseLabel = `${node.cpu_cores || 0}核 ${node.memory_mb ? (node.memory_mb / 1024).toFixed(0) + 'G' : ''}`
+    subLabel = node.ha_enabled ? `${baseLabel} · HA:${node.ha_group}` : baseLabel
     statusDot = node.status || 'unknown'
   } else if (node.type === 'storage') {
     subLabel = `${node.total_gb || 0}GB ${node.storage_type || ''}`
@@ -347,12 +364,52 @@ const renderedEdges = computed(() => {
     else if (edge.type === 'vm-network' || edge.type === 'container-network') { color = '#8b5cf6'; dashed = true }
     else if (edge.type === 'vm-storage' || edge.type === 'container-storage') { color = '#f56c6c'; dashed = true }
     else if (edge.type === 'cluster-ceph') color = '#06b6d4'
-    else if (edge.type === 'node-ha' || edge.type === 'resource-ha') color = '#f97316'
+    else if (edge.type === 'node-ha' || edge.type === 'resource-ha' || edge.type === 'ha-resource') { color = '#f97316'; dashed = true }
     else if (edge.type === 'cluster-sdn' || edge.type === 'zone-vnet' || edge.type === 'vnet-subnet') color = '#ec4899'
 
     edges.push({ path, color, dashed })
   })
   return edges
+})
+
+// HA 组覆盖层矩形（Phase 3：跨节点 HA 组视觉标识）
+const haOverlayRects = computed(() => {
+  const rects: any[] = []
+  const haGroups = graphData.value.nodes.filter(n => n.type === 'ha')
+  if (!haGroups.length) return rects
+
+  haGroups.forEach(haNode => {
+    // 找到该 HA 组的所有成员边
+    const memberEdges = graphData.value.edges.filter(e => e.source === haNode.id && e.type === 'ha-resource')
+    const memberIds = memberEdges.map(e => e.target)
+    if (!memberIds.length) return
+
+    // 计算所有成员的包围盒
+    const pad = 20
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    memberIds.forEach(id => {
+      const pos = nodePositions.value.get(id)
+      if (!pos) return
+      const memberNode = graphData.value.nodes.find(n => n.id === id)
+      const size = memberNode ? (nodeSizes[memberNode.type] || { width: 120, height: 42 }) : { width: 120, height: 42 }
+      minX = Math.min(minX, pos.x - pad)
+      minY = Math.min(minY, pos.y - pad)
+      maxX = Math.max(maxX, pos.x + size.width + pad)
+      maxY = Math.max(maxY, pos.y + size.height + pad)
+    })
+
+    if (minX === Infinity) return
+    rects.push({
+      id: `overlay-${haNode.id}`,
+      x: minX,
+      y: minY,
+      width: maxX - minX,
+      height: maxY - minY,
+      name: `HA: ${haNode.name}`,
+      memberCount: memberIds.length,
+    })
+  })
+  return rects
 })
 
 const currentViewBox = computed(() => {
@@ -478,10 +535,16 @@ function autoLayout() {
     positions.set(cluster.id, { x: centerX - 80, y: 20 })
   }
 
-  // 3. HA、Ceph、SDN 在节点区域下方
+  // 3. HA、Ceph、SDN 在节点区域下方（动态计算 Y）
   const extraItems = [...haNodes, ...cephNodes, ...sdnNodes]
   if (extraItems.length > 0) {
-    const extraY = nodeStartY + 320
+    // 计算所有节点容器的最大底部 Y
+    let maxNodeBottom = nodeStartY
+    nodeNodes.forEach(n => {
+      const np = positions.get(n.id)
+      if (np) maxNodeBottom = Math.max(maxNodeBottom, np.y + ((n as any).nodeH || 120))
+    })
+    const extraY = maxNodeBottom + 60
     const totalW = extraItems.length * (cardW + gapX) - gapX
     let startX = 0
     if (nodeNodes.length > 0) {
@@ -753,6 +816,9 @@ function selectNode(node: any) {
     details[t('smartAnalysis.dependencyMapping.cpuCores')] = String(node.cpu_cores || '-')
     details[t('smartAnalysis.dependencyMapping.memory')] = node.memory_mb ? `${(node.memory_mb / 1024).toFixed(1)} GB` : '-'
     details[t('smartAnalysis.dependencyMapping.status')] = node.status || '-'
+    if (node.ha_enabled) {
+      details['HA'] = `${t('smartAnalysis.dependencyMapping.legendHA')} · ${node.ha_group || '-'}`
+    }
   } else if (node.type === 'storage') {
     details[t('smartAnalysis.dependencyMapping.type')] = node.storage_type || '-'
     details[t('smartAnalysis.dependencyMapping.totalCapacity')] = node.total_gb ? `${node.total_gb} GB` : '-'
@@ -767,9 +833,10 @@ function selectNode(node: any) {
     details[t('smartAnalysis.dependencyMapping.osdCount')] = String(node.total_osds || '-')
     details[t('smartAnalysis.dependencyMapping.onlineOsd')] = String(node.up_osds || '-')
   } else if (node.type === 'ha') {
-    details[t('smartAnalysis.dependencyMapping.type')] = node.resource_type || '-'
-    details[t('smartAnalysis.dependencyMapping.state')] = node.state || '-'
-    details[t('smartAnalysis.dependencyMapping.haGroup')] = node.ha_group || '-'
+    details[t('smartAnalysis.dependencyMapping.haGroup')] = node.ha_group || node.name || '-'
+    if (node.member_count) details['成员数量'] = String(node.member_count)
+    if (node.resource_type) details[t('smartAnalysis.dependencyMapping.type')] = node.resource_type
+    if (node.state) details[t('smartAnalysis.dependencyMapping.state')] = node.state
   }
 
   selectedNode.value = {
@@ -1239,5 +1306,12 @@ watch(() => clusterStore.currentClusterId, async () => {
 .slide-leave-to {
   transform: translateX(20px);
   opacity: 0;
+}
+
+/* HA 覆盖层 */
+.ha-overlay-label {
+  font-family: inherit;
+  user-select: none;
+  pointer-events: none;
 }
 </style>
