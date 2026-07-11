@@ -33,7 +33,7 @@ python manage.py shell -c "
 from django.contrib.auth import get_user_model
 User = get_user_model()
 if not User.objects.filter(username='pcs').exists():
-    User.objects.create_superuser('pcs', '1121031509@qq.com', 'pcs123456')
+    User.objects.create_superuser('pcs', '1121031509@qq.com', '123456')
     print('  ✓ 管理员账户已创建: pcs')
 else:
     print('  ✓ 管理员账户已存在')
