@@ -32,9 +32,9 @@ echo "[3.5/5] 检查管理员账户..."
 python manage.py shell -c "
 from django.contrib.auth import get_user_model
 User = get_user_model()
-if not User.objects.filter(username='buladou').exists():
-    User.objects.create_superuser('buladou', 'kellyhu112@qq.com', 'husongsxx')
-    print('  ✓ 管理员账户已创建: buladou')
+if not User.objects.filter(username='pcs').exists():
+    User.objects.create_superuser('pcs', '1121031509@qq.com', 'pcs123456')
+    print('  ✓ 管理员账户已创建: pcs')
 else:
     print('  ✓ 管理员账户已存在')
 "
