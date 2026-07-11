@@ -7,7 +7,7 @@
       </div>
     </div>
 
-    <div class="stats-row">
+    <div class="stats-row" v-if="!sdnUnsupported">
       <div class="el-card is-never-shadow stat-card">
         <div class="el-card__body" style="">
           <div class="stat-label">{{ t('advanced.sdn.zones') }}</div>
@@ -28,7 +28,26 @@
       </div>
     </div>
 
-    <el-card shadow="hover" class="table-card">
+    <!-- PVE 7 不支持 SDN -->
+    <el-card v-if="sdnUnsupported" shadow="hover" class="unsupported-card">
+      <el-empty description="">
+        <template #image>
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5">
+            <circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/>
+          </svg>
+        </template>
+        <template #description>
+          <p style="font-size: 16px; font-weight: 600; color: var(--text-heading); margin: 0 0 8px">
+            PVE {{ pveMajor }} 不支持 SDN 虚拟网络
+          </p>
+          <p style="font-size: 13px; color: var(--text-muted); margin: 0">
+            SDN 功能需要 Proxmox VE 8.0 及以上版本，当前集群版本为 PVE {{ pveMajor }}。
+          </p>
+        </template>
+      </el-empty>
+    </el-card>
+
+    <el-card v-else shadow="hover" class="table-card">
       <el-tabs v-model="activeTab">
         <el-tab-pane :label="t('advanced.sdn.zones')" name="zones">
           <el-table :data="zones" stripe style="width: 100%" v-loading="loading" empty-text="暂无 SDN 区域数据">
@@ -87,7 +106,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useClusterStore } from '@/stores/cluster'
 import { getSDNZones, getSDNVNets, getSDNSubnets, type SDNZone, type SDNVNet, type SDNSubnet } from '@/api/sdn'
@@ -100,6 +119,16 @@ const activeTab = ref('zones')
 const zones = ref<SDNZone[]>([])
 const vnets = ref<SDNVNet[]>([])
 const subnets = ref<SDNSubnet[]>([])
+
+/** 解析 PVE 主版本号，如 "pve-manager/8.2.4" → 8 */
+const pveMajor = computed(() => {
+  const ver = clusterStore.currentCluster?.pve_version || ''
+  const m = ver.match(/pve-manager\/(\d+)/)
+  return m ? parseInt(m[1], 10) : 0
+})
+
+/** PVE 7 不支持 SDN */
+const sdnUnsupported = computed(() => pveMajor.value > 0 && pveMajor.value < 8)
 
 function formatTime(iso: string) {
   if (!iso) return '-'
@@ -144,5 +173,7 @@ watch(() => clusterStore.currentClusterId, () => fetchData())
 .stat-label { font-size: 13px; color: var(--text-muted); }
 .stat-value { font-size: 28px; font-weight: 700; color: var(--text-heading); }
 .table-card { margin-top: 0; }
+.unsupported-card { margin-top: 0; }
+.unsupported-card .el-card__body { padding: 80px 20px; }
 .text-muted { color: var(--text-muted); }
 </style>

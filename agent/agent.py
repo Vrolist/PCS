@@ -81,6 +81,7 @@ class Config:
         self.pve_endpoint = ""
         self.pve_username = "root@pam"
         self.pve_password = ""
+        self.pve_version = ""
         self.scan_interval = 300
         self.heartbeat_interval = 120
 
@@ -112,6 +113,7 @@ class Config:
             f'pve_endpoint="{self.pve_endpoint}"',
             f'pve_username="{self.pve_username}"',
             f'pve_password="{self.pve_password}"',
+            f'pve_version="{self.pve_version}"',
             f'scan_interval={self.scan_interval}',
             f'heartbeat_interval={self.heartbeat_interval}',
         ]
@@ -1092,12 +1094,13 @@ class PlatformClient:
     def unregister(self, agent_id):
         return http_post(f"{self.base_url}/api/agent/unregister/", {"agent_id": agent_id})
 
-    def heartbeat(self, agent_id, status="online", current_task="", error_message="", version=""):
+    def heartbeat(self, agent_id, status="online", current_task="", error_message="", version="", pve_version=""):
         payload = {
             "agent_id": agent_id,
             "status": status,
             "current_task": current_task,
             "version": version,
+            "pve_version": pve_version,
         }
         if error_message:
             payload["error_message"] = error_message
@@ -1327,6 +1330,7 @@ class Agent:
                 result = self.platform.heartbeat(
                     self.config.agent_id, status="online",
                     version=VERSION,
+                    pve_version=self.config.pve_version,
                 )
                 if isinstance(result, dict) and result.get("_deleted"):
                     self._stop_permanently("集群已被删除（心跳检测）")
@@ -1353,6 +1357,7 @@ class Agent:
             self.platform.heartbeat(
                 self.config.agent_id, status="online", current_task="scanning",
                 version=VERSION,
+                pve_version=self.config.pve_version,
             )
         except Exception:
             pass
@@ -1365,6 +1370,12 @@ class Agent:
 
             scan_data = scan_full(self.pve)
             logger.info(f"扫描完成: {len(scan_data['nodes'])} 个节点")
+
+            # 保存 PVE 版本到配置（首次扫描后）
+            if scan_data.get("version") and not self.config.pve_version:
+                self.config.pve_version = scan_data["version"]
+                self.config.save()
+                logger.info(f"PVE 版本已记录: {self.config.pve_version}")
 
             result = self.platform.upload_scan(self.config.agent_id, self.config.cluster_id, scan_data)
 
@@ -1381,6 +1392,7 @@ class Agent:
                         self.config.agent_id,
                         status="paused",
                         version=VERSION,
+                        pve_version=self.config.pve_version,
                         current_task="deactivated",
                         error_message="集群已停用，等待恢复",
                     )
@@ -1395,6 +1407,7 @@ class Agent:
                 self.platform.heartbeat(
                     self.config.agent_id, status="online", current_task="",
                     version=VERSION,
+                    pve_version=self.config.pve_version,
                 )
             except Exception:
                 pass

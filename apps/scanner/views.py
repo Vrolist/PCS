@@ -1584,28 +1584,26 @@ class DependencyGraphView(APIView):
             ct_node["ha_enabled"] = bool(group)
             ct_node["ha_group"] = group
 
-        # 4.2 HA 组节点（跨节点的 HA 组关系）
-        ha_group_members: dict[str, list[str]] = {}
-        for node in nodes_list:
-            if node.get("ha_enabled") and node.get("ha_group"):
-                group = node["ha_group"]
-                ha_group_members.setdefault(group, []).append(node["id"])
-
-        for group_name, member_ids in ha_group_members.items():
-            ha_group_id = f"ha-group-{group_name}"
-            nodes_list.append({
-                "id": ha_group_id,
-                "type": "ha",
-                "name": group_name,
-                "ha_group": group_name,
-                "member_count": len(member_ids),
-            })
-            for mid in member_ids:
-                edges_list.append({
-                    "source": ha_group_id,
-                    "target": mid,
-                    "type": "ha-resource",
-                })
+        # 4.2 HA 故障转移连线
+        # HA 资源可迁移到集群内其他节点，用虚线连接表示
+        ha_enabled_resources = [
+            n for n in nodes_list
+            if n.get("ha_enabled") and n["type"] in ("vm", "container")
+        ]
+        pve_node_ids = [n["id"] for n in nodes_list if n["type"] == "node"]
+        for res in ha_enabled_resources:
+            # ID 格式: "vm-{node_db_id}-{vmid}" / "ct-{node_db_id}-{vmid}"
+            # 提取 node_db_id 拼出当前节点 ID
+            parts = res["id"].split("-", 2)  # ["vm", "5", "100"]
+            if len(parts) >= 2:
+                current_node_id = f"node-{parts[1]}"
+                for nid in pve_node_ids:
+                    if nid != current_node_id:
+                        edges_list.append({
+                            "source": res["id"],
+                            "target": nid,
+                            "type": "ha-failover",
+                        })
 
         # 5. 存储 - 选择特定资源时只显示该资源使用的存储
         storage_node_ids = node_ids

@@ -175,6 +175,12 @@ class AgentHeartbeatView(APIView):
             update_fields.append("version")
         agent.save(update_fields=update_fields)
 
+        # 心跳上报 PVE 版本时同步更新集群
+        pve_ver = d.get("pve_version", "")
+        if pve_ver and agent.cluster and agent.cluster.pve_version != pve_ver:
+            agent.cluster.pve_version = pve_ver
+            agent.cluster.save(update_fields=["pve_version"])
+
         # 构建响应
         response = {"ok": True}
 

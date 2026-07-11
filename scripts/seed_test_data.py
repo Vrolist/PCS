@@ -47,15 +47,15 @@ CPU_MODELS = [
 ]
 
 PVE_VERSIONS = [
+    "pve-manager/7.4-3/9002ab8a (running kernel: 5.15.107-2-pve)",
     "pve-manager/8.2.4/8a926dcaae49e658 (running kernel: 6.8.8-1-pve)",
-    "pve-manager/8.3.2/f156893a3f28ad76 (running kernel: 6.11.11-1-pve)",
-    "pve-manager/8.1.4/ec5affc9e41f1d31 (running kernel: 6.5.13-3-pve)",
+    "pve-manager/9.0.3/7c422110c13c3e4a (running kernel: 6.14.8-2-pve)",
 ]
 
 KERNEL_VERSIONS = [
+    "5.15.107-2-pve",
     "6.8.8-1-pve",
-    "6.11.11-1-pve",
-    "6.5.13-3-pve",
+    "6.14.8-2-pve",
 ]
 
 # 网络模型池（按常见度加权）
@@ -1007,7 +1007,7 @@ def level_1_single_node():
     return {
         "name": "单节点入门集群",
         "desc": "1节点 / 2VM(停机) / 3容器 / 无Ceph / 无HA / 无备份",
-        "pve_version": "8.2.4",
+        "pve_version": "pve-manager/7.4-3/9002ab8a (running kernel: 5.15.107-2-pve)",
         "nodes": [node], "ceph": None, "ha_resources": [],
     }
 
@@ -1114,7 +1114,7 @@ def level_2_dual_node():
     return {
         "name": "双节点小集群",
         "desc": "2节点 / 6VM / 13容器 / NFS共享存储 / 无Ceph",
-        "pve_version": "8.3.2",
+        "pve_version": "pve-manager/8.2.4/8a926dcaae49e658 (running kernel: 6.8.8-1-pve)",
         "nodes": nodes, "ceph": None, "ha_resources": [],
     }
 
@@ -1235,7 +1235,7 @@ def level_3_triple_node():
     return {
         "name": "三节点标准集群",
         "desc": "3节点 / ~20VM / ~35容器 / 多存储类型 / Bond网络",
-        "pve_version": "8.3.2",
+        "pve_version": "pve-manager/8.2.4/8a926dcaae49e658 (running kernel: 6.8.8-1-pve)",
         "nodes": nodes, "ceph": None, "ha_resources": [],
     }
 
@@ -1380,7 +1380,7 @@ def level_4_ceph_cluster():
     return {
         "name": "Ceph 三节点集群",
         "desc": "3节点 / ~36VM / ~30容器 / Ceph OK(12OSD) / 2 HA资源",
-        "pve_version": "8.3.2",
+        "pve_version": "pve-manager/8.2.4/8a926dcaae49e658 (running kernel: 6.8.8-1-pve)",
         "nodes": nodes, "ceph": ceph, "ha_resources": ha_resources,
     }
 
@@ -1562,7 +1562,7 @@ def level_5_enterprise():
     return {
         "name": "企业生产集群",
         "desc": "5节点 / ~65VM / ~60容器 / Ceph OK(24OSD) / 5 HA资源 / 复杂网络 / prod-4离线",
-        "pve_version": "8.3.2",
+        "pve_version": "pve-manager/9.0.3/7c422110c13c3e4a (running kernel: 6.14.8-2-pve)",
         "nodes": nodes, "ceph": ceph, "ha_resources": ha_resources,
     }
 

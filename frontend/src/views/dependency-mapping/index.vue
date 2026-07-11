@@ -219,7 +219,6 @@ interface Pos { x: number; y: number; w: number; h: number }
 const clusterNode = ref<HNode | null>(null)
 const pveNodes = ref<HNode[]>([])
 const leafList = ref<HNode[]>([])
-const haNodes = ref<HNode[]>([])
 const childMap = ref<Map<string, string[]>>(new Map())
 const nodeParentMap = ref<Map<string, string>>(new Map())
 const edgeData = ref<EdgeData[]>([])
@@ -269,7 +268,7 @@ const legendItems = computed(() => [
   { type: 'storage', label: t('smartAnalysis.dependencyMapping.legendStorage'), color: '#f56c6c' },
   { type: 'network', label: t('smartAnalysis.dependencyMapping.legendNetwork'), color: '#8b5cf6' },
   { type: 'ceph', label: t('smartAnalysis.dependencyMapping.legendCeph'), color: '#06b6d4' },
-  { type: 'ha', label: t('smartAnalysis.dependencyMapping.legendHA'), color: '#f97316' },
+  { type: 'ha', label: 'HA 故障转移', color: '#f97316', dashed: true },
   { type: 'sdn_zone', label: t('smartAnalysis.dependencyMapping.legendSDN'), color: '#ec4899' },
 ])
 
@@ -327,13 +326,9 @@ function buildHierarchy(apiData: DependencyGraph) {
 
   const nodes = raw.filter(n => n.type === 'node').map(n => nodeMap.get(n.id)!)
   const leafNodes = raw.filter(n => !['cluster', 'node'].includes(n.type))
-  const haList: HNode[] = []
-  const nonHaLeafs: HNode[] = []
 
   leafNodes.forEach(n => {
     const hNode = nodeMap.get(n.id)!
-    if (n.type === 'ha') { haList.push(hNode); return }
-    nonHaLeafs.push(hNode)
     if (n.node_id != null) {
       const parent = nodes.find(nd => String(nd.node_id) === String(n.node_id))
       if (parent) { parent.leafs.push(hNode); return }
@@ -379,8 +374,7 @@ function buildHierarchy(apiData: DependencyGraph) {
 
   clusterNode.value = clusterHNode
   pveNodes.value = nodes
-  leafList.value = nonHaLeafs
-  haNodes.value = haList
+  leafList.value = leafNodes.map(n => nodeMap.get(n.id)!)
 
   // 父子索引
   const cMap = new Map<string, string[]>()
@@ -518,15 +512,6 @@ function layoutGraph() {
   })
 
   // HA 节点在集群下方
-  haNodes.value.forEach((ha, i) => {
-    const cp = positions[clusterNode.value!.id]
-    positions[ha.id] = {
-      x: cp.x + cp.w / 2 + (i - (haNodes.value.length - 1) / 2) * 180,
-      y: cp.y + cp.h + 60,
-      w: ha.width, h: ha.height,
-    }
-  })
-
   // 集群级叶子（node_id 不匹配任何节点的 storage/network 等）
   // 策略：放到选中资源所在节点内（或第一个节点），节点自动扩大
   const clusterLeafs = leafList.value.filter(lf => !nodeParentMap.value.has(lf.id))
@@ -696,7 +681,7 @@ function shrinkClusterToFit() {
   })
 
   leafList.value.forEach(lf => {
-    if (nodeParentMap.value.has(lf.id) || haNodes.value.includes(lf)) return
+    if (nodeParentMap.value.has(lf.id)) return
     const lp = getPos(lf.id)
     if (!lp) return
     minX = Math.min(minX, lp.x - lf.width / 2)
@@ -732,7 +717,7 @@ function containAndShrinkCluster() {
 
   // 约束集群级叶子节点
   leafList.value.forEach(lf => {
-    if (nodeParentMap.value.has(lf.id) || haNodes.value.includes(lf)) return
+    if (nodeParentMap.value.has(lf.id)) return
     const lp = getPos(lf.id)
     if (!lp) return
     const hw = lf.width / 2, hh = lf.height / 2
@@ -878,7 +863,7 @@ function onMouseUp() {
 
 function onLeafClick(leafId: string) {
   if (dragMoved) return // 拖拽时不触发详情
-  const lf = leafList.value.find(l => l.id === leafId) || haNodes.value.find(l => l.id === leafId)
+  const lf = leafList.value.find(l => l.id === leafId)
   if (!lf) return
   showDetails(lf)
 }
@@ -907,9 +892,6 @@ function showDetails(node: HNode) {
   } else if (node.type === 'ceph') {
     d[t('smartAnalysis.dependencyMapping.health')] = node.health || '-'
     d[t('smartAnalysis.dependencyMapping.osdCount')] = String(node.total_osds || '-')
-  } else if (node.type === 'ha') {
-    d[t('smartAnalysis.dependencyMapping.haGroup')] = node.ha_group || node.name || '-'
-    if (node.member_count) d['成员数量'] = String(node.member_count)
   }
   selectedNode.value = { name: node.name, type: node.type, details: d }
 }
@@ -1022,7 +1004,6 @@ async function loadData() {
   clusterNode.value = null
   pveNodes.value = []
   leafList.value = []
-  haNodes.value = []
   childMap.value = new Map()
   nodeParentMap.value = new Map()
   scale.value = 1; panX.value = 0; panY.value = 0
