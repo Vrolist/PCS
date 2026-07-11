@@ -299,7 +299,7 @@ export default {
     pveConnectionInfo: 'PVE 连接信息（可选，填入后安装无需交互）',
     apiEndpointLabel: 'PVE API 地址',
     apiEndpointPlaceholder: '如 https://192.168.1.200:8006',
-    pveTokenPlaceholder: '如 root@pam!monitor:xxxxxxxxxxxx',
+    pveTokenPlaceholder: "如 root{'@'}pam!monitor:xxxxxxxxxxxx",
     apiTokenTip: '在 PVE 的「数据中心 → 权限 → API Tokens」中创建只读 Token',
     create: '创建',
     basicInfo: '基本信息',

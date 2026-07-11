@@ -299,7 +299,7 @@ export default {
     pveConnectionInfo: 'PVE-Verbindungsinformationen (optional – bei Eingabe keine interaktive Installation nötig)',
     apiEndpointLabel: 'PVE-API-Adresse',
     apiEndpointPlaceholder: 'z. B. https://192.168.1.200:8006',
-    pveTokenPlaceholder: 'z. B. root@pam!monitor:xxxxxxxxxxxx',
+    pveTokenPlaceholder: "z. B. root{'@'}pam!monitor:xxxxxxxxxxxx",
     apiTokenTip: 'Erstellen Sie ein schreibgeschütztes Token im PVE unter „Datenzentrum → Berechtigungen → API Tokens"',
     create: 'Erstellen',
     basicInfo: 'Grundinformationen',

@@ -299,7 +299,7 @@ export default {
     pveConnectionInfo: 'Данные для подключения к PVE (необязательно, упрощает установку)',
     apiEndpointLabel: 'Адрес API PVE',
     apiEndpointPlaceholder: 'Например: https://192.168.1.200:8006',
-    pveTokenPlaceholder: 'Например: root@pam!monitor:xxxxxxxxxxxx',
+    pveTokenPlaceholder: "Например: root{'@'}pam!monitor:xxxxxxxxxxxx",
     apiTokenTip: 'Создайте токен только для чтения в «Данные центра → Разрешения → API Tokens» в PVE',
     create: 'Создать',
     basicInfo: 'Основная информация',
