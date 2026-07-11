@@ -30,8 +30,8 @@
         </div>
         <div class="selector-item" v-if="selectedResourceType">
           <label class="selector-label">{{ t('smartAnalysis.dependencyMapping.selectResource') }}</label>
-          <el-select v-model="selectedResourceId" :placeholder="t('smartAnalysis.dependencyMapping.selectResourcePlaceholder')" filterable clearable @change="onResourceChange" style="width: 200px" size="small">
-            <el-option v-for="item in resourceOptions" :key="item.id" :value="item.id">
+          <el-select v-model="selectedResourceId" :placeholder="t('smartAnalysis.dependencyMapping.selectResourcePlaceholder')" filterable clearable @change="onResourceChange" style="width: 220px" size="small">
+            <el-option v-for="item in resourceOptions" :key="item.id" :value="item.id" :label="`${item.name} (${item.vmid})`">
               <span>{{ item.name }} ({{ item.vmid }})</span>
               <span v-if="item.ha_enabled" style="margin-left: 6px; color: #f97316; font-size: 11px; font-weight: 600;">HA</span>
             </el-option>
@@ -1130,12 +1130,12 @@ watch(() => clusterStore.currentClusterId, async () => {
 .legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
 
 /* 详情面板 */
-.detail-panel { position: absolute; right: 20px; top: 80px; width: 300px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 100; }
-.detail-header { display: flex; align-items: center; justify-content: space-between; padding: 16px; border-bottom: 1px solid var(--border-color); }
-.detail-header h3 { margin: 0; font-size: 16px; font-weight: 600; color: var(--text-heading); }
+.detail-panel { position: absolute; right: 20px; top: 80px; width: 240px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 100; }
+.detail-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border-color); }
+.detail-header h3 { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .detail-close { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border: none; background: transparent; color: var(--text-muted); font-size: 18px; cursor: pointer; border-radius: 6px; transition: all 0.2s; }
 .detail-close:hover { background: rgba(245,108,108,0.1); color: #f56c6c; }
-.detail-body { padding: 16px; }
+.detail-body { padding: 12px 14px; }
 .detail-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px dashed var(--border-color); }
 .detail-row:last-child { border-bottom: none; }
 .detail-label { font-size: 13px; color: var(--text-muted); }
