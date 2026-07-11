@@ -31,7 +31,10 @@
         <div class="selector-item" v-if="selectedResourceType">
           <label class="selector-label">{{ t('smartAnalysis.dependencyMapping.selectResource') }}</label>
           <el-select v-model="selectedResourceId" :placeholder="t('smartAnalysis.dependencyMapping.selectResourcePlaceholder')" filterable clearable @change="onResourceChange" style="width: 200px" size="small">
-            <el-option v-for="item in resourceOptions" :key="item.id" :label="`${item.name} (${item.vmid})`" :value="item.id" />
+            <el-option v-for="item in resourceOptions" :key="item.id" :value="item.id">
+              <span>{{ item.name }} ({{ item.vmid }})</span>
+              <span v-if="item.ha_enabled" style="margin-left: 6px; color: #f97316; font-size: 11px; font-weight: 600;">HA</span>
+            </el-option>
           </el-select>
         </div>
       </div>
@@ -59,11 +62,19 @@
         <!-- 缩放/平移容器（等 positions 就绪后才渲染） -->
         <g v-if="initDone" :transform="`translate(${panX}, ${panY}) scale(${scale})`">
           <!-- 1️⃣ 边（跨节点连接线） -->
-          <path v-for="(e, idx) in edgeData" :key="'e-'+idx"
-            :d="e.d" fill="none"
-            :stroke="e.color" :stroke-width="e.dashed ? 1.5 : 2"
-            :stroke-dasharray="e.dashed ? '6,3' : undefined"
-            marker-end="url(#dep-arrowhead)" />
+          <g v-for="(e, idx) in edgeData" :key="'e-'+idx">
+            <path
+              :d="e.d" fill="none"
+              :stroke="e.color" :stroke-width="e.dashed ? 1.5 : 2"
+              :stroke-dasharray="e.dashed ? '6,3' : undefined"
+              marker-end="url(#dep-arrowhead)" />
+            <!-- HA 标签 -->
+            <g v-if="e.label" :transform="`translate(${e.mx}, ${e.my})`">
+              <rect x="-14" y="-10" width="28" height="18" rx="9"
+                :fill="e.color" opacity="0.9" />
+              <text text-anchor="middle" y="3" fill="#fff" font-size="9" font-weight="700">{{ e.label }}</text>
+            </g>
+          </g>
 
           <!-- 2️⃣ 集群背景 -->
           <g v-if="clusterNode" class="bg-cluster"
@@ -213,7 +224,7 @@ interface HNode {
   x: number; y: number; children: HNode[]; leafs: HNode[];
   [key: string]: any
 }
-interface EdgeData { d: string; color: string; dashed: boolean }
+interface EdgeData { d: string; color: string; dashed: boolean; label?: string; mx?: number; my?: number }
 interface Pos { x: number; y: number; w: number; h: number }
 
 const clusterNode = ref<HNode | null>(null)
@@ -239,8 +250,12 @@ const clusterPos = computed(() => {
 })
 
 const resourceOptions = computed(() => {
-  if (selectedResourceType.value === 'vm') return vmList.value.map(vm => ({ id: vm.id, name: vm.name, vmid: vm.vmid })).sort((a, b) => a.vmid - b.vmid)
-  if (selectedResourceType.value === 'container') return containerList.value.map(ct => ({ id: ct.id, name: ct.name, vmid: ct.vmid })).sort((a, b) => a.vmid - b.vmid)
+  if (selectedResourceType.value === 'vm') return vmList.value.map(vm => ({
+    id: vm.id, name: vm.name, vmid: vm.vmid, ha_enabled: vm.ha_enabled, ha_group: vm.ha_group
+  })).sort((a, b) => a.vmid - b.vmid)
+  if (selectedResourceType.value === 'container') return containerList.value.map(ct => ({
+    id: ct.id, name: ct.name, vmid: ct.vmid, ha_enabled: ct.ha_enabled, ha_group: ct.ha_group
+  })).sort((a, b) => a.vmid - b.vmid)
   return []
 })
 
@@ -420,7 +435,8 @@ function computeEdges() {
     const off = Math.min(dist * 0.15, 50)
     const d = `M${x1},${y1} Q${mx + (-dy / dist) * off},${my + (dx / dist) * off} ${x2},${y2}`
     const s = edgeStyle(e.type)
-    edges.push({ d, color: s.color, dashed: s.dashed })
+    const label = e.type === 'ha-failover' ? 'HA' : undefined
+    edges.push({ d, color: s.color, dashed: s.dashed, label, mx, my })
   })
   edgeData.value = edges
 }
