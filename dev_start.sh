@@ -36,7 +36,7 @@ if not User.objects.filter(username='pcs').exists():
     User.objects.create_superuser('pcs', '1121031509@qq.com', '123456')
     print('  ✓ 管理员账户已创建: pcs')
 else:
-    print('  ✓ 管理员账户已存在')
+    print('  ✓ 管理员账户已存在: pcs')
 "
 
 # 4. 安装前端依赖并构建
