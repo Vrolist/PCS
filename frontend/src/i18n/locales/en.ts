@@ -367,6 +367,10 @@ export default {
     stopped: 'Stopped',
     nodeDetailTitle: 'Node Details',
     emptyDesc: 'No node data yet — deploy an Agent to start collecting data',
+    healthScore: 'Health Score',
+    basicInfo: 'Basic Info',
+    searchPlaceholder: 'Search node name / IP',
+    kernelVersion: 'Kernel',
   },
 
   // Virtual Machines

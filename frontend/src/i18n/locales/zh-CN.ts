@@ -374,6 +374,10 @@ export default {
     stopped: '停止',
     nodeDetailTitle: '节点详情',
     emptyDesc: '暂无节点数据，请先部署 Agent 采集数据',
+    healthScore: '健康评分',
+    basicInfo: '基本信息',
+    searchPlaceholder: '搜索节点名 / IP',
+    kernelVersion: '内核版本',
   },
 
   // 虚拟机
