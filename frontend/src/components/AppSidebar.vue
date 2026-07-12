@@ -52,6 +52,7 @@
       <div class="cluster-trigger" @click="clusterDropdownOpen = !clusterDropdownOpen">
         <span class="cluster-dot" :class="{ online: clusterStore.currentCluster }"></span>
         <span class="cluster-name">{{ clusterStore.currentCluster?.name || t('nav.selectCluster') }}</span>
+        <span v-if="pveMajor" class="pve-version-badge">PVE {{ pveMajor }}</span>
         <el-icon class="cluster-caret" :class="{ open: clusterDropdownOpen }"><ArrowDown /></el-icon>
       </div>
       <transition name="dropdown">
@@ -257,7 +258,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
@@ -274,6 +275,14 @@ const clusterStore = useClusterStore()
 // 集群选择器
 const clusterDropdownOpen = ref(false)
 const clusterSelectorRef = ref<HTMLElement>()
+
+// 从 pve_version（如 "8.2.4"）提取大版本号（如 "8"）
+const pveMajor = computed(() => {
+  const v = clusterStore.currentCluster?.pve_version
+  if (!v) return ''
+  const m = v.match(/(\d+)/)
+  return m ? m[1] : ''
+})
 
 function selectCluster(id: number) {
   clusterStore.setCluster(id)
@@ -505,6 +514,16 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.pve-version-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: #409eff;
+  background: rgba(64, 158, 255, 0.12);
+  padding: 1px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  letter-spacing: 0.3px;
+}
 .cluster-caret {
   font-size: 12px;
   color: var(--text-muted);
@@ -696,6 +715,10 @@ onBeforeUnmount(() => {
 .sidebar-menu.is-dark .cluster-trigger:hover {
   border-color: rgba(64, 158, 255, 0.3);
   background: rgba(64, 158, 255, 0.06);
+}
+.sidebar-menu.is-dark .pve-version-badge {
+  color: #6db3ff;
+  background: rgba(64, 158, 255, 0.18);
 }
 .sidebar-menu.is-dark .cluster-dropdown {
   border-color: rgba(255, 255, 255, 0.1);
