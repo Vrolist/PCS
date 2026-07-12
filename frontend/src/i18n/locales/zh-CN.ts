@@ -421,6 +421,7 @@ export default {
   containers: {
     title: '容器',
     subtitle: '查看和管理所有 PVE LXC 容器',
+    total: '容器总数',
     nodeFilter: '节点',
     statusFilter: '状态',
     typeFilter: '类型',

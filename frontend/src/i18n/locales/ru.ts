@@ -421,6 +421,7 @@ export default {
   containers: {
     title: 'Контейнеры',
     subtitle: 'Просмотр и управление всеми контейнерами LXC PVE',
+    total: 'Всего контейнеров',
     nodeFilter: 'Узел',
     statusFilter: 'Статус',
     typeFilter: 'Тип',

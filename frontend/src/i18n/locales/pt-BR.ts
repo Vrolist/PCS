@@ -421,6 +421,7 @@ export default {
   containers: {
     title: 'Containers',
     subtitle: 'Visualize e gerencie todos os containers LXC do PVE',
+    total: 'Total de containers',
     nodeFilter: 'Nó',
     statusFilter: 'Status',
     typeFilter: 'Tipo',

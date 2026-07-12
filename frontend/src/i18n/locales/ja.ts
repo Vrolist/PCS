@@ -414,6 +414,7 @@ export default {
   containers: {
     title: 'コンテナ',
     subtitle: 'PVE LXC コンテナの一覧表示と管理',
+    total: 'コンテナ合計',
     nodeFilter: 'ノード',
     statusFilter: 'ステータス',
     typeFilter: 'タイプ',
