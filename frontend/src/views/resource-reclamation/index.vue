@@ -5,20 +5,6 @@
         <h2 class="page-title">资源回收建议</h2>
         <p class="page-desc">检测僵尸 VM、未使用磁盘等可回收资源</p>
       </div>
-      <el-select
-        v-model="selectedClusterId"
-        placeholder="选择集群"
-        clearable
-        style="width: 200px"
-        @change="fetchData"
-      >
-        <el-option
-          v-for="cluster in clusterStore.clusterList"
-          :key="cluster.id"
-          :label="cluster.name"
-          :value="cluster.id"
-        />
-      </el-select>
     </div>
 
     <!-- 统计卡片 -->
@@ -213,7 +199,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useClusterStore } from '@/stores/cluster'
 import { getResourceReclamation } from '@/api/resource-reclamation'
 import type { ResourceReclamationData, ZombieResource, OldSnapshot, LowUsageStorage, IdleResource } from '@/api/resource-reclamation'
@@ -221,7 +207,6 @@ import { Warning, Clock, Coin, FolderOpened } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 
 const clusterStore = useClusterStore()
-const selectedClusterId = ref<number | undefined>(undefined)
 const activeTab = ref('zombie_vms')
 const loading = ref(false)
 
@@ -243,7 +228,7 @@ const idle_resources = ref<IdleResource[]>([])
 const fetchData = async () => {
   loading.value = true
   try {
-    const params = selectedClusterId.value ? { cluster_id: selectedClusterId.value } : undefined
+    const params = clusterStore.currentClusterId ? { cluster_id: clusterStore.currentClusterId } : undefined
     const data = await getResourceReclamation(params)
     
     summary.value = data.summary
@@ -259,6 +244,11 @@ const fetchData = async () => {
     loading.value = false
   }
 }
+
+// 监听全局集群选择器变化
+watch(() => clusterStore.currentClusterId, () => {
+  fetchData()
+})
 
 const formatDate = (dateStr: string) => {
   const date = new Date(dateStr)
