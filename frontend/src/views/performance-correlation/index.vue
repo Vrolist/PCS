@@ -18,76 +18,56 @@
       </div>
     </div>
 
-    <div v-if="loading" v-loading="true" style="min-height: 400px" />
+    <div v-if="loading" v-loading="true" style="min-height: 500px" />
 
-    <template v-else>
-      <!-- 1. 节点多指标趋势 — 首屏立即渲染 -->
-      <el-card shadow="hover" class="chart-card">
-        <template #header>
-          <div class="card-header">
-            <div>
-              <span class="card-title">{{ t('smartAnalysis.performanceCorrelation.nodeTrend') }}</span>
-              <span class="card-desc">{{ t('smartAnalysis.performanceCorrelation.nodeTrendDesc') }}</span>
-            </div>
-          </div>
-        </template>
-        <v-chart :option="nodeTrendOption" autoresize class="chart-area" />
-      </el-card>
-
-      <!-- 2. CPU vs 内存散点 + 3. 相关性热力图 — 延迟渲染 -->
-      <div ref="scatterRowRef" class="row-split">
-        <el-card shadow="hover" class="chart-card half">
-          <template #header>
-            <div class="card-header">
-              <div>
-                <span class="card-title">{{ t('smartAnalysis.performanceCorrelation.cpuVsMemory') }}</span>
-                <span class="card-desc">{{ t('smartAnalysis.performanceCorrelation.cpuVsMemoryDesc') }}</span>
-              </div>
-            </div>
+    <el-card v-else shadow="hover" class="chart-card">
+      <el-tabs v-model="activeTab" class="correlation-tabs">
+        <el-tab-pane name="trend">
+          <template #label>
+            <span class="tab-label">{{ t('smartAnalysis.performanceCorrelation.nodeTrend') }}</span>
           </template>
-          <div v-if="scatterVisible" class="chart-area-wrapper">
-            <v-chart :option="scatterOption" autoresize class="chart-area" />
+          <div v-if="activeTab === 'trend'" class="tab-chart-wrap">
+            <p class="tab-desc">{{ t('smartAnalysis.performanceCorrelation.nodeTrendDesc') }}</p>
+            <v-chart :option="nodeTrendOption" autoresize class="tab-chart" />
           </div>
-          <div v-else class="chart-placeholder" />
-        </el-card>
+        </el-tab-pane>
 
-        <el-card shadow="hover" class="chart-card half">
-          <template #header>
-            <div class="card-header">
-              <div>
-                <span class="card-title">{{ t('smartAnalysis.performanceCorrelation.correlationHeatmap') }}</span>
-                <span class="card-desc">{{ t('smartAnalysis.performanceCorrelation.correlationHeatmapDesc') }}</span>
-              </div>
-            </div>
+        <el-tab-pane name="scatter">
+          <template #label>
+            <span class="tab-label">{{ t('smartAnalysis.performanceCorrelation.cpuVsMemory') }}</span>
           </template>
-          <div v-if="scatterVisible" class="chart-area-wrapper">
-            <v-chart :option="heatmapOption" autoresize class="chart-area" />
+          <div v-if="activeTab === 'scatter'" class="tab-chart-wrap">
+            <p class="tab-desc">{{ t('smartAnalysis.performanceCorrelation.cpuVsMemoryDesc') }}</p>
+            <v-chart :option="scatterOption" autoresize class="tab-chart" />
           </div>
-          <div v-else class="chart-placeholder" />
-        </el-card>
-      </div>
+        </el-tab-pane>
 
-      <!-- 4. 存储使用趋势 — 延迟渲染 -->
-      <div ref="storageRef">
-        <el-card v-if="storageVisible" shadow="hover" class="chart-card">
-          <template #header>
-            <div class="card-header">
-              <div>
-                <span class="card-title">{{ t('smartAnalysis.performanceCorrelation.storageTrend') }}</span>
-                <span class="card-desc">{{ t('smartAnalysis.performanceCorrelation.storageTrendDesc') }}</span>
-              </div>
-            </div>
+        <el-tab-pane name="heatmap">
+          <template #label>
+            <span class="tab-label">{{ t('smartAnalysis.performanceCorrelation.correlationHeatmap') }}</span>
           </template>
-          <v-chart :option="storageTrendOption" autoresize class="chart-area" />
-        </el-card>
-        <div v-else class="chart-placeholder-block" />
-      </div>
-    </template>
+          <div v-if="activeTab === 'heatmap'" class="tab-chart-wrap">
+            <p class="tab-desc">{{ t('smartAnalysis.performanceCorrelation.correlationHeatmapDesc') }}</p>
+            <v-chart :option="heatmapOption" autoresize class="tab-chart" />
+          </div>
+        </el-tab-pane>
+
+        <el-tab-pane name="storage">
+          <template #label>
+            <span class="tab-label">{{ t('smartAnalysis.performanceCorrelation.storageTrend') }}</span>
+          </template>
+          <div v-if="activeTab === 'storage'" class="tab-chart-wrap">
+            <p class="tab-desc">{{ t('smartAnalysis.performanceCorrelation.storageTrendDesc') }}</p>
+            <v-chart :option="storageTrendOption" autoresize class="tab-chart" />
+          </div>
+        </el-tab-pane>
+      </el-tabs>
+    </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import * as echarts from 'echarts'
 import VChart from 'vue-echarts'
@@ -102,14 +82,8 @@ const clusterStore = useClusterStore()
 const loading = ref(false)
 const timeRange = ref(7)
 const selectedNode = ref('')
+const activeTab = ref('trend')
 const rawData = ref<CorrelationData>({ node_trends: [], current: [], storage: [], correlation_matrix: [] })
-
-// ── 延迟渲染状态 ──
-const scatterVisible = ref(false)
-const storageVisible = ref(false)
-const scatterRowRef = ref<HTMLElement | null>(null)
-const storageRef = ref<HTMLElement | null>(null)
-let observer: IntersectionObserver | null = null
 
 const isDark = computed(() => themeStore.theme === 'dark')
 const textColor = computed(() => isDark.value ? '#a0a0c0' : '#606266')
@@ -146,38 +120,8 @@ async function loadData() {
   }
 }
 
-// ── IntersectionObserver 设置 ──
-function setupObserver() {
-  observer = new IntersectionObserver((entries) => {
-    for (const entry of entries) {
-      if (entry.isIntersecting) {
-        if (entry.target === scatterRowRef.value) scatterVisible.value = true
-        if (entry.target === storageRef.value) storageVisible.value = true
-        observer?.unobserve(entry.target)
-      }
-    }
-  }, { rootMargin: '200px' })
-
-  if (scatterRowRef.value) observer.observe(scatterRowRef.value)
-  if (storageRef.value) observer.observe(storageRef.value)
-}
-
-onMounted(() => {
-  loadData()
-})
-
-onUnmounted(() => {
-  observer?.disconnect()
-})
-
-watch(() => clusterStore.currentClusterId, () => { scatterVisible.value = false; storageVisible.value = false; loadData() })
-
-// 数据加载完成后，DOM 渲染完毕，再设置 observer
-watch(loading, (val) => {
-  if (!val) {
-    nextTick(setupObserver)
-  }
-})
+onMounted(loadData)
+watch(() => clusterStore.currentClusterId, loadData)
 
 // ── 1. 节点多指标趋势图 ──
 const nodeTrendOption = computed(() => {
@@ -220,7 +164,7 @@ const nodeTrendOption = computed(() => {
   return {
     tooltip: { trigger: 'axis' as const, ...tooltipStyle.value, axisPointer: { type: 'cross' as const } },
     legend: { top: 0, type: 'scroll' as const, textStyle: { color: textColor.value } },
-    grid: { left: 50, right: 80, bottom: 30, top: 50 },
+    grid: { left: 55, right: 80, bottom: 30, top: 50 },
     xAxis: {
       type: 'category' as const, data: allTs, boundaryGap: false,
       axisLine: { lineStyle: { color: axisColor.value } },
@@ -244,7 +188,7 @@ const scatterOption = computed(() => {
     name: s.node_name,
     value: [s.cpu_load || 0, s.memory_usage_pct || 0, (s.total_vms + s.total_lxc) || 1],
     itemStyle: { color: NODE_COLORS[i % NODE_COLORS.length] },
-    label: { show: true, formatter: s.node_name, position: 'top' as const, color: textColor.value, fontSize: 11 },
+    label: { show: true, formatter: s.node_name, position: 'top' as const, color: textColor.value, fontSize: 12 },
   }))
 
   return {
@@ -252,23 +196,22 @@ const scatterOption = computed(() => {
       ...tooltipStyle.value,
       formatter: (p: any) => {
         const d = p.data
-        return `<b>${d.name}</b><br/>CPU: ${d.value[0]?.toFixed(1)}%<br/>${t('smartAnalysis.performanceCorrelation.memoryUsage')}: ${d.value[1]?.toFixed(1)}%<br/>${t('smartAnalysis.performanceCorrelation.vmCount')}+${t('smartAnalysis.performanceCorrelation.lxcCount')}: ${d.value[2]}`
+        return `<b>${d.name}</b><br/>CPU: ${d.value[0]?.toFixed(1)}%<br/>MEM: ${d.value[1]?.toFixed(1)}%<br/>VM+CT: ${d.value[2]}`
       },
     },
     grid: { left: 60, right: 30, bottom: 40, top: 30 },
-    xAxis: { type: 'value' as const, name: 'CPU %', max: 100, nameTextStyle: { color: textColor.value }, axisLabel: { formatter: '{value}%', color: textColor.value }, splitLine: { lineStyle: { color: lineColor.value, type: 'dashed' as const } } },
-    yAxis: { type: 'value' as const, name: 'MEM %', max: 100, nameTextStyle: { color: textColor.value }, axisLabel: { formatter: '{value}%', color: textColor.value }, splitLine: { lineStyle: { color: lineColor.value, type: 'dashed' as const } } },
+    xAxis: { type: 'value' as const, name: 'CPU %', max: 100, nameTextStyle: { color: textColor.value }, axisLabel: { formatter: '{value}%', color: textColor.value }, splitLine: { lineStyle: { color: lineColor.value, type: 'dashed' as const } }, axisLine: { lineStyle: { color: axisColor.value } } },
+    yAxis: { type: 'value' as const, name: 'MEM %', max: 100, nameTextStyle: { color: textColor.value }, axisLabel: { formatter: '{value}%', color: textColor.value }, splitLine: { lineStyle: { color: lineColor.value, type: 'dashed' as const } }, axisLine: { lineStyle: { color: axisColor.value } } },
     series: [{ type: 'scatter', symbolSize: (val: number[]) => Math.max(20, Math.min(60, val[2] * 6 + 16)), data }],
   }
 })
 
-// ── 3. 相关性热力图（直接使用后端计算的 correlation_matrix）──
+// ── 3. 相关性热力图（后端计算）──
 const heatmapOption = computed(() => {
   const matrix = rawData.value.correlation_matrix
   if (!matrix?.length) return {}
 
-  const labels = ['CPU', t('smartAnalysis.performanceCorrelation.memoryUsage'), t('smartAnalysis.performanceCorrelation.diskIO'), t('smartAnalysis.performanceCorrelation.rootfs')]
-
+  const labels = ['CPU', 'MEM', 'IO', 'Disk']
   const heatData: number[][] = []
   for (let i = 0; i < matrix.length; i++) {
     for (let j = 0; j < matrix[i].length; j++) {
@@ -279,12 +222,9 @@ const heatmapOption = computed(() => {
   return {
     tooltip: {
       ...tooltipStyle.value,
-      formatter: (p: any) => {
-        const [x, y, val] = p.data
-        return `${labels[y]} ↔ ${labels[x]}<br/>r = <b>${val}</b>`
-      },
+      formatter: (p: any) => `${labels[p.data[1]]} ↔ ${labels[p.data[0]]}<br/>r = <b>${p.data[2]}</b>`,
     },
-    grid: { left: 90, right: 40, bottom: 50, top: 20 },
+    grid: { left: 80, right: 40, bottom: 50, top: 20 },
     xAxis: {
       type: 'category' as const, data: labels, position: 'bottom' as const,
       axisLine: { lineStyle: { color: axisColor.value } },
@@ -303,8 +243,7 @@ const heatmapOption = computed(() => {
     },
     series: [{
       type: 'heatmap', data: heatData,
-      label: { show: true, fontSize: 12, fontWeight: 'bold' as const, color: '#333' },
-      emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.3)' } },
+      label: { show: true, fontSize: 13, fontWeight: 'bold' as const, color: '#333' },
     }],
   }
 })
@@ -333,7 +272,7 @@ const storageTrendOption = computed(() => {
   return {
     tooltip: { trigger: 'axis' as const, ...tooltipStyle.value },
     legend: { top: 0, type: 'scroll' as const, textStyle: { color: textColor.value } },
-    grid: { left: 50, right: 30, bottom: 30, top: 50 },
+    grid: { left: 55, right: 30, bottom: 30, top: 50 },
     xAxis: {
       type: 'category' as const, data: allTs, boundaryGap: false,
       axisLine: { lineStyle: { color: axisColor.value } },
@@ -366,7 +305,7 @@ function alignData(allTs: string[], srcTs: string[], srcVal: (number | null)[] |
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 28px;
+  margin-bottom: 24px;
   flex-wrap: wrap;
   gap: 12px;
 }
@@ -387,52 +326,22 @@ function alignData(allTs: string[], srcTs: string[], srcVal: (number | null)[] |
   align-items: center;
 }
 .chart-card {
-  margin-bottom: 20px;
+  min-height: 500px;
 }
-.card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.tab-label {
+  font-size: 14px;
+  font-weight: 500;
 }
-.card-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-heading);
-}
-.card-desc {
-  display: block;
+.tab-desc {
   font-size: 12px;
   color: var(--text-muted);
-  margin-top: 2px;
+  margin: 0 0 12px;
 }
-.chart-area {
+.tab-chart-wrap {
+  padding: 8px 0;
+}
+.tab-chart {
   width: 100%;
-  height: 340px;
-}
-.chart-area-wrapper {
-  width: 100%;
-  height: 340px;
-}
-.chart-placeholder {
-  width: 100%;
-  height: 340px;
-}
-.chart-placeholder-block {
-  width: 100%;
-  height: 400px;
-}
-.row-split {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  margin-bottom: 20px;
-}
-.row-split .half {
-  margin-bottom: 0;
-}
-@media (max-width: 900px) {
-  .row-split {
-    grid-template-columns: 1fr;
-  }
+  height: 460px;
 }
 </style>
