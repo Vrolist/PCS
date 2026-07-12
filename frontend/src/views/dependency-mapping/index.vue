@@ -1138,7 +1138,7 @@ watch(() => clusterStore.currentClusterId, async () => {
 .toolbar-btn-text:active { transform: scale(0.92); }
 
 .graph-container { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; position: relative; }
-.unified-panel { position: absolute; top: 12px; left: 12px; z-index: 10; display: flex; flex-direction: column; gap: 10px; background: var(--bg-card, #fff); border: 1px solid var(--border-color, #e4e7ed); border-radius: 10px; padding: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); max-width: 320px; }
+.unified-panel { position: absolute; top: 12px; left: 12px; z-index: 10; display: flex; flex-direction: column; gap: 8px; background: var(--bg-card, #fff); border: 1px solid var(--border-color, #e4e7ed); border-radius: 10px; padding: 10px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); max-width: 260px; }
 .panel-section { display: flex; flex-direction: column; gap: 8px; }
 .panel-section .selector-item { display: flex; align-items: center; gap: 8px; }
 .panel-section .selector-label { font-size: 12px; color: var(--text-secondary, #606266); white-space: nowrap; min-width: 56px; text-align: right; }
