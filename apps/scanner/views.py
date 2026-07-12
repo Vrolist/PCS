@@ -2079,66 +2079,67 @@ class ChangeTrackingView(APIView):
 
     def _detect_storage_changes(self, cluster_id, cutoff, changes):
         """检测存储池增减和容量变化"""
-        # 所有节点 ID
         node_ids = list(
             ClusterNode.objects.filter(cluster_id=cluster_id)
             .values_list("id", flat=True)
         )
 
-        # 当前存在的存储池
-        all_storages = Storage.objects.filter(node_id__in=node_ids)
+        # 一次查询获取所有存储池的首次记录（用于新增检测）
+        first_by_key: dict[tuple, Storage] = {}
+        all_storages_qs = (
+            Storage.objects.filter(node_id__in=node_ids)
+            .select_related("node")
+            .order_by("scanned_at")
+        )
+        for s in all_storages_qs:
+            key = (s.node.node_name, s.storage_name)
+            if key not in first_by_key:
+                first_by_key[key] = s
+
+        all_keys = set(first_by_key.keys())
+
         # cutoff 之前存在的存储池
-        old_storages = Storage.objects.filter(node_id__in=node_ids, scanned_at__lt=cutoff)
-
-        all_keys = set()
-        for s in all_storages.values_list("node__node_name", "storage_name").distinct():
-            all_keys.add((s[0], s[1]))
-
         old_keys = set()
-        for s in old_storages.values_list("node__node_name", "storage_name").distinct():
+        old_qs = (Storage.objects.filter(node_id__in=node_ids, scanned_at__lt=cutoff)
+            .select_related("node")
+            .values_list("node__node_name", "storage_name").distinct())
+        for s in old_qs:
             old_keys.add((s[0], s[1]))
 
         # 新增存储池（排除新节点自带的存储池）
-        new_node_names = set()
-        all_node_names = set(
-            ClusterNode.objects.filter(cluster_id=cluster_id)
-            .values_list("node_name", flat=True).distinct()
-        )
         old_node_names = set(
             ClusterNode.objects.filter(cluster_id=cluster_id, scanned_at__lt=cutoff)
             .values_list("node_name", flat=True).distinct()
         )
-        new_node_names = all_node_names - old_node_names
 
         for node_name, storage_name in all_keys - old_keys:
-            # 跳过新节点的存储池（已被 node_added 覆盖）
-            if node_name in new_node_names:
+            if node_name not in old_node_names:
                 continue
-            first = Storage.objects.filter(
-                node_id__in=node_ids,
-                node__node_name=node_name,
-                storage_name=storage_name,
-            ).order_by("scanned_at").first()
-            if first:
-                changes.append({
-                    "type": "storage_added",
-                    "severity": "info",
-                    "node": node_name,
-                    "title": f"新增存储池 {storage_name}",
-                    "detail": f"类型: {first.type}, 容量: {first.total_gb} GB, 内容: {first.content_types}",
-                    "old_value": "",
-                    "new_value": first.total_gb,
-                    "unit": "GB",
-                    "detected_at": first.scanned_at.isoformat(),
-                })
+            first = first_by_key[(node_name, storage_name)]
+            changes.append({
+                "type": "storage_added",
+                "severity": "info",
+                "node": node_name,
+                "title": f"新增存储池 {storage_name}",
+                "detail": f"类型: {first.type}, 容量: {first.total_gb} GB, 内容: {first.content_types}",
+                "old_value": "",
+                "new_value": first.total_gb,
+                "unit": "GB",
+                "detected_at": first.scanned_at.isoformat(),
+            })
 
         # 移除存储池
+        last_by_key: dict[tuple, Storage] = {}
+        old_storage_qs = (Storage.objects.filter(node_id__in=node_ids, scanned_at__lt=cutoff)
+            .select_related("node")
+            .order_by("-scanned_at"))
+        for s in old_storage_qs:
+            key = (s.node.node_name, s.storage_name)
+            if key not in last_by_key:
+                last_by_key[key] = s
+
         for node_name, storage_name in old_keys - all_keys:
-            last = Storage.objects.filter(
-                node_id__in=node_ids,
-                node__node_name=node_name,
-                storage_name=storage_name,
-            ).order_by("-scanned_at").first()
+            last = last_by_key.get((node_name, storage_name))
             if last:
                 changes.append({
                     "type": "storage_removed",
@@ -2155,6 +2156,7 @@ class ChangeTrackingView(APIView):
         # 容量变化
         storages = (
             Storage.objects.filter(node_id__in=node_ids, scanned_at__gte=cutoff)
+            .select_related("node")
             .order_by("storage_name", "scanned_at")
         )
         grouped: dict[str, list] = {}
@@ -2186,6 +2188,7 @@ class ChangeTrackingView(APIView):
         """检测网卡增减和 IP 变化"""
         nets = (
             NetworkInterface.objects.filter(node__cluster_id=cluster_id, scanned_at__gte=cutoff)
+            .select_related("node")
             .order_by("name", "scanned_at")
         )
 
