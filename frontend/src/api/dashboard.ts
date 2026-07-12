@@ -251,3 +251,51 @@ export function getComplianceReport(clusterId?: number) {
   if (clusterId) params.cluster_id = clusterId
   return request.get<any, ComplianceData>('/dashboard/compliance/', { params })
 }
+
+// === 性能关联分析 ===
+export interface CorrelationNodeTrend {
+  node_name: string
+  cluster_name: string
+  timestamps: string[]
+  cpu_load: (number | null)[]
+  memory_usage_pct: (number | null)[]
+  disk_io_delay_ms: (number | null)[]
+  rootfs_used_gb: (number | null)[]
+  rootfs_total_gb: number
+}
+
+export interface CorrelationSnapshot {
+  node_name: string
+  cluster_name: string
+  cpu_load: number | null
+  memory_usage_pct: number | null
+  disk_io_delay_ms: number | null
+  rootfs_used_gb: number | null
+  rootfs_total_gb: number | null
+  total_vms: number
+  total_lxc: number
+  ip_address: string
+  status: string
+}
+
+export interface CorrelationStorageTrend {
+  storage_name: string
+  node_name: string
+  type: string
+  timestamps: string[]
+  used_gb: (number | null)[]
+  total_gb: number
+  used_fraction: (number | null)[]
+}
+
+export interface CorrelationData {
+  node_trends: CorrelationNodeTrend[]
+  current: CorrelationSnapshot[]
+  storage: CorrelationStorageTrend[]
+}
+
+export function getCorrelationData(clusterId?: number, days = 7) {
+  const params: Record<string, any> = { days }
+  if (clusterId) params.cluster_id = clusterId
+  return request.get<any, CorrelationData>('/dashboard/correlation/', { params })
+}

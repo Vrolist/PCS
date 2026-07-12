@@ -5,6 +5,7 @@ from .predictions import PredictionsView
 from .health_report import HealthReportView
 from .dr_score import DRScoreView
 from .compliance import ComplianceReportView
+from .correlation import CorrelationView
 
 urlpatterns = [
     path("stats/", views.StatsView.as_view(), name="dashboard-stats"),
@@ -15,4 +16,5 @@ urlpatterns = [
     path("health-report/", HealthReportView.as_view(), name="dashboard-health-report"),
     path("dr-score/", DRScoreView.as_view(), name="dashboard-dr-score"),
     path("compliance/", ComplianceReportView.as_view(), name="dashboard-compliance"),
+    path("correlation/", CorrelationView.as_view(), name="dashboard-correlation"),
 ]
