@@ -7,7 +7,7 @@
       </div>
     </div>
     <el-card shadow="hover" class="table-card">
-      <el-empty :description="t('services.noData')" />
+      <el-empty description="待开发" />
     </el-card>
   </div>
 </template>
