@@ -21,7 +21,7 @@
     <div v-if="loading" v-loading="true" style="min-height: 400px" />
 
     <template v-else>
-      <!-- 节点多指标趋势 -->
+      <!-- 1. 节点多指标趋势 — 首屏立即渲染 -->
       <el-card shadow="hover" class="chart-card">
         <template #header>
           <div class="card-header">
@@ -34,8 +34,8 @@
         <v-chart :option="nodeTrendOption" autoresize class="chart-area" />
       </el-card>
 
-      <!-- CPU vs 内存散点 + 指标相关性热力图 -->
-      <div class="row-split">
+      <!-- 2. CPU vs 内存散点 + 3. 相关性热力图 — 延迟渲染 -->
+      <div ref="scatterRowRef" class="row-split">
         <el-card shadow="hover" class="chart-card half">
           <template #header>
             <div class="card-header">
@@ -45,7 +45,10 @@
               </div>
             </div>
           </template>
-          <v-chart :option="scatterOption" autoresize class="chart-area" />
+          <div v-if="scatterVisible" class="chart-area-wrapper">
+            <v-chart :option="scatterOption" autoresize class="chart-area" />
+          </div>
+          <div v-else class="chart-placeholder" />
         </el-card>
 
         <el-card shadow="hover" class="chart-card half">
@@ -57,34 +60,40 @@
               </div>
             </div>
           </template>
-          <v-chart :option="heatmapOption" autoresize class="chart-area" />
+          <div v-if="scatterVisible" class="chart-area-wrapper">
+            <v-chart :option="heatmapOption" autoresize class="chart-area" />
+          </div>
+          <div v-else class="chart-placeholder" />
         </el-card>
       </div>
 
-      <!-- 存储使用趋势 -->
-      <el-card shadow="hover" class="chart-card">
-        <template #header>
-          <div class="card-header">
-            <div>
-              <span class="card-title">{{ t('smartAnalysis.performanceCorrelation.storageTrend') }}</span>
-              <span class="card-desc">{{ t('smartAnalysis.performanceCorrelation.storageTrendDesc') }}</span>
+      <!-- 4. 存储使用趋势 — 延迟渲染 -->
+      <div ref="storageRef">
+        <el-card v-if="storageVisible" shadow="hover" class="chart-card">
+          <template #header>
+            <div class="card-header">
+              <div>
+                <span class="card-title">{{ t('smartAnalysis.performanceCorrelation.storageTrend') }}</span>
+                <span class="card-desc">{{ t('smartAnalysis.performanceCorrelation.storageTrendDesc') }}</span>
+              </div>
             </div>
-          </div>
-        </template>
-        <v-chart :option="storageTrendOption" autoresize class="chart-area" />
-      </el-card>
+          </template>
+          <v-chart :option="storageTrendOption" autoresize class="chart-area" />
+        </el-card>
+        <div v-else class="chart-placeholder-block" />
+      </div>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import * as echarts from 'echarts'
 import VChart from 'vue-echarts'
 import { useThemeStore } from '@/stores/theme'
 import { useClusterStore } from '@/stores/cluster'
-import { getCorrelationData, type CorrelationData, type CorrelationNodeTrend, type CorrelationSnapshot } from '@/api/dashboard'
+import { getCorrelationData, type CorrelationData } from '@/api/dashboard'
 
 const { t } = useI18n()
 const themeStore = useThemeStore()
@@ -93,7 +102,14 @@ const clusterStore = useClusterStore()
 const loading = ref(false)
 const timeRange = ref(7)
 const selectedNode = ref('')
-const rawData = ref<CorrelationData>({ node_trends: [], current: [], storage: [] })
+const rawData = ref<CorrelationData>({ node_trends: [], current: [], storage: [], correlation_matrix: [] })
+
+// ── 延迟渲染状态 ──
+const scatterVisible = ref(false)
+const storageVisible = ref(false)
+const scatterRowRef = ref<HTMLElement | null>(null)
+const storageRef = ref<HTMLElement | null>(null)
+let observer: IntersectionObserver | null = null
 
 const isDark = computed(() => themeStore.theme === 'dark')
 const textColor = computed(() => isDark.value ? '#a0a0c0' : '#606266')
@@ -110,11 +126,9 @@ const tooltipStyle = computed(() => ({
 }))
 
 const NODE_COLORS = ['#409eff', '#8b5cf6', '#f59e0b', '#10b981', '#ef4444', '#06b6d4', '#ec4899', '#84cc16']
-const METRIC_LABELS = ['CPU', t('smartAnalysis.performanceCorrelation.memoryUsage'), t('smartAnalysis.performanceCorrelation.diskIO'), t('smartAnalysis.performanceCorrelation.rootfs')]
 
 const nodeNames = computed(() => rawData.value.node_trends.map(n => n.node_name))
 
-// 过滤后的趋势数据
 const filteredTrends = computed(() => {
   if (!selectedNode.value) return rawData.value.node_trends
   return rawData.value.node_trends.filter(n => n.node_name === selectedNode.value)
@@ -126,13 +140,38 @@ async function loadData() {
   try {
     rawData.value = await getCorrelationData(clusterId, timeRange.value)
   } catch {
-    rawData.value = { node_trends: [], current: [], storage: [] }
+    rawData.value = { node_trends: [], current: [], storage: [], correlation_matrix: [] }
   } finally {
     loading.value = false
   }
 }
 
-onMounted(loadData)
+// ── IntersectionObserver 设置 ──
+function setupObserver() {
+  observer = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (entry.isIntersecting) {
+        if (entry.target === scatterRowRef.value) scatterVisible.value = true
+        if (entry.target === storageRef.value) storageVisible.value = true
+        observer?.unobserve(entry.target)
+      }
+    }
+  }, { rootMargin: '200px' })
+
+  if (scatterRowRef.value) observer.observe(scatterRowRef.value)
+  if (storageRef.value) observer.observe(storageRef.value)
+}
+
+onMounted(() => {
+  loadData()
+  // nextTick 后 observe（DOM 已渲染）
+  setTimeout(setupObserver, 100)
+})
+
+onUnmounted(() => {
+  observer?.disconnect()
+})
+
 watch(() => clusterStore.currentClusterId, loadData)
 
 // ── 1. 节点多指标趋势图 ──
@@ -140,49 +179,36 @@ const nodeTrendOption = computed(() => {
   const trends = filteredTrends.value
   if (!trends.length) return {}
 
-  // 合并所有时间戳
   const allTs = [...new Set(trends.flatMap(t => t.timestamps))].sort()
-
   const series: any[] = []
-  const legendData: string[] = []
 
   trends.forEach((node, ni) => {
     const color = NODE_COLORS[ni % NODE_COLORS.length]
     const prefix = trends.length > 1 ? `${node.node_name} ` : ''
 
-    // CPU
-    legendData.push(`${prefix}${t('smartAnalysis.performanceCorrelation.cpuLoad')}`)
     series.push({
       name: `${prefix}${t('smartAnalysis.performanceCorrelation.cpuLoad')}`,
       type: 'line', smooth: true, symbol: 'none',
       data: alignData(allTs, node.timestamps, node.cpu_load),
-      lineStyle: { color, width: 2 },
-      itemStyle: { color },
-      yAxisIndex: 0,
+      lineStyle: { color, width: 2 }, itemStyle: { color }, yAxisIndex: 0,
     })
 
-    // Memory
     const memColor = NODE_COLORS[(ni + trends.length) % NODE_COLORS.length]
-    legendData.push(`${prefix}${t('smartAnalysis.performanceCorrelation.memoryUsage')}`)
     series.push({
       name: `${prefix}${t('smartAnalysis.performanceCorrelation.memoryUsage')}`,
       type: 'line', smooth: true, symbol: 'none',
       data: alignData(allTs, node.timestamps, node.memory_usage_pct),
       lineStyle: { color: memColor, width: 2, type: 'dashed' as const },
-      itemStyle: { color: memColor },
-      yAxisIndex: 1,
+      itemStyle: { color: memColor }, yAxisIndex: 1,
     })
 
-    // Disk I/O
     const diskColor = NODE_COLORS[(ni + trends.length * 2) % NODE_COLORS.length]
-    legendData.push(`${prefix}${t('smartAnalysis.performanceCorrelation.diskIO')}`)
     series.push({
       name: `${prefix}${t('smartAnalysis.performanceCorrelation.diskIO')}`,
       type: 'line', smooth: true, symbol: 'none',
       data: alignData(allTs, node.timestamps, node.disk_io_delay_ms),
       lineStyle: { color: diskColor, width: 1.5, type: 'dotted' as const },
-      itemStyle: { color: diskColor },
-      yAxisIndex: 2,
+      itemStyle: { color: diskColor }, yAxisIndex: 2,
     })
   })
 
@@ -196,24 +222,9 @@ const nodeTrendOption = computed(() => {
       axisLabel: { color: textColor.value, fontSize: 11 },
     },
     yAxis: [
-      {
-        type: 'value' as const, position: 'left' as const, max: 100,
-        name: 'CPU %', nameTextStyle: { color: textColor.value },
-        axisLabel: { formatter: '{value}%', color: textColor.value },
-        splitLine: { lineStyle: { color: lineColor.value, type: 'dashed' as const } },
-      },
-      {
-        type: 'value' as const, position: 'right' as const, max: 100,
-        name: 'MEM %', nameTextStyle: { color: textColor.value },
-        axisLabel: { formatter: '{value}%', color: textColor.value },
-        splitLine: { show: false },
-      },
-      {
-        type: 'value' as const, position: 'right' as const, offset: 50,
-        name: 'IO ms', nameTextStyle: { color: textColor.value },
-        axisLabel: { color: textColor.value },
-        splitLine: { show: false },
-      },
+      { type: 'value' as const, position: 'left' as const, max: 100, name: 'CPU %', nameTextStyle: { color: textColor.value }, axisLabel: { formatter: '{value}%', color: textColor.value }, splitLine: { lineStyle: { color: lineColor.value, type: 'dashed' as const } } },
+      { type: 'value' as const, position: 'right' as const, max: 100, name: 'MEM %', nameTextStyle: { color: textColor.value }, axisLabel: { formatter: '{value}%', color: textColor.value }, splitLine: { show: false } },
+      { type: 'value' as const, position: 'right' as const, offset: 50, name: 'IO ms', nameTextStyle: { color: textColor.value }, axisLabel: { color: textColor.value }, splitLine: { show: false } },
     ],
     series,
   }
@@ -240,70 +251,25 @@ const scatterOption = computed(() => {
       },
     },
     grid: { left: 60, right: 30, bottom: 40, top: 30 },
-    xAxis: {
-      type: 'value' as const, name: 'CPU %', max: 100,
-      nameTextStyle: { color: textColor.value },
-      axisLabel: { formatter: '{value}%', color: textColor.value },
-      splitLine: { lineStyle: { color: lineColor.value, type: 'dashed' as const } },
-    },
-    yAxis: {
-      type: 'value' as const, name: 'MEM %', max: 100,
-      nameTextStyle: { color: textColor.value },
-      axisLabel: { formatter: '{value}%', color: textColor.value },
-      splitLine: { lineStyle: { color: lineColor.value, type: 'dashed' as const } },
-    },
-    series: [{
-      type: 'scatter',
-      symbolSize: (val: number[]) => Math.max(20, Math.min(60, val[2] * 6 + 16)),
-      data,
-    }],
+    xAxis: { type: 'value' as const, name: 'CPU %', max: 100, nameTextStyle: { color: textColor.value }, axisLabel: { formatter: '{value}%', color: textColor.value }, splitLine: { lineStyle: { color: lineColor.value, type: 'dashed' as const } } },
+    yAxis: { type: 'value' as const, name: 'MEM %', max: 100, nameTextStyle: { color: textColor.value }, axisLabel: { formatter: '{value}%', color: textColor.value }, splitLine: { lineStyle: { color: lineColor.value, type: 'dashed' as const } } },
+    series: [{ type: 'scatter', symbolSize: (val: number[]) => Math.max(20, Math.min(60, val[2] * 6 + 16)), data }],
   }
 })
 
-// ── 3. 相关性热力图 ──
+// ── 3. 相关性热力图（直接使用后端计算的 correlation_matrix）──
 const heatmapOption = computed(() => {
-  const trends = rawData.value.node_trends
-  if (!trends.length) return {}
+  const matrix = rawData.value.correlation_matrix
+  if (!matrix?.length) return {}
 
-  // 收集各指标的所有有效值
-  const metrics: { key: keyof CorrelationNodeTrend; label: string }[] = [
-    { key: 'cpu_load', label: 'CPU' },
-    { key: 'memory_usage_pct', label: t('smartAnalysis.performanceCorrelation.memoryUsage') },
-    { key: 'disk_io_delay_ms', label: t('smartAnalysis.performanceCorrelation.diskIO') },
-    { key: 'rootfs_used_gb', label: t('smartAnalysis.performanceCorrelation.rootfs') },
-  ]
+  const labels = ['CPU', t('smartAnalysis.performanceCorrelation.memoryUsage'), t('smartAnalysis.performanceCorrelation.diskIO'), t('smartAnalysis.performanceCorrelation.rootfs')]
 
-  // 将所有节点的时序数据拼接成统一数组
-  const allSeries: (number | null)[][] = metrics.map(() => [])
-  trends.forEach(node => {
-    metrics.forEach((m, mi) => {
-      const arr = node[m.key] as (number | null)[]
-      allSeries[mi].push(...arr)
-    })
-  })
-
-  // 计算 Pearson 相关系数
-  const n = metrics.length
-  const matrix: number[][] = Array.from({ length: n }, () => Array(n).fill(0))
-  for (let i = 0; i < n; i++) {
-    for (let j = 0; j < n; j++) {
-      if (i === j) {
-        matrix[i][j] = 1
-      } else {
-        matrix[i][j] = pearson(allSeries[i], allSeries[j])
-      }
-    }
-  }
-
-  // 转换为 ECharts heatmap 数据格式
   const heatData: number[][] = []
-  for (let i = 0; i < n; i++) {
-    for (let j = 0; j < n; j++) {
+  for (let i = 0; i < matrix.length; i++) {
+    for (let j = 0; j < matrix[i].length; j++) {
       heatData.push([j, i, Math.round(matrix[i][j] * 100) / 100])
     }
   }
-
-  const labels = metrics.map(m => m.label)
 
   return {
     tooltip: {
@@ -328,15 +294,12 @@ const heatmapOption = computed(() => {
       min: -1, max: 1, calculable: true, orient: 'horizontal' as const,
       left: 'center', bottom: 0, itemWidth: 14, itemHeight: 120,
       textStyle: { color: textColor.value },
-      inRange: {
-        color: ['#ef4444', '#fbbf24', '#e5e7eb', '#86efac', '#22c55e'],
-      },
+      inRange: { color: ['#ef4444', '#fbbf24', '#e5e7eb', '#86efac', '#22c55e'] },
     },
     series: [{
-      type: 'heatmap',
-      data: heatData,
-      label: { show: true, color: '#333', fontSize: 12, fontWeight: 'bold' as const },
-      emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0, 0, 0, 0.3)' } },
+      type: 'heatmap', data: heatData,
+      label: { show: true, fontSize: 12, fontWeight: 'bold' as const, color: '#333' },
+      emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.3)' } },
     }],
   }
 })
@@ -386,28 +349,6 @@ function alignData(allTs: string[], srcTs: string[], srcVal: (number | null)[] |
   const map = new Map<string, number | null>()
   srcTs.forEach((t, i) => map.set(t, srcVal[i]))
   return allTs.map(t => map.get(t) ?? null)
-}
-
-function pearson(xs: (number | null)[], ys: (number | null)[]): number {
-  const pairs: [number, number][] = []
-  const len = Math.min(xs.length, ys.length)
-  for (let i = 0; i < len; i++) {
-    if (xs[i] != null && ys[i] != null) {
-      pairs.push([xs[i]!, ys[i]!])
-    }
-  }
-  const n = pairs.length
-  if (n < 3) return 0
-
-  const sumX = pairs.reduce((s, p) => s + p[0], 0)
-  const sumY = pairs.reduce((s, p) => s + p[1], 0)
-  const sumXY = pairs.reduce((s, p) => s + p[0] * p[1], 0)
-  const sumX2 = pairs.reduce((s, p) => s + p[0] * p[0], 0)
-  const sumY2 = pairs.reduce((s, p) => s + p[1] * p[1], 0)
-
-  const denom = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY))
-  if (denom === 0) return 0
-  return (n * sumXY - sumX * sumY) / denom
 }
 </script>
 
@@ -462,6 +403,18 @@ function pearson(xs: (number | null)[], ys: (number | null)[]): number {
 .chart-area {
   width: 100%;
   height: 340px;
+}
+.chart-area-wrapper {
+  width: 100%;
+  height: 340px;
+}
+.chart-placeholder {
+  width: 100%;
+  height: 340px;
+}
+.chart-placeholder-block {
+  width: 100%;
+  height: 400px;
 }
 .row-split {
   display: grid;

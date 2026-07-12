@@ -292,6 +292,7 @@ export interface CorrelationData {
   node_trends: CorrelationNodeTrend[]
   current: CorrelationSnapshot[]
   storage: CorrelationStorageTrend[]
+  correlation_matrix: number[][]
 }
 
 export function getCorrelationData(clusterId?: number, days = 7) {
