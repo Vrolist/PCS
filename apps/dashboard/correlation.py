@@ -16,16 +16,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.clusters.models import Cluster
-from apps.scanner.models import ClusterNode, Storage
+from apps.scanner.models import ClusterNode
 
 # 节点时序查询只需要的字段
 _NODE_FIELDS = [
     "cluster_id", "node_name", "scanned_at",
     "cpu_load", "memory_usage_pct", "disk_io_delay_ms", "rootfs_used_gb", "rootfs_total_gb",
-]
-# 存储时序查询只需要的字段
-_STORAGE_FIELDS = [
-    "node_id", "storage_name", "type", "scanned_at", "used_gb", "used_fraction", "total_gb",
 ]
 # 快照查询额外需要的字段
 _SNAPSHOT_EXTRA = [
@@ -80,7 +76,7 @@ class CorrelationView(APIView):
         cluster_ids = _user_cluster_ids(request.user)
 
         if not cluster_ids:
-            return Response({"node_trends": [], "current": [], "storage": [], "correlation_matrix": []})
+            return Response({"node_trends": [], "current": [], "correlation_matrix": []})
 
         since = timezone.now() - timezone.timedelta(days=days)
         cid_filter = {"cluster_id": cluster_filter} if cluster_filter else {"cluster_id__in": cluster_ids}
@@ -159,41 +155,7 @@ class CorrelationView(APIView):
                 "status": node.status,
             })
 
-        # ── 3. 存储趋势 ──
-        storage_filter = {"node__cluster_id": cluster_filter} if cluster_filter else {"node__cluster_id__in": cluster_ids}
-        storage_qs = (
-            Storage.objects
-            .filter(**storage_filter, scanned_at__gte=since)
-            .select_related("node")
-            .only(*_STORAGE_FIELDS, "node__node_name")
-            .order_by("scanned_at")
-        )
-
-        storage_series = defaultdict(lambda: {
-            "storage_name": "", "node_name": "", "type": "",
-            "timestamps": [], "used_gb": [], "total_gb": 0, "used_fraction": [],
-        })
-        for st in storage_qs:
-            key = f"{st.node_id}:{st.storage_name}"
-            s = storage_series[key]
-            s["storage_name"] = st.storage_name
-            s["node_name"] = st.node.node_name if st.node else ""
-            s["type"] = st.type
-            s["timestamps"].append(st.scanned_at.strftime("%m-%d %H:%M"))
-            s["used_gb"].append(_safe(st.used_gb))
-            s["used_fraction"].append(_safe(st.used_fraction))
-            if st.total_gb:
-                s["total_gb"] = float(st.total_gb)
-
-        storage_trends = []
-        for s in storage_series.values():
-            step = _downsample(s["timestamps"])
-            if step > 1:
-                for k in ("timestamps", "used_gb", "used_fraction"):
-                    s[k] = s[k][::step]
-            storage_trends.append(s)
-
-        # ── 4. 后端计算 Pearson 相关系数 ──
+        # ── 3. 后端计算 Pearson 相关系数 ──
         metric_keys = ["cpu_load", "memory_usage_pct", "disk_io_delay_ms", "rootfs_used_gb"]
         all_series = {k: [] for k in metric_keys}
         for nt in node_trends:
@@ -214,6 +176,5 @@ class CorrelationView(APIView):
         return Response({
             "node_trends": node_trends,
             "current": current,
-            "storage": storage_trends,
             "correlation_matrix": corr_matrix,
         })

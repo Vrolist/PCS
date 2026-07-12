@@ -278,20 +278,9 @@ export interface CorrelationSnapshot {
   status: string
 }
 
-export interface CorrelationStorageTrend {
-  storage_name: string
-  node_name: string
-  type: string
-  timestamps: string[]
-  used_gb: (number | null)[]
-  total_gb: number
-  used_fraction: (number | null)[]
-}
-
 export interface CorrelationData {
   node_trends: CorrelationNodeTrend[]
   current: CorrelationSnapshot[]
-  storage: CorrelationStorageTrend[]
   correlation_matrix: number[][]
 }
 

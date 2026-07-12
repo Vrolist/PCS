@@ -52,15 +52,7 @@
           </div>
         </el-tab-pane>
 
-        <el-tab-pane name="storage">
-          <template #label>
-            <span class="tab-label">{{ t('smartAnalysis.performanceCorrelation.storageTrend') }}</span>
-          </template>
-          <div v-if="activeTab === 'storage'" class="tab-chart-wrap">
-            <p class="tab-desc">{{ t('smartAnalysis.performanceCorrelation.storageTrendDesc') }}</p>
-            <v-chart :option="storageTrendOption" autoresize class="tab-chart" />
-          </div>
-        </el-tab-pane>
+
       </el-tabs>
     </el-card>
   </div>
@@ -69,8 +61,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import * as echarts from 'echarts'
 import VChart from 'vue-echarts'
+import * as echarts from 'echarts'
 import { useThemeStore } from '@/stores/theme'
 import { useClusterStore } from '@/stores/cluster'
 import { getCorrelationData, type CorrelationData } from '@/api/dashboard'
@@ -83,7 +75,7 @@ const loading = ref(false)
 const timeRange = ref(7)
 const selectedNode = ref('')
 const activeTab = ref('trend')
-const rawData = ref<CorrelationData>({ node_trends: [], current: [], storage: [], correlation_matrix: [] })
+const rawData = ref<CorrelationData>({ node_trends: [], current: [], correlation_matrix: [] })
 
 const isDark = computed(() => themeStore.theme === 'dark')
 const textColor = computed(() => isDark.value ? '#a0a0c0' : '#606266')
@@ -114,7 +106,7 @@ async function loadData() {
   try {
     rawData.value = await getCorrelationData(clusterId, timeRange.value)
   } catch {
-    rawData.value = { node_trends: [], current: [], storage: [], correlation_matrix: [] }
+    rawData.value = { node_trends: [], current: [], correlation_matrix: [] }
   } finally {
     loading.value = false
   }
@@ -123,47 +115,32 @@ async function loadData() {
 onMounted(loadData)
 watch(() => clusterStore.currentClusterId, loadData)
 
-// ── 1. 节点多指标趋势图 ──
+// ── 1. 节点多指标趋势图（固定 3 条线，多节点取平均）──
 const nodeTrendOption = computed(() => {
   const trends = filteredTrends.value
   if (!trends.length) return {}
 
   const allTs = [...new Set(trends.flatMap(t => t.timestamps))].sort()
-  const series: any[] = []
 
-  trends.forEach((node, ni) => {
-    const color = NODE_COLORS[ni % NODE_COLORS.length]
-    const prefix = trends.length > 1 ? `${node.node_name} ` : ''
-
-    series.push({
-      name: `${prefix}${t('smartAnalysis.performanceCorrelation.cpuLoad')}`,
-      type: 'line', smooth: true, symbol: 'none',
-      data: alignData(allTs, node.timestamps, node.cpu_load),
-      lineStyle: { color, width: 2 }, itemStyle: { color }, yAxisIndex: 0,
+  // 多节点时按时间戳聚合取平均
+  function avgAlign(key: 'cpu_load' | 'memory_usage_pct' | 'disk_io_delay_ms'): (number | null)[] {
+    return allTs.map(ts => {
+      let sum = 0, cnt = 0
+      for (const node of trends) {
+        const idx = node.timestamps.indexOf(ts)
+        if (idx >= 0 && node[key]) { sum += node[key]![idx]!; cnt++ }
+      }
+      return cnt > 0 ? Math.round(sum / cnt * 100) / 100 : null
     })
+  }
 
-    const memColor = NODE_COLORS[(ni + trends.length) % NODE_COLORS.length]
-    series.push({
-      name: `${prefix}${t('smartAnalysis.performanceCorrelation.memoryUsage')}`,
-      type: 'line', smooth: true, symbol: 'none',
-      data: alignData(allTs, node.timestamps, node.memory_usage_pct),
-      lineStyle: { color: memColor, width: 2, type: 'dashed' as const },
-      itemStyle: { color: memColor }, yAxisIndex: 1,
-    })
-
-    const diskColor = NODE_COLORS[(ni + trends.length * 2) % NODE_COLORS.length]
-    series.push({
-      name: `${prefix}${t('smartAnalysis.performanceCorrelation.diskIO')}`,
-      type: 'line', smooth: true, symbol: 'none',
-      data: alignData(allTs, node.timestamps, node.disk_io_delay_ms),
-      lineStyle: { color: diskColor, width: 1.5, type: 'dotted' as const },
-      itemStyle: { color: diskColor }, yAxisIndex: 2,
-    })
-  })
+  const cpuColor = '#409eff'
+  const memColor = '#f59e0b'
+  const ioColor = '#10b981'
 
   return {
     tooltip: { trigger: 'axis' as const, ...tooltipStyle.value, axisPointer: { type: 'cross' as const } },
-    legend: { top: 0, type: 'scroll' as const, textStyle: { color: textColor.value } },
+    legend: { top: 0, textStyle: { color: textColor.value } },
     grid: { left: 55, right: 80, bottom: 30, top: 50 },
     xAxis: {
       type: 'category' as const, data: allTs, boundaryGap: false,
@@ -175,7 +152,11 @@ const nodeTrendOption = computed(() => {
       { type: 'value' as const, position: 'right' as const, max: 100, name: 'MEM %', nameTextStyle: { color: textColor.value }, axisLabel: { formatter: '{value}%', color: textColor.value }, splitLine: { show: false } },
       { type: 'value' as const, position: 'right' as const, offset: 50, name: 'IO ms', nameTextStyle: { color: textColor.value }, axisLabel: { color: textColor.value }, splitLine: { show: false } },
     ],
-    series,
+    series: [
+      { name: t('smartAnalysis.performanceCorrelation.cpuLoad'), type: 'line', smooth: true, symbol: 'none', data: avgAlign('cpu_load'), lineStyle: { color: cpuColor, width: 2 }, itemStyle: { color: cpuColor }, yAxisIndex: 0, areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: `${cpuColor}20` }, { offset: 1, color: `${cpuColor}02` }] } } },
+      { name: t('smartAnalysis.performanceCorrelation.memoryUsage'), type: 'line', smooth: true, symbol: 'none', data: avgAlign('memory_usage_pct'), lineStyle: { color: memColor, width: 2 }, itemStyle: { color: memColor }, yAxisIndex: 1, areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: `${memColor}20` }, { offset: 1, color: `${memColor}02` }] } } },
+      { name: t('smartAnalysis.performanceCorrelation.diskIO'), type: 'line', smooth: true, symbol: 'none', data: avgAlign('disk_io_delay_ms'), lineStyle: { color: ioColor, width: 2 }, itemStyle: { color: ioColor }, yAxisIndex: 2, areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: `${ioColor}20` }, { offset: 1, color: `${ioColor}02` }] } } },
+    ],
   }
 })
 
@@ -245,45 +226,6 @@ const heatmapOption = computed(() => {
       type: 'heatmap', data: heatData,
       label: { show: true, fontSize: 13, fontWeight: 'bold' as const, color: '#333' },
     }],
-  }
-})
-
-// ── 4. 存储使用趋势 ──
-const storageTrendOption = computed(() => {
-  const storageData = rawData.value.storage
-  if (!storageData.length) return {}
-
-  const allTs = [...new Set(storageData.flatMap(s => s.timestamps))].sort()
-
-  const series = storageData.map((s, i) => ({
-    name: `${s.node_name}/${s.storage_name}`,
-    type: 'line' as const, smooth: true, symbol: 'none',
-    data: alignData(allTs, s.timestamps, s.used_fraction?.map(v => v !== null ? v * 100 : null)),
-    lineStyle: { width: 2 },
-    itemStyle: { color: NODE_COLORS[i % NODE_COLORS.length] },
-    areaStyle: {
-      color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-        { offset: 0, color: `${NODE_COLORS[i % NODE_COLORS.length]}40` },
-        { offset: 1, color: `${NODE_COLORS[i % NODE_COLORS.length]}05` },
-      ]),
-    },
-  }))
-
-  return {
-    tooltip: { trigger: 'axis' as const, ...tooltipStyle.value },
-    legend: { top: 0, type: 'scroll' as const, textStyle: { color: textColor.value } },
-    grid: { left: 55, right: 30, bottom: 30, top: 50 },
-    xAxis: {
-      type: 'category' as const, data: allTs, boundaryGap: false,
-      axisLine: { lineStyle: { color: axisColor.value } },
-      axisLabel: { color: textColor.value, fontSize: 11 },
-    },
-    yAxis: {
-      type: 'value' as const, max: 100,
-      axisLabel: { formatter: '{value}%', color: textColor.value },
-      splitLine: { lineStyle: { color: lineColor.value, type: 'dashed' as const } },
-    },
-    series,
   }
 })
 
