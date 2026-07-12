@@ -18,16 +18,25 @@
 
     <el-card v-else shadow="hover" class="chart-card">
       <el-tabs v-model="activeTab" class="correlation-tabs">
+        <!-- Tab 1: 趋势图 -->
         <el-tab-pane name="trend">
           <template #label>
             <span class="tab-label">{{ t('smartAnalysis.performanceCorrelation.nodeTrend') }}</span>
           </template>
           <div v-if="activeTab === 'trend'" class="tab-chart-wrap">
-            <p class="tab-desc">{{ t('smartAnalysis.performanceCorrelation.nodeTrendDesc') }}</p>
+            <div class="trend-toolbar">
+              <el-radio-group v-model="selectedMetric" size="small">
+                <el-radio-button value="cpu">CPU 负载</el-radio-button>
+                <el-radio-button value="mem">内存使用</el-radio-button>
+                <el-radio-button value="io">磁盘 IO</el-radio-button>
+              </el-radio-group>
+              <span class="trend-hint">{{ metricHint }}</span>
+            </div>
             <v-chart :option="nodeTrendOption" autoresize class="tab-chart" />
           </div>
         </el-tab-pane>
 
+        <!-- Tab 2: 散点图 -->
         <el-tab-pane name="scatter">
           <template #label>
             <span class="tab-label">{{ t('smartAnalysis.performanceCorrelation.cpuVsMemory') }}</span>
@@ -38,6 +47,7 @@
           </div>
         </el-tab-pane>
 
+        <!-- Tab 3: 热力图 -->
         <el-tab-pane name="heatmap">
           <template #label>
             <span class="tab-label">{{ t('smartAnalysis.performanceCorrelation.correlationHeatmap') }}</span>
@@ -47,8 +57,6 @@
             <v-chart :option="heatmapOption" autoresize class="tab-chart" />
           </div>
         </el-tab-pane>
-
-
       </el-tabs>
     </el-card>
   </div>
@@ -70,6 +78,7 @@ const clusterStore = useClusterStore()
 const loading = ref(false)
 const timeRange = ref(7)
 const activeTab = ref('trend')
+const selectedMetric = ref<'cpu' | 'mem' | 'io'>('cpu')
 const rawData = ref<CorrelationData>({ node_trends: [], current: [], correlation_matrix: [] })
 
 const isDark = computed(() => themeStore.theme === 'dark')
@@ -88,6 +97,17 @@ const tooltipStyle = computed(() => ({
 
 const NODE_COLORS = ['#409eff', '#8b5cf6', '#f59e0b', '#10b981', '#ef4444', '#06b6d4', '#ec4899', '#84cc16']
 
+const METRIC_CONFIG = {
+  cpu: { key: 'cpu_load' as const, suffix: '%', name: 'CPU 负载', max: 100 },
+  mem: { key: 'memory_usage_pct' as const, suffix: '%', name: '内存使用', max: 100 },
+  io: { key: 'disk_io_delay_ms' as const, suffix: 'ms', name: '磁盘 IO 延迟', max: undefined },
+}
+
+const metricHint = computed(() => {
+  const cfg = METRIC_CONFIG[selectedMetric.value]
+  return `${cfg.name}（${cfg.suffix}）— 各节点对比`
+})
+
 async function loadData() {
   const clusterId = clusterStore.currentClusterId || undefined
   loading.value = true
@@ -103,81 +123,45 @@ async function loadData() {
 onMounted(loadData)
 watch(() => clusterStore.currentClusterId, loadData)
 
-// ── 1. 节点多指标趋势图（每节点一色，同色三线型，legend 只显示节点名）──
+// ── 1. 趋势图（指标切换，每条线 = 一个节点）──
 const nodeTrendOption = computed(() => {
   const trends = rawData.value.node_trends
   if (!trends.length) return {}
 
+  const cfg = METRIC_CONFIG[selectedMetric.value]
   const allTs = [...new Set(trends.flatMap(t => t.timestamps))].sort()
-  const series: any[] = []
-
-  trends.forEach((node, ni) => {
-    const color = NODE_COLORS[ni % NODE_COLORS.length]
-    const name = node.node_name
-    // 用 node name 作为 legend 项，CPU 线显示在 legend 中
-    series.push({
-      name, id: `${name}-cpu`, type: 'line', smooth: true, symbol: 'none',
-      data: alignData(allTs, node.timestamps, node.cpu_load),
-      lineStyle: { color, width: 2.5 }, itemStyle: { color }, yAxisIndex: 0,
-    })
-    // MEM 和 IO 用隐藏名称，通过 legendselectchanged 事件联动
-    series.push({
-      name: `${name}_mem`, id: `${name}-mem`, type: 'line', smooth: true, symbol: 'none',
-      data: alignData(allTs, node.timestamps, node.memory_usage_pct),
-      lineStyle: { color, width: 2, type: 'dashed' as const }, itemStyle: { color }, yAxisIndex: 1,
-    })
-    series.push({
-      name: `${name}_io`, id: `${name}-io`, type: 'line', smooth: true, symbol: 'none',
-      data: alignData(allTs, node.timestamps, node.disk_io_delay_ms),
-      lineStyle: { color, width: 1.5, type: 'dotted' as const }, itemStyle: { color }, yAxisIndex: 2,
-    })
-  })
-
-  return {
-    tooltip: {
-      trigger: 'axis' as const, ...tooltipStyle.value, axisPointer: { type: 'cross' as const },
-      formatter: (params: any) => {
-        if (!Array.isArray(params)) return ''
-        const time = params[0].axisValue
-        // 按节点分组
-        const grouped: Record<string, { cpu?: number; mem?: number; io?: number; color: string }> = {}
-        for (const p of params) {
-          const s = p.seriesName as string
-          const idx = s.lastIndexOf('_')
-          const isMetric = idx > 0 && ['mem', 'io'].includes(s.slice(idx + 1))
-          const nodeName = isMetric ? s.slice(0, idx) : s
-          if (!grouped[nodeName]) grouped[nodeName] = { color: p.color }
-          if (!isMetric) grouped[nodeName].cpu = p.value
-          else if (s.endsWith('_mem')) grouped[nodeName].mem = p.value
-          else grouped[nodeName].io = p.value
-        }
-        let html = `<div style="margin-bottom:4px;font-weight:600">${time}</div>`
-        for (const [name, v] of Object.entries(grouped)) {
-          html += `<div style="margin:2px 0"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${v.color};margin-right:6px"></span><b>${name}</b>`
-          if (v.cpu != null) html += ` &nbsp;CPU: ${v.cpu.toFixed(1)}%`
-          if (v.mem != null) html += ` &nbsp;MEM: ${v.mem.toFixed(1)}%`
-          if (v.io != null) html += ` &nbsp;IO: ${v.io.toFixed(1)}ms`
-          html += '</div>'
-        }
-        return html
+  const series = trends.map((node, ni) => ({
+    name: node.node_name,
+    type: 'line' as const, smooth: true, symbol: 'none',
+    data: alignData(allTs, node.timestamps, node[cfg.key]),
+    lineStyle: { color: NODE_COLORS[ni % NODE_COLORS.length], width: 2.5 },
+    itemStyle: { color: NODE_COLORS[ni % NODE_COLORS.length] },
+    areaStyle: {
+      color: {
+        type: 'linear' as const, x: 0, y: 0, x2: 0, y2: 1,
+        colorStops: [
+          { offset: 0, color: `${NODE_COLORS[ni % NODE_COLORS.length]}25` },
+          { offset: 1, color: `${NODE_COLORS[ni % NODE_COLORS.length]}03` },
+        ],
       },
     },
-    legend: {
-      top: 0, textStyle: { color: textColor.value, fontSize: 12 },
-      // 只显示节点名，不显示 _mem/_io
-      data: trends.map(n => ({ name: n.node_name, icon: 'roundRect' })),
-    },
-    grid: { left: 55, right: 80, bottom: 30, top: 50 },
+  }))
+
+  return {
+    tooltip: { trigger: 'axis' as const, ...tooltipStyle.value },
+    legend: { top: 0, textStyle: { color: textColor.value, fontSize: 12 } },
+    grid: { left: 55, right: 30, bottom: 30, top: 50 },
     xAxis: {
       type: 'category' as const, data: allTs, boundaryGap: false,
       axisLine: { lineStyle: { color: axisColor.value } },
       axisLabel: { color: textColor.value, fontSize: 11 },
     },
-    yAxis: [
-      { type: 'value' as const, position: 'left' as const, max: 100, name: 'CPU %', nameTextStyle: { color: textColor.value }, axisLabel: { formatter: '{value}%', color: textColor.value }, splitLine: { lineStyle: { color: lineColor.value, type: 'dashed' as const } } },
-      { type: 'value' as const, position: 'right' as const, max: 100, name: 'MEM %', nameTextStyle: { color: textColor.value }, axisLabel: { formatter: '{value}%', color: textColor.value }, splitLine: { show: false } },
-      { type: 'value' as const, position: 'right' as const, offset: 50, name: 'IO ms', nameTextStyle: { color: textColor.value }, axisLabel: { color: textColor.value }, splitLine: { show: false } },
-    ],
+    yAxis: {
+      type: 'value' as const, max: cfg.max,
+      name: cfg.suffix, nameTextStyle: { color: textColor.value },
+      axisLabel: { formatter: `{value}${cfg.suffix}`, color: textColor.value },
+      splitLine: { lineStyle: { color: lineColor.value, type: 'dashed' as const } },
+    },
     series,
   }
 })
@@ -307,5 +291,15 @@ function alignData(allTs: string[], srcTs: string[], srcVal: (number | null)[] |
 .tab-chart {
   width: 100%;
   height: 460px;
+}
+.trend-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.trend-hint {
+  font-size: 12px;
+  color: var(--text-muted);
 }
 </style>
