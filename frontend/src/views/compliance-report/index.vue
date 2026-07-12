@@ -6,9 +6,9 @@
         <p class="page-desc">{{ t('compliance.subtitle') }}</p>
       </div>
       <div class="header-actions">
-        <el-button type="primary" :icon="Download" @click="exportPDF" :loading="exporting">
+        <!-- <el-button type="primary" :icon="Download" @click="exportPDF" :loading="exporting">
           {{ t('compliance.exportPdf') }}
-        </el-button>
+        </el-button> -->
       </div>
     </div>
 

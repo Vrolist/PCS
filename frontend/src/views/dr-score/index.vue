@@ -7,9 +7,9 @@
       </div>
       <div class="header-actions">
         <el-button @click="loadData" :icon="Refresh" circle />
-        <el-button @click="exportPDF" :icon="Download" :loading="exporting">
+        <!-- <el-button @click="exportPDF" :icon="Download" :loading="exporting">
           {{ t('healthReport.exportPDF') }}
-        </el-button>
+        </el-button> -->
       </div>
     </div>
 

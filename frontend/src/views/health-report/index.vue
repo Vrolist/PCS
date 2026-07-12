@@ -14,9 +14,9 @@
           <el-option :label="t('healthReport.last30Days')" :value="30" />
         </el-select>
         <el-button @click="loadData" :icon="Refresh" circle />
-        <el-button @click="exportPDF" :icon="Download" :loading="exporting">
+        <!-- <el-button @click="exportPDF" :icon="Download" :loading="exporting">
           {{ t('healthReport.exportPDF') }}
-        </el-button>
+        </el-button> -->
       </div>
     </div>
 
