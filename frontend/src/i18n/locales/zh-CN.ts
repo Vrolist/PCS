@@ -492,6 +492,13 @@ export default {
     bondMode: 'Bond 模式',
     speed: '速率',
     status: '状态',
+    searchPlaceholder: '搜索接口名 / IP / MAC',
+    emptyDesc: '暂无网络接口数据',
+    basicInfo: '基本信息',
+    statusUp: '在线',
+    statusDown: '离线',
+    gateway: '网关',
+    bondSlaves: 'Bond 从接口',
   },
 
   // Ceph

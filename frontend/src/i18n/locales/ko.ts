@@ -485,6 +485,13 @@ export default {
     bondMode: 'Bond 모드',
     speed: '속도',
     status: '상태',
+    searchPlaceholder: '인터페이스 / IP / MAC 검색',
+    emptyDesc: '네트워크 인터페이스가 없습니다',
+    basicInfo: '기본 정보',
+    statusUp: '활성',
+    statusDown: '비활성',
+    gateway: '게이트웨이',
+    bondSlaves: 'Bond 슬레이브',
   },
 
   // Ceph

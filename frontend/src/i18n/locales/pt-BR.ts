@@ -492,6 +492,13 @@ export default {
     bondMode: 'Modo do bond',
     speed: 'Velocidade',
     status: 'Status',
+    searchPlaceholder: 'Pesquisar interface / IP / MAC',
+    emptyDesc: 'Nenhuma interface de rede',
+    basicInfo: 'Informações básicas',
+    statusUp: 'Ativo',
+    statusDown: 'Inativo',
+    gateway: 'Gateway',
+    bondSlaves: 'Escravos do Bond',
   },
 
   // Ceph
