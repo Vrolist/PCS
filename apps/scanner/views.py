@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from django.db.models import Max, Q
+from django.db.models import Max, Q, Sum
 from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -2343,6 +2343,9 @@ class ResourceReclamationView(APIView):
             old_snapshots, zombie_vms, zombie_containers
         )
         
+        # 计算总存储空间
+        total_storage_gb = self._calculate_total_storage(node_ids, cluster_filter)
+        
         return Response({
             "summary": {
                 "zombie_vms_count": len(zombie_vms),
@@ -2351,6 +2354,7 @@ class ResourceReclamationView(APIView):
                 "low_usage_storages_count": len(low_usage_storages),
                 "idle_resources_count": len(idle_resources),
                 "reclaimable_space_gb": reclaimable_space_gb,
+                "total_storage_gb": total_storage_gb,
             },
             "zombie_vms": zombie_vms,
             "zombie_containers": zombie_containers,
@@ -2370,18 +2374,43 @@ class ResourceReclamationView(APIView):
         if cluster_filter:
             vms = vms.filter(node__cluster_id=cluster_filter)
         
-        return [{
-            "id": vm.id,
-            "vmid": vm.vmid,
-            "name": vm.name,
-            "node_name": vm.node.node_name,
-            "cluster_name": vm.node.cluster.name,
-            "cpu_cores": vm.cpu_cores,
-            "memory_mb": vm.memory_mb,
-            "disk_gb": vm.disk_gb,
-            "status": vm.status,
-            "scanned_at": vm.scanned_at.isoformat(),
-        } for vm in vms]
+        now = timezone.now()
+        result = []
+        for vm in vms:
+            # 计算停机天数（基于扫描时间）
+            stopped_days = (now - vm.scanned_at).days if vm.scanned_at else 0
+            
+            # 风险等级判断
+            risk_level = "low"
+            if stopped_days > 90:
+                risk_level = "high"
+            elif stopped_days > 30:
+                risk_level = "medium"
+            
+            # 回收建议
+            suggestion = "确认业务不再需要后可删除"
+            if stopped_days > 90:
+                suggestion = "长期停机，建议确认后删除释放资源"
+            elif stopped_days > 30:
+                suggestion = "停机超过30天，建议评估是否需要"
+            
+            result.append({
+                "id": vm.id,
+                "vmid": vm.vmid,
+                "name": vm.name,
+                "node_name": vm.node.node_name,
+                "cluster_name": vm.node.cluster.name,
+                "cpu_cores": vm.cpu_cores,
+                "memory_mb": vm.memory_mb,
+                "disk_gb": vm.disk_gb,
+                "status": vm.status,
+                "scanned_at": vm.scanned_at.isoformat(),
+                "stopped_days": stopped_days,
+                "risk_level": risk_level,
+                "suggestion": suggestion,
+            })
+        
+        return result
     
     def _detect_zombie_containers(self, node_ids, cluster_filter):
         """检测僵尸容器"""
@@ -2394,18 +2423,43 @@ class ResourceReclamationView(APIView):
         if cluster_filter:
             containers = containers.filter(node__cluster_id=cluster_filter)
         
-        return [{
-            "id": ct.id,
-            "vmid": ct.vmid,
-            "name": ct.name,
-            "node_name": ct.node.node_name,
-            "cluster_name": ct.node.cluster.name,
-            "cpu_cores": ct.cpu_cores,
-            "memory_mb": ct.memory_mb,
-            "disk_gb": ct.disk_gb,
-            "status": ct.status,
-            "scanned_at": ct.scanned_at.isoformat(),
-        } for ct in containers]
+        now = timezone.now()
+        result = []
+        for ct in containers:
+            # 计算停机天数（基于扫描时间）
+            stopped_days = (now - ct.scanned_at).days if ct.scanned_at else 0
+            
+            # 风险等级判断
+            risk_level = "low"
+            if stopped_days > 90:
+                risk_level = "high"
+            elif stopped_days > 30:
+                risk_level = "medium"
+            
+            # 回收建议
+            suggestion = "确认业务不再需要后可删除"
+            if stopped_days > 90:
+                suggestion = "长期停机，建议确认后删除释放资源"
+            elif stopped_days > 30:
+                suggestion = "停机超过30天，建议评估是否需要"
+            
+            result.append({
+                "id": ct.id,
+                "vmid": ct.vmid,
+                "name": ct.name,
+                "node_name": ct.node.node_name,
+                "cluster_name": ct.node.cluster.name,
+                "cpu_cores": ct.cpu_cores,
+                "memory_mb": ct.memory_mb,
+                "disk_gb": ct.disk_gb,
+                "status": ct.status,
+                "scanned_at": ct.scanned_at.isoformat(),
+                "stopped_days": stopped_days,
+                "risk_level": risk_level,
+                "suggestion": suggestion,
+            })
+        
+        return result
     
     def _detect_old_snapshots(self, cluster_ids, cluster_filter):
         """检测旧快照（超过30天）"""
@@ -2419,18 +2473,43 @@ class ResourceReclamationView(APIView):
         if cluster_filter:
             snapshots = snapshots.filter(vm__node__cluster_id=cluster_filter)
         
-        return [{
-            "id": snap.id,
-            "snapid": snap.snapid,
-            "name": snap.name,
-            "vm_name": snap.vm.name,
-            "vm_vmid": snap.vm.vmid,
-            "node_name": snap.vm.node.node_name,
-            "cluster_name": snap.vm.node.cluster.name,
-            "snap_time": snap.snap_time.isoformat() if snap.snap_time else None,
-            "size_mb": snap.size_mb,
-            "size_gb": round(snap.size_mb / 1024, 2) if snap.size_mb else 0,
-        } for snap in snapshots]
+        now = timezone.now()
+        result = []
+        for snap in snapshots:
+            # 计算快照年龄天数
+            snap_age_days = (now - snap.snap_time).days if snap.snap_time else 0
+            
+            # 风险等级判断
+            risk_level = "low"
+            if snap_age_days > 180:
+                risk_level = "high"
+            elif snap_age_days > 90:
+                risk_level = "medium"
+            
+            # 回收建议
+            suggestion = "旧快照，建议清理"
+            if snap_age_days > 180:
+                suggestion = "超旧快照，强烈建议清理"
+            elif snap_age_days > 90:
+                suggestion = "快照超过90天，建议评估后清理"
+            
+            result.append({
+                "id": snap.id,
+                "snapid": snap.snapid,
+                "name": snap.name,
+                "vm_name": snap.vm.name,
+                "vm_vmid": snap.vm.vmid,
+                "node_name": snap.vm.node.node_name,
+                "cluster_name": snap.vm.node.cluster.name,
+                "snap_time": snap.snap_time.isoformat() if snap.snap_time else None,
+                "size_mb": snap.size_mb,
+                "size_gb": round(snap.size_mb / 1024, 2) if snap.size_mb else 0,
+                "snap_age_days": snap_age_days,
+                "risk_level": risk_level,
+                "suggestion": suggestion,
+            })
+        
+        return result
     
     def _detect_low_usage_storages(self, node_ids, cluster_filter):
         """检测低使用率存储（使用率<30%）"""
@@ -2442,18 +2521,39 @@ class ResourceReclamationView(APIView):
         if cluster_filter:
             storages = storages.filter(node__cluster_id=cluster_filter)
         
-        return [{
-            "id": s.id,
-            "storage_name": s.storage_name,
-            "type": s.type,
-            "node_name": s.node.node_name,
-            "cluster_name": s.node.cluster.name,
-            "total_gb": s.total_gb,
-            "used_gb": s.used_gb,
-            "avail_gb": s.avail_gb,
-            "used_fraction": s.used_fraction,
-            "scanned_at": s.scanned_at.isoformat(),
-        } for s in storages]
+        result = []
+        for s in storages:
+            # 风险等级判断（基于使用率）
+            used_pct = (s.used_fraction or 0) * 100
+            risk_level = "low"
+            if used_pct < 5:
+                risk_level = "high"
+            elif used_pct < 15:
+                risk_level = "medium"
+            
+            # 回收建议
+            suggestion = "存储使用率低，可考虑优化或卸载"
+            if used_pct < 5:
+                suggestion = "几乎空闲，建议检查是否可卸载"
+            elif used_pct < 15:
+                suggestion = "使用率很低，建议评估存储用途"
+            
+            result.append({
+                "id": s.id,
+                "storage_name": s.storage_name,
+                "type": s.type,
+                "node_name": s.node.node_name,
+                "cluster_name": s.node.cluster.name,
+                "total_gb": s.total_gb,
+                "used_gb": s.used_gb,
+                "avail_gb": s.avail_gb,
+                "used_fraction": s.used_fraction,
+                "scanned_at": s.scanned_at.isoformat(),
+                "risk_level": risk_level,
+                "suggestion": suggestion,
+            })
+        
+        return result
     
     def _detect_idle_resources(self, node_ids, cluster_filter):
         """检测空闲资源（CPU和内存使用率都为0）"""
@@ -2481,6 +2581,8 @@ class ResourceReclamationView(APIView):
                 "memory_mb": vm.memory_mb,
                 "disk_gb": vm.disk_gb,
                 "scanned_at": vm.scanned_at.isoformat(),
+                "risk_level": "medium",
+                "suggestion": "运行中但无负载，建议检查是否需要",
             })
         
         # 空闲容器
@@ -2506,6 +2608,8 @@ class ResourceReclamationView(APIView):
                 "memory_mb": ct.memory_mb,
                 "disk_gb": ct.disk_gb,
                 "scanned_at": ct.scanned_at.isoformat(),
+                "risk_level": "medium",
+                "suggestion": "运行中但无负载，建议检查是否需要",
             })
         
         return idle_resources
@@ -2529,4 +2633,17 @@ class ResourceReclamationView(APIView):
             if ct.get("disk_gb"):
                 total_gb += ct["disk_gb"]
         
+        return round(total_gb, 2)
+    
+    def _calculate_total_storage(self, node_ids, cluster_filter):
+        """计算总存储空间（GB）"""
+        storages = Storage.objects.filter(
+            node_id__in=node_ids,
+            total_gb__isnull=False
+        )
+        
+        if cluster_filter:
+            storages = storages.filter(node__cluster_id=cluster_filter)
+        
+        total_gb = storages.aggregate(total=Sum("total_gb"))["total"] or 0
         return round(total_gb, 2)

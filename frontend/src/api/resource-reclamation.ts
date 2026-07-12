@@ -11,6 +11,9 @@ export interface ZombieResource {
   disk_gb: number | null
   status: string
   scanned_at: string
+  stopped_days: number
+  risk_level: 'low' | 'medium' | 'high'
+  suggestion: string
 }
 
 export interface OldSnapshot {
@@ -24,6 +27,9 @@ export interface OldSnapshot {
   snap_time: string | null
   size_mb: number | null
   size_gb: number
+  snap_age_days: number
+  risk_level: 'low' | 'medium' | 'high'
+  suggestion: string
 }
 
 export interface LowUsageStorage {
@@ -37,6 +43,8 @@ export interface LowUsageStorage {
   avail_gb: number | null
   used_fraction: number | null
   scanned_at: string
+  risk_level: 'low' | 'medium' | 'high'
+  suggestion: string
 }
 
 export interface IdleResource {
@@ -50,6 +58,8 @@ export interface IdleResource {
   memory_mb: number | null
   disk_gb: number | null
   scanned_at: string
+  risk_level: 'low' | 'medium' | 'high'
+  suggestion: string
 }
 
 export interface ResourceReclamationData {
@@ -60,6 +70,7 @@ export interface ResourceReclamationData {
     low_usage_storages_count: number
     idle_resources_count: number
     reclaimable_space_gb: number
+    total_storage_gb: number
   }
   zombie_vms: ZombieResource[]
   zombie_containers: ZombieResource[]

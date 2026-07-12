@@ -3,7 +3,20 @@
     <div class="page-header">
       <div>
         <h2 class="page-title">资源回收建议</h2>
-        <p class="page-desc">检测僵尸 VM、未使用磁盘等可回收资源</p>
+        <p class="page-desc">
+          检测僵尸 VM、未使用磁盘等可回收资源
+          <el-tooltip placement="right" :width="320">
+            <template #content>
+              <div class="tooltip-content">
+                <p><strong>僵尸 VM/容器：</strong>状态为 stopped 且运行时长为 0</p>
+                <p><strong>旧快照：</strong>创建时间超过 30 天的快照</p>
+                <p><strong>低使用率存储：</strong>存储使用率低于 30%</p>
+                <p><strong>空闲资源：</strong>运行中但 CPU 和内存使用均为 0</p>
+              </div>
+            </template>
+            <el-icon class="help-icon"><QuestionFilled /></el-icon>
+          </el-tooltip>
+        </p>
       </div>
     </div>
 
@@ -53,6 +66,9 @@
           <div class="stat-info">
             <div class="stat-value">{{ summary.reclaimable_space_gb }} GB</div>
             <div class="stat-label">可回收空间</div>
+            <div class="stat-sub" v-if="summary.total_storage_gb > 0">
+              占总存储 {{ Math.round(summary.reclaimable_space_gb / summary.total_storage_gb * 100) }}%
+            </div>
           </div>
         </div>
       </el-card>
@@ -60,12 +76,21 @@
 
     <!-- 资源回收内容 -->
     <el-tabs v-model="activeTab" class="resource-tabs">
-      <el-tab-pane label="僵尸 VM" name="zombie_vms">
-        <el-table :data="zombie_vms" stripe style="width: 100%">
+      <el-tab-pane name="zombie_vms">
+        <template #label>
+          <span class="tab-label">
+            僵尸 VM
+            <el-badge :value="zombie_vms.length" :max="99" class="tab-badge" />
+          </span>
+        </template>
+        
+        <el-empty v-if="zombie_vms.length === 0" description="暂无僵尸 VM" />
+        
+        <el-table v-else :data="zombie_vms" stripe style="width: 100%">
           <el-table-column prop="vmid" label="VM ID" width="100" />
-          <el-table-column prop="name" label="名称" />
-          <el-table-column prop="node_name" label="节点" />
-          <el-table-column prop="cluster_name" label="集群" />
+          <el-table-column prop="name" label="名称" min-width="120" />
+          <el-table-column prop="node_name" label="节点" width="100" />
+          <el-table-column prop="cluster_name" label="集群" width="120" />
           <el-table-column prop="cpu_cores" label="CPU" width="80" />
           <el-table-column label="内存" width="100">
             <template #default="{ row }">
@@ -77,22 +102,43 @@
               {{ row.disk_gb ? `${row.disk_gb} GB` : '-' }}
             </template>
           </el-table-column>
-          <el-table-column prop="status" label="状态" width="100">
+          <el-table-column label="停机时长" width="120">
             <template #default="{ row }">
-              <el-tag :type="row.status === 'stopped' ? 'danger' : 'success'" size="small">
-                {{ row.status }}
+              <span :class="{ 'text-danger': row.stopped_days > 90, 'text-warning': row.stopped_days > 30 }">
+                {{ row.stopped_days }} 天
+              </span>
+            </template>
+          </el-table-column>
+          <el-table-column label="风险等级" width="100">
+            <template #default="{ row }">
+              <el-tag :type="getRiskType(row.risk_level)" size="small">
+                {{ getRiskLabel(row.risk_level) }}
               </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="回收建议" min-width="200">
+            <template #default="{ row }">
+              <span class="suggestion-text">{{ row.suggestion }}</span>
             </template>
           </el-table-column>
         </el-table>
       </el-tab-pane>
       
-      <el-tab-pane label="僵尸容器" name="zombie_containers">
-        <el-table :data="zombie_containers" stripe style="width: 100%">
+      <el-tab-pane name="zombie_containers">
+        <template #label>
+          <span class="tab-label">
+            僵尸容器
+            <el-badge :value="zombie_containers.length" :max="99" class="tab-badge" />
+          </span>
+        </template>
+        
+        <el-empty v-if="zombie_containers.length === 0" description="暂无僵尸容器" />
+        
+        <el-table v-else :data="zombie_containers" stripe style="width: 100%">
           <el-table-column prop="vmid" label="容器 ID" width="100" />
-          <el-table-column prop="name" label="名称" />
-          <el-table-column prop="node_name" label="节点" />
-          <el-table-column prop="cluster_name" label="集群" />
+          <el-table-column prop="name" label="名称" min-width="120" />
+          <el-table-column prop="node_name" label="节点" width="100" />
+          <el-table-column prop="cluster_name" label="集群" width="120" />
           <el-table-column prop="cpu_cores" label="CPU" width="80" />
           <el-table-column label="内存" width="100">
             <template #default="{ row }">
@@ -104,24 +150,45 @@
               {{ row.disk_gb ? `${row.disk_gb} GB` : '-' }}
             </template>
           </el-table-column>
-          <el-table-column prop="status" label="状态" width="100">
+          <el-table-column label="停机时长" width="120">
             <template #default="{ row }">
-              <el-tag :type="row.status === 'stopped' ? 'danger' : 'success'" size="small">
-                {{ row.status }}
+              <span :class="{ 'text-danger': row.stopped_days > 90, 'text-warning': row.stopped_days > 30 }">
+                {{ row.stopped_days }} 天
+              </span>
+            </template>
+          </el-table-column>
+          <el-table-column label="风险等级" width="100">
+            <template #default="{ row }">
+              <el-tag :type="getRiskType(row.risk_level)" size="small">
+                {{ getRiskLabel(row.risk_level) }}
               </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="回收建议" min-width="200">
+            <template #default="{ row }">
+              <span class="suggestion-text">{{ row.suggestion }}</span>
             </template>
           </el-table-column>
         </el-table>
       </el-tab-pane>
       
-      <el-tab-pane label="旧快照" name="old_snapshots">
-        <el-table :data="old_snapshots" stripe style="width: 100%">
+      <el-tab-pane name="old_snapshots">
+        <template #label>
+          <span class="tab-label">
+            旧快照
+            <el-badge :value="old_snapshots.length" :max="99" class="tab-badge" />
+          </span>
+        </template>
+        
+        <el-empty v-if="old_snapshots.length === 0" description="暂无旧快照" />
+        
+        <el-table v-else :data="old_snapshots" stripe style="width: 100%">
           <el-table-column prop="snapid" label="快照 ID" width="120" />
-          <el-table-column prop="name" label="名称" />
-          <el-table-column prop="vm_name" label="虚拟机" />
+          <el-table-column prop="name" label="名称" min-width="120" />
+          <el-table-column prop="vm_name" label="虚拟机" min-width="120" />
           <el-table-column prop="vm_vmid" label="VM ID" width="100" />
-          <el-table-column prop="node_name" label="节点" />
-          <el-table-column prop="cluster_name" label="集群" />
+          <el-table-column prop="node_name" label="节点" width="100" />
+          <el-table-column prop="cluster_name" label="集群" width="120" />
           <el-table-column label="快照时间" width="180">
             <template #default="{ row }">
               {{ row.snap_time ? formatDate(row.snap_time) : '-' }}
@@ -132,15 +199,43 @@
               {{ row.size_gb ? `${row.size_gb} GB` : '-' }}
             </template>
           </el-table-column>
+          <el-table-column label="快照年龄" width="120">
+            <template #default="{ row }">
+              <span :class="{ 'text-danger': row.snap_age_days > 180, 'text-warning': row.snap_age_days > 90 }">
+                {{ row.snap_age_days }} 天
+              </span>
+            </template>
+          </el-table-column>
+          <el-table-column label="风险等级" width="100">
+            <template #default="{ row }">
+              <el-tag :type="getRiskType(row.risk_level)" size="small">
+                {{ getRiskLabel(row.risk_level) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="回收建议" min-width="200">
+            <template #default="{ row }">
+              <span class="suggestion-text">{{ row.suggestion }}</span>
+            </template>
+          </el-table-column>
         </el-table>
       </el-tab-pane>
       
-      <el-tab-pane label="低使用率存储" name="low_usage_storages">
-        <el-table :data="low_usage_storages" stripe style="width: 100%">
-          <el-table-column prop="storage_name" label="存储名称" />
+      <el-tab-pane name="low_usage_storages">
+        <template #label>
+          <span class="tab-label">
+            低使用率存储
+            <el-badge :value="low_usage_storages.length" :max="99" class="tab-badge" />
+          </span>
+        </template>
+        
+        <el-empty v-if="low_usage_storages.length === 0" description="暂无低使用率存储" />
+        
+        <el-table v-else :data="low_usage_storages" stripe style="width: 100%">
+          <el-table-column prop="storage_name" label="存储名称" min-width="120" />
           <el-table-column prop="type" label="类型" width="100" />
-          <el-table-column prop="node_name" label="节点" />
-          <el-table-column prop="cluster_name" label="集群" />
+          <el-table-column prop="node_name" label="节点" width="100" />
+          <el-table-column prop="cluster_name" label="集群" width="120" />
           <el-table-column label="总容量" width="100">
             <template #default="{ row }">
               {{ row.total_gb ? `${row.total_gb} GB` : '-' }}
@@ -165,11 +260,32 @@
               />
             </template>
           </el-table-column>
+          <el-table-column label="风险等级" width="100">
+            <template #default="{ row }">
+              <el-tag :type="getRiskType(row.risk_level)" size="small">
+                {{ getRiskLabel(row.risk_level) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="回收建议" min-width="200">
+            <template #default="{ row }">
+              <span class="suggestion-text">{{ row.suggestion }}</span>
+            </template>
+          </el-table-column>
         </el-table>
       </el-tab-pane>
       
-      <el-tab-pane label="空闲资源" name="idle_resources">
-        <el-table :data="idle_resources" stripe style="width: 100%">
+      <el-tab-pane name="idle_resources">
+        <template #label>
+          <span class="tab-label">
+            空闲资源
+            <el-badge :value="idle_resources.length" :max="99" class="tab-badge" />
+          </span>
+        </template>
+        
+        <el-empty v-if="idle_resources.length === 0" description="暂无空闲资源" />
+        
+        <el-table v-else :data="idle_resources" stripe style="width: 100%">
           <el-table-column prop="type" label="类型" width="100">
             <template #default="{ row }">
               <el-tag :type="row.type === 'vm' ? 'primary' : 'success'" size="small">
@@ -178,9 +294,9 @@
             </template>
           </el-table-column>
           <el-table-column prop="vmid" label="ID" width="100" />
-          <el-table-column prop="name" label="名称" />
-          <el-table-column prop="node_name" label="节点" />
-          <el-table-column prop="cluster_name" label="集群" />
+          <el-table-column prop="name" label="名称" min-width="120" />
+          <el-table-column prop="node_name" label="节点" width="100" />
+          <el-table-column prop="cluster_name" label="集群" width="120" />
           <el-table-column prop="cpu_cores" label="CPU" width="80" />
           <el-table-column label="内存" width="100">
             <template #default="{ row }">
@@ -190,6 +306,18 @@
           <el-table-column label="磁盘" width="100">
             <template #default="{ row }">
               {{ row.disk_gb ? `${row.disk_gb} GB` : '-' }}
+            </template>
+          </el-table-column>
+          <el-table-column label="风险等级" width="100">
+            <template #default="{ row }">
+              <el-tag :type="getRiskType(row.risk_level)" size="small">
+                {{ getRiskLabel(row.risk_level) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="回收建议" min-width="200">
+            <template #default="{ row }">
+              <span class="suggestion-text">{{ row.suggestion }}</span>
             </template>
           </el-table-column>
         </el-table>
@@ -202,8 +330,8 @@
 import { ref, onMounted, watch } from 'vue'
 import { useClusterStore } from '@/stores/cluster'
 import { getResourceReclamation } from '@/api/resource-reclamation'
-import type { ResourceReclamationData, ZombieResource, OldSnapshot, LowUsageStorage, IdleResource } from '@/api/resource-reclamation'
-import { Warning, Clock, Coin, FolderOpened } from '@element-plus/icons-vue'
+import type { ZombieResource, OldSnapshot, LowUsageStorage, IdleResource } from '@/api/resource-reclamation'
+import { Warning, Clock, Coin, FolderOpened, QuestionFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 
 const clusterStore = useClusterStore()
@@ -217,6 +345,7 @@ const summary = ref({
   low_usage_storages_count: 0,
   idle_resources_count: 0,
   reclaimable_space_gb: 0,
+  total_storage_gb: 0,
 })
 
 const zombie_vms = ref<ZombieResource[]>([])
@@ -263,6 +392,24 @@ const getProgressColor = (fraction: number | null) => {
   return '#f56c6c'
 }
 
+const getRiskType = (level: string) => {
+  switch (level) {
+    case 'high': return 'danger'
+    case 'medium': return 'warning'
+    case 'low': return 'success'
+    default: return 'info'
+  }
+}
+
+const getRiskLabel = (level: string) => {
+  switch (level) {
+    case 'high': return '高风险'
+    case 'medium': return '中风险'
+    case 'low': return '低风险'
+    default: return '未知'
+  }
+}
+
 onMounted(() => {
   fetchData()
 })
@@ -289,6 +436,21 @@ onMounted(() => {
   font-size: 14px;
   color: var(--text-muted);
   margin: 4px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.help-icon {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 16px;
+}
+.help-icon:hover {
+  color: var(--el-color-primary);
+}
+.tooltip-content p {
+  margin: 4px 0;
+  line-height: 1.6;
 }
 .stat-cards {
   display: grid;
@@ -343,7 +505,35 @@ onMounted(() => {
   color: var(--text-muted);
   margin-top: 4px;
 }
+.stat-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
 .resource-tabs {
   margin-top: 20px;
+}
+.tab-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.tab-badge {
+  margin-left: 4px;
+}
+.tab-badge :deep(.el-badge__content) {
+  background-color: #909399;
+}
+.text-danger {
+  color: #f56c6c;
+  font-weight: 600;
+}
+.text-warning {
+  color: #e6a23c;
+  font-weight: 600;
+}
+.suggestion-text {
+  font-size: 13px;
+  color: var(--text-muted);
 }
 </style>
