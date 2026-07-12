@@ -374,6 +374,10 @@ export default {
     stopped: 'Parado',
     nodeDetailTitle: 'Detalhes do nó',
     emptyDesc: 'Nenhum dado de nó disponível, implante o Agent para coletar dados',
+    healthScore: 'Pontuação de saúde',
+    basicInfo: 'Informações básicas',
+    searchPlaceholder: 'Pesquisar nome do nó / IP',
+    kernelVersion: 'Versão do kernel',
   },
 
   // Máquinas virtuais
@@ -462,6 +466,17 @@ export default {
     usageRate: 'Taxa de uso',
     shared: 'Compartilhado',
     yes: 'Sim',
+    allTypes: 'Todos os tipos',
+    searchPlaceholder: 'Pesquisar armazenamento / nó',
+    emptyDesc: 'Nenhum dado de armazenamento',
+    totalCapacity: 'Capacidade total',
+    usedCapacity: 'Utilizado',
+    availCapacity: 'Disponível',
+    noCapacityInfo: 'Sem informações de capacidade para este armazenamento',
+    basicInfo: 'Informações básicas',
+    contentType: 'Tipo de conteúdo',
+    used: 'Utilizado',
+    avail: 'Disponível',
   },
 
   // Interfaces de rede

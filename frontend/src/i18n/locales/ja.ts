@@ -367,6 +367,10 @@ export default {
     stopped: '停止',
     nodeDetailTitle: 'ノード詳細',
     emptyDesc: 'ノードデータがありません。先に Agent をデプロイしてデータを収集してください',
+    healthScore: 'ヘルススコア',
+    basicInfo: '基本情報',
+    searchPlaceholder: 'ノード名 / IP で検索',
+    kernelVersion: 'カーネルバージョン',
   },
 
   // 仮想マシン
@@ -455,6 +459,17 @@ export default {
     usageRate: '使用率',
     shared: '共有',
     yes: 'はい',
+    allTypes: '全タイプ',
+    searchPlaceholder: 'ストレージ名 / ノードで検索',
+    emptyDesc: 'ストレージデータがありません',
+    totalCapacity: '総容量',
+    usedCapacity: '使用済み',
+    availCapacity: '空き容量',
+    noCapacityInfo: 'このストレージに容量情報がありません',
+    basicInfo: '基本情報',
+    contentType: 'コンテンツタイプ',
+    used: '使用済み',
+    avail: '空き',
   },
 
   // ネットワークインターフェース

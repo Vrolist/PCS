@@ -374,6 +374,10 @@ export default {
     stopped: 'Gestoppt',
     nodeDetailTitle: 'Knotendetails',
     emptyDesc: 'Keine Knotendaten vorhanden, bitte zuerst einen Agent bereitstellen',
+    healthScore: 'Gesundheitsbewertung',
+    basicInfo: 'Grundinformationen',
+    searchPlaceholder: 'Knotenname / IP suchen',
+    kernelVersion: 'Kernel-Version',
   },
 
   // Virtuelle Maschinen
@@ -462,6 +466,17 @@ export default {
     usageRate: 'Auslastung',
     shared: 'Geteilt',
     yes: 'Ja',
+    allTypes: 'Alle Typen',
+    searchPlaceholder: 'Speicher / Knoten suchen',
+    emptyDesc: 'Keine Speicherdaten',
+    totalCapacity: 'Gesamtkapazität',
+    usedCapacity: 'Belegt',
+    availCapacity: 'Verfügbar',
+    noCapacityInfo: 'Keine Kapazitätsinformationen für diesen Speicher',
+    basicInfo: 'Grundinformationen',
+    contentType: 'Inhaltstyp',
+    used: 'Belegt',
+    avail: 'Verfügbar',
   },
 
   // Netzwerkschnittstellen

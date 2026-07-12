@@ -367,6 +367,10 @@ export default {
     stopped: '중지됨',
     nodeDetailTitle: '노드 상세 정보',
     emptyDesc: '노드 데이터가 없습니다. 먼저 Agent를 배포하여 데이터를 수집하세요',
+    healthScore: '건강 점수',
+    basicInfo: '기본 정보',
+    searchPlaceholder: '노드 이름 / IP 검색',
+    kernelVersion: '커널 버전',
   },
 
   // 가상 머신
@@ -455,6 +459,17 @@ export default {
     usageRate: '사용률',
     shared: '공유',
     yes: '예',
+    allTypes: '전체 유형',
+    searchPlaceholder: '스토리지 / 노드 검색',
+    emptyDesc: '스토리지 데이터가 없습니다',
+    totalCapacity: '총 용량',
+    usedCapacity: '사용량',
+    availCapacity: '사용 가능',
+    noCapacityInfo: '이 스토리지에 대한 용량 정보가 없습니다',
+    basicInfo: '기본 정보',
+    contentType: '콘텐츠 유형',
+    used: '사용됨',
+    avail: '사용 가능',
   },
 
   // 네트워크 인터페이스

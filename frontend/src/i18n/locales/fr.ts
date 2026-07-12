@@ -374,6 +374,10 @@ export default {
     stopped: 'Arrêté',
     nodeDetailTitle: 'Détails du nœud',
     emptyDesc: 'Aucune donnée de nœud, veuillez d\'abord déployer un Agent pour collecter les données',
+    healthScore: 'Score de santé',
+    basicInfo: 'Informations de base',
+    searchPlaceholder: 'Rechercher nom du nœud / IP',
+    kernelVersion: 'Version du noyau',
   },
 
   // Machines virtuelles
@@ -462,6 +466,17 @@ export default {
     usageRate: 'Taux d\'utilisation',
     shared: 'Partagé',
     yes: 'Oui',
+    allTypes: 'Tous les types',
+    searchPlaceholder: 'Rechercher stockage / nœud',
+    emptyDesc: 'Aucune donnée de stockage',
+    totalCapacity: 'Capacité totale',
+    usedCapacity: 'Utilisé',
+    availCapacity: 'Disponible',
+    noCapacityInfo: 'Aucune information de capacité pour ce stockage',
+    basicInfo: 'Informations de base',
+    contentType: 'Type de contenu',
+    used: 'Utilisé',
+    avail: 'Disponible',
   },
 
   // Interfaces réseau

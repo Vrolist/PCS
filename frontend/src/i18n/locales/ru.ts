@@ -374,6 +374,10 @@ export default {
     stopped: 'Остановлен',
     nodeDetailTitle: 'Сведения об узле',
     emptyDesc: 'Нет данных об узлах, сначала разверните Agent для сбора данных',
+    healthScore: 'Оценка здоровья',
+    basicInfo: 'Основная информация',
+    searchPlaceholder: 'Поиск по имени узла / IP',
+    kernelVersion: 'Версия ядра',
   },
 
   // Виртуальные машины
@@ -462,6 +466,17 @@ export default {
     usageRate: 'Процент использования',
     shared: 'Общее',
     yes: 'Да',
+    allTypes: 'Все типы',
+    searchPlaceholder: 'Поиск хранилища / узла',
+    emptyDesc: 'Нет данных о хранилищах',
+    totalCapacity: 'Общая ёмкость',
+    usedCapacity: 'Использовано',
+    availCapacity: 'Доступно',
+    noCapacityInfo: 'Нет информации о ёмкости для этого хранилища',
+    basicInfo: 'Основная информация',
+    contentType: 'Тип содержимого',
+    used: 'Использовано',
+    avail: 'Доступно',
   },
 
   // Сетевые интерфейсы

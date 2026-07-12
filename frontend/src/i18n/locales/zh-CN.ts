@@ -461,11 +461,22 @@ export default {
   storagePage: {
     title: '存储管理',
     allNodes: '全部节点',
+    allTypes: '全部类型',
     storageName: '存储名称',
     usedTotal: '已用 / 总量',
     usageRate: '使用率',
     shared: '共享',
     yes: '是',
+    searchPlaceholder: '搜索存储名 / 节点',
+    emptyDesc: '暂无存储数据',
+    totalCapacity: '总容量',
+    usedCapacity: '已用容量',
+    availCapacity: '可用容量',
+    noCapacityInfo: '该存储无容量信息',
+    basicInfo: '基本信息',
+    contentType: '内容类型',
+    used: '已用',
+    avail: '可用',
   },
 
   // 网络接口

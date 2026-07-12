@@ -454,11 +454,22 @@ export default {
   storagePage: {
     title: 'Storage Management',
     allNodes: 'All Nodes',
+    allTypes: 'All Types',
     storageName: 'Storage Name',
     usedTotal: 'Used / Total',
     usageRate: 'Usage',
     shared: 'Shared',
     yes: 'Yes',
+    searchPlaceholder: 'Search storage / node',
+    emptyDesc: 'No storage data',
+    totalCapacity: 'Total Capacity',
+    usedCapacity: 'Used',
+    availCapacity: 'Available',
+    noCapacityInfo: 'No capacity info for this storage',
+    basicInfo: 'Basic Info',
+    contentType: 'Content Type',
+    used: 'Used',
+    avail: 'Available',
   },
 
   // Network Interfaces
