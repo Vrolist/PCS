@@ -46,6 +46,37 @@ def _classify_trend(slope, threshold=0.1):
     return "rising" if slope > 0 else "declining"
 
 
+def _holt_damped(values, alpha=0.3, beta=0.15, phi=0.85, horizon=30):
+    """Holt's Damped Trend 指数平滑
+    适合基础设施资源监控：趋势会随时间自然衰减，不会无限外推。
+    - alpha: 水平平滑系数 (0~1)，越大越跟近期数据
+    - beta: 趋势平滑系数 (0~1)，越大趋势越敏感
+    - phi: 趋势阻尼系数 (0~1)，越小趋势衰减越快
+    返回 (forecasts, level, trend_per_day)
+    """
+    n = len(values)
+    if n < 2:
+        return [], values[-1] if values else 0, 0
+
+    # 初始化：水平取第一个值，趋势取前两个值之差
+    level = values[0]
+    trend = values[1] - values[0]
+
+    # 拟合历史数据
+    for i in range(1, n):
+        prev_level = level
+        level = alpha * values[i] + (1 - alpha) * (level + phi * trend)
+        trend = beta * (level - prev_level) + (1 - beta) * phi * trend
+
+    # 预测未来（趋势衰减：phi^h 效应递减）
+    forecasts = []
+    for h in range(1, horizon + 1):
+        damped_sum = sum(phi ** j for j in range(1, h + 1))
+        forecasts.append(level + damped_sum * trend)
+
+    return forecasts, level, trend
+
+
 def _predict_full_date(current_value, capacity, slope, today):
     """预测满载日期"""
     if slope is None or slope <= 0 or capacity <= current_value:
@@ -85,6 +116,12 @@ def _build_dimension(daily_data, field, capacity=None, unit="pct", display_multi
     """构建单个维度的预测结果
     unit: "pct" 表示百分比, "gb" 表示 GB
     display_multiplier: 显示时的乘数 (如 CPU 0~1 → 100)
+
+    算法选择：
+    - 百分比指标（CPU/内存）→ Holt's Damped Trend 指数平滑
+        趋势会随时间自然衰减，预测曲线弯曲，不会穿过 0%/100%
+    - 容量指标（存储/根分区）→ 短期线性回归（最近 7 个数据点）
+        更贴近近期趋势，不会被旧数据带偏，到达容量上限自动截断
     """
     dates = []
     values = []
@@ -102,53 +139,66 @@ def _build_dimension(daily_data, field, capacity=None, unit="pct", display_multi
             "chart": {"dates": [], "values": [], "predicted_dates": [], "predicted_values": []},
         }
 
-    # 当前值（最后一天的均值）
     current = values[-1]
 
-    # 线性回归
-    x_base = 0
-    points = []
-    for i, v in enumerate(values):
-        points.append((float(i), v))
-    slope, intercept = _linear_regression(points)
-
-    # 趋势判断（阈值根据单位调整）
     if unit == "pct":
-        threshold = 0.05  # 每天 0.05% 的变化视为稳定
-        slope_display = round(slope * display_multiplier, 3) if slope is not None else None
+        # ── 百分比指标：Holt's Damped Trend 指数平滑 ──
+        horizon = 30
+        forecasts, level, trend_val = _holt_damped(values, horizon=horizon)
+
+        # 钳制到物理边界 [0, capacity]
+        upper = (capacity / display_multiplier) if capacity else 1.0
+        forecasts = [max(0.0, min(upper, f)) for f in forecasts]
+
+        slope_display = round(trend_val * display_multiplier, 3)
+        threshold = 0.05
+        trend = _classify_trend(trend_val, threshold)
+
+        # 满载预测（用当前趋势斜率估算）
+        days_until_full = None
+        predicted_full_date = None
+        if trend == "rising" and trend_val > 0 and capacity:
+            remaining = (capacity / display_multiplier) - current
+            if remaining > 0:
+                days = remaining / trend_val
+                if 0 < days <= 365:
+                    predicted_full_date = (timezone.now().date() + timedelta(days=round(days))).strftime("%Y-%m-%d")
+                    days_until_full = round(days)
+
+        extend_days = min(days_until_full or 14, horizon)
+        predicted_values = [round(f * display_multiplier, 2) for f in forecasts[:extend_days]]
+
     else:
-        threshold = 0.1  # 每天 0.1GB 的变化视为稳定
-        slope_display = round(slope, 3) if slope is not None else None
+        # ── 容量指标：Holt's Damped Trend 指数平滑 + 容量上限 ──
+        horizon = 30
+        forecasts, level, trend_val = _holt_damped(values, alpha=0.25, beta=0.1, phi=0.9, horizon=horizon)
 
-    trend = _classify_trend(slope, threshold)
+        # 钳制到物理边界 [0, capacity]
+        forecasts = [max(0.0, min(capacity or float('inf'), f)) for f in forecasts]
 
-    # 满载预测（仅当趋势为上升时才有意义，且不超过 365 天才显示）
-    days_until_full = None
-    predicted_full_date = None
-    if trend == "rising" and capacity and slope and slope > 0:
-        predicted_full_date, days_until_full = _predict_full_date(current, capacity, slope, timezone.now().date())
-        if days_until_full and days_until_full > 365:
-            predicted_full_date, days_until_full = None, None
+        slope_display = round(trend_val, 3)
+        threshold = 0.1
+        trend = _classify_trend(trend_val, threshold)
 
-    # 预测线：延伸到满载日期或最多再加 30 天，超出物理边界时截断
+        # 满载预测（用当前趋势斜率估算）
+        days_until_full = None
+        predicted_full_date = None
+        if trend == "rising" and trend_val > 0 and capacity and capacity > current:
+            days = (capacity - current) / trend_val
+            if 0 < days <= 365:
+                predicted_full_date = (timezone.now().date() + timedelta(days=round(days))).strftime("%Y-%m-%d")
+                days_until_full = round(days)
+
+        extend_days = min(days_until_full or 14, horizon)
+        predicted_values = [round(f, 2) for f in forecasts[:extend_days]]
+
+    # 生成预测日期
     predicted_dates = []
-    predicted_values = []
-    if slope is not None and intercept is not None:
-        extend_days = min(days_until_full or 30, 90)
-        from datetime import datetime as dt
-        base_date = dt.strptime(dates[-1], "%Y-%m-%d")
-        for i in range(1, extend_days + 1):
-            raw_val = slope * (len(values) - 1 + i) + intercept
-            display_val = round(raw_val * display_multiplier, 2)
-            # 百分比指标超出 [0, 100] 时截断预测线
-            if unit == "pct" and (display_val < 0 or display_val > 100):
-                break
-            # 容量指标超出 [0, capacity] 时截断预测线
-            if unit == "gb" and capacity and (display_val < 0 or display_val > capacity * display_multiplier):
-                break
-            future_date = base_date + timedelta(days=i)
-            predicted_dates.append(future_date.strftime("%Y-%m-%d"))
-            predicted_values.append(display_val)
+    from datetime import datetime as dt
+    base_date = dt.strptime(dates[-1], "%Y-%m-%d")
+    for i in range(1, len(predicted_values) + 1):
+        future_date = base_date + timedelta(days=i)
+        predicted_dates.append(future_date.strftime("%Y-%m-%d"))
 
     return {
         "current": round(current * display_multiplier, 2),
@@ -200,41 +250,40 @@ def _build_storage_from_tables(cluster_id, days):
     # 取最新的 total 作为容量
     total_gb = total_values[-1] if total_values else 0
 
-    # 线性回归
-    points = [(float(i), v) for i, v in enumerate(used_values)]
-    slope, intercept = _linear_regression(points)
-
     current_used = used_values[-1] if used_values else 0
-    trend = _classify_trend(slope, 0.1)
+
+    # Holt's Damped Trend 指数平滑（容量指标用更平滑的参数）
+    horizon = 30
+    forecasts, level, trend_val = _holt_damped(used_values, alpha=0.25, beta=0.1, phi=0.9, horizon=horizon)
+    # 钳制到物理边界 [0, total_gb]
+    forecasts = [max(0.0, min(total_gb, f)) for f in forecasts]
+
+    trend = _classify_trend(trend_val, 0.1)
 
     days_until_full = None
     predicted_full_date = None
-    if trend == "rising" and slope and slope > 0 and total_gb > current_used:
-        predicted_full_date, days_until_full = _predict_full_date(current_used, total_gb, slope, timezone.now().date())
-        if days_until_full and days_until_full > 365:
-            predicted_full_date, days_until_full = None, None
+    if trend == "rising" and trend_val > 0 and total_gb > current_used:
+        days = (total_gb - current_used) / trend_val
+        if 0 < days <= 365:
+            predicted_full_date = (timezone.now().date() + timedelta(days=round(days))).strftime("%Y-%m-%d")
+            days_until_full = round(days)
 
-    # 预测线（超出 [0, total_gb] 时截断）
+    # 预测线（趋势衰减 + 容量边界截断）
+    extend_days = min(days_until_full or 14, horizon)
     predicted_dates = []
     predicted_values = []
-    if slope is not None and intercept is not None:
-        extend_days = min(days_until_full or 30, 90)
-        from datetime import datetime as dt
-        base_date = dt.strptime(dates[-1], "%Y-%m-%d")
-        for i in range(1, extend_days + 1):
-            val = round(slope * (len(used_values) - 1 + i) + intercept, 2)
-            if val < 0 or val > total_gb:
-                break
-            future_date = base_date + timedelta(days=i)
-            predicted_dates.append(future_date.strftime("%Y-%m-%d"))
-            predicted_values.append(val)
+    from datetime import datetime as dt
+    base_date = dt.strptime(dates[-1], "%Y-%m-%d")
+    for i, f in enumerate(forecasts[:extend_days], 1):
+        predicted_dates.append((base_date + timedelta(days=i)).strftime("%Y-%m-%d"))
+        predicted_values.append(round(f, 2))
 
     return {
         "current_used_gb": round(current_used, 2),
         "total_gb": round(total_gb, 2),
         "current_pct": round(current_used / total_gb * 100, 1) if total_gb > 0 else 0,
         "trend": trend,
-        "slope_gb_per_day": round(slope, 3) if slope is not None else None,
+        "slope_gb_per_day": round(trend_val, 3),
         "days_until_full": days_until_full,
         "predicted_full_date": predicted_full_date,
         "data_points": len(dates),
@@ -278,41 +327,38 @@ def _build_rootfs_from_tables(cluster_id, days):
 
     total_gb = total_values[-1] if total_values else 0
 
-    # 线性回归
-    points = [(float(i), v) for i, v in enumerate(used_values)]
-    slope, intercept = _linear_regression(points)
-
     current_used = used_values[-1] if used_values else 0
-    trend = _classify_trend(slope, 0.1)
+
+    # Holt's Damped Trend 指数平滑
+    horizon = 30
+    forecasts, level, trend_val = _holt_damped(used_values, alpha=0.25, beta=0.1, phi=0.9, horizon=horizon)
+    forecasts = [max(0.0, min(total_gb, f)) for f in forecasts]
+
+    trend = _classify_trend(trend_val, 0.1)
 
     days_until_full = None
     predicted_full_date = None
-    if trend == "rising" and slope and slope > 0 and total_gb > current_used:
-        predicted_full_date, days_until_full = _predict_full_date(current_used, total_gb, slope, timezone.now().date())
-        if days_until_full and days_until_full > 365:
-            predicted_full_date, days_until_full = None, None
+    if trend == "rising" and trend_val > 0 and total_gb > current_used:
+        days = (total_gb - current_used) / trend_val
+        if 0 < days <= 365:
+            predicted_full_date = (timezone.now().date() + timedelta(days=round(days))).strftime("%Y-%m-%d")
+            days_until_full = round(days)
 
-    # 预测线（超出 [0, total_gb] 时截断）
+    extend_days = min(days_until_full or 14, horizon)
     predicted_dates = []
     predicted_values = []
-    if slope is not None and intercept is not None:
-        extend_days = min(days_until_full or 30, 90)
-        from datetime import datetime as dt
-        base_date = dt.strptime(dates[-1], "%Y-%m-%d")
-        for i in range(1, extend_days + 1):
-            val = round(slope * (len(used_values) - 1 + i) + intercept, 2)
-            if val < 0 or val > total_gb:
-                break
-            future_date = base_date + timedelta(days=i)
-            predicted_dates.append(future_date.strftime("%Y-%m-%d"))
-            predicted_values.append(val)
+    from datetime import datetime as dt
+    base_date = dt.strptime(dates[-1], "%Y-%m-%d")
+    for i, f in enumerate(forecasts[:extend_days], 1):
+        predicted_dates.append((base_date + timedelta(days=i)).strftime("%Y-%m-%d"))
+        predicted_values.append(round(f, 2))
 
     return {
         "current_used_gb": round(current_used, 2),
         "total_gb": round(total_gb, 2),
         "current_pct": round(current_used / total_gb * 100, 1) if total_gb > 0 else 0,
         "trend": trend,
-        "slope_gb_per_day": round(slope, 3) if slope is not None else None,
+        "slope_gb_per_day": round(trend_val, 3),
         "days_until_full": days_until_full,
         "predicted_full_date": predicted_full_date,
         "data_points": len(dates),

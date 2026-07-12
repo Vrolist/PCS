@@ -3,7 +3,26 @@
     <div class="page-header">
       <div>
         <h2 class="page-title">{{ t('smartAnalysis.capacityPlanning.title') }}</h2>
-        <p class="page-desc">{{ t('smartAnalysis.capacityPlanning.subtitle') }}</p>
+        <p class="page-desc">
+          {{ t('smartAnalysis.capacityPlanning.subtitle') }}
+          <el-tooltip placement="bottom-start" :width="360" effect="light">
+            <template #content>
+              <div class="holt-tooltip">
+                <div class="holt-tooltip-title">{{ t('smartAnalysis.capacityPlanning.holtTitle') }}</div>
+                <div class="holt-tooltip-desc">{{ t('smartAnalysis.capacityPlanning.holtDesc') }}</div>
+                <div class="holt-tooltip-formula">
+                  <div>L[t] = α·y[t] + (1-α)·(L[t-1] + φ·T[t-1])</div>
+                  <div>T[t] = β·(L[t]-L[t-1]) + (1-β)·φ·T[t-1]</div>
+                  <div>ŷ[t+h] = L[t] + (φ+φ²+...+φ^h)·T[t]</div>
+                </div>
+                <div class="holt-tooltip-params">
+                  <span>α=0.3</span> <span>β=0.15</span> <span>φ=0.85</span>
+                </div>
+              </div>
+            </template>
+            <el-icon class="holt-info-icon"><QuestionFilled /></el-icon>
+          </el-tooltip>
+        </p>
       </div>
       <div class="header-actions">
         <el-select v-model="timeRange" size="default" style="width: 120px" @change="loadData">
@@ -74,7 +93,7 @@ import VChart from 'vue-echarts'
 import { useThemeStore } from '@/stores/theme'
 import { useClusterStore } from '@/stores/cluster'
 import { getPredictions, type Predictions, type PredictionDimension } from '@/api/dashboard'
-import { Cpu, Coin, Box, Memo } from '@element-plus/icons-vue'
+import { Cpu, Coin, Box, Memo, QuestionFilled } from '@element-plus/icons-vue'
 
 const { t } = useI18n()
 const themeStore = useThemeStore()
@@ -375,6 +394,57 @@ const chartOption = computed(() => {
   font-size: 14px;
   color: var(--text-muted);
   margin: 4px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.holt-info-icon {
+  font-size: 15px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.2s;
+  flex-shrink: 0;
+}
+.holt-info-icon:hover {
+  color: #409eff;
+}
+.holt-tooltip {
+  line-height: 1.6;
+}
+.holt-tooltip-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 6px;
+}
+.holt-tooltip-desc {
+  font-size: 12px;
+  color: #606266;
+  margin-bottom: 8px;
+}
+.holt-tooltip-formula {
+  background: #f5f7fa;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 11px;
+  color: #303133;
+  line-height: 1.8;
+  margin-bottom: 8px;
+}
+.holt-tooltip-params {
+  font-size: 11px;
+  color: #909399;
+  display: flex;
+  gap: 12px;
+}
+.holt-tooltip-params span {
+  background: #ecf5ff;
+  color: #409eff;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
 }
 .header-actions {
   display: flex;

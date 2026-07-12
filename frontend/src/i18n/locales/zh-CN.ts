@@ -660,7 +660,10 @@ export default {
   smartAnalysis: {
     capacityPlanning: {
       title: '容量规划与趋势预测',
-      subtitle: '基于历史数据预测资源使用趋势与满载日期',
+      subtitle: '采用 Holt\'s Damped Trend 指数平滑算法，预测资源使用趋势与满载日期',
+      holtTitle: 'Holt\'s Damped Trend 指数平滑',
+      holtDesc: '趋势会随时间自然衰减，预测曲线弯曲而非直线外推，不会穿过物理边界。CPU/内存使用标准参数，存储/根分区使用更平滑参数。',
+
       comingSoon: '容量规划功能开发中',
       memory: '内存',
       storage: '存储',
@@ -673,7 +676,7 @@ export default {
       perDay: '每日',
       prediction: '预测',
       trendChart: '资源趋势与容量预测',
-      chartNote: '实线为历史数据，虚线为线性回归预测趋势；橙色虚线为 85% 告警阈值，红色虚线为 95% 危险阈值',
+      chartNote: '实线为历史数据，虚线为 Holt\'s Damped Trend 预测趋势；橙色虚线为 85% 告警阈值，红色虚线为 95% 危险阈值',
     },
     changeTracking: { title: '变更追踪', subtitle: '对比相邻扫描差异，追踪集群资源变化', comingSoon: '变更追踪功能开发中' },
     resourceReclamation: { title: '资源回收建议', subtitle: '检测僵尸 VM、未使用磁盘等可回收资源', comingSoon: '资源回收功能开发中' },
