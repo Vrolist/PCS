@@ -1,47 +1,30 @@
 <template>
   <div class="page-container">
-    <!-- 标题区 -->
-    <div class="page-header">
-      <div>
+    <!-- 标题 + 统计 + 筛选 一行排 -->
+    <div class="page-top">
+      <div class="page-top-left">
         <h2 class="page-title">{{ t('containers.title') }}</h2>
-        <p class="page-desc">{{ t('containers.subtitle') }}</p>
-      </div>
-    </div>
-
-    <!-- 统计卡片 -->
-    <div class="stats-row" v-if="!loading && containers.length">
-      <div class="stat-card" v-for="s in statCards" :key="s.key">
-        <div class="stat-icon" :style="{ background: s.iconBg }">
-          <el-icon :size="20"><component :is="s.icon" /></el-icon>
-        </div>
-        <div class="stat-info">
-          <span class="stat-value">{{ s.value }}</span>
-          <span class="stat-label">{{ s.label }}</span>
+        <div class="mini-stats" v-if="!loading && containers.length">
+          <span class="ms-item"><i class="ms-dot ms-dot-total" />{{ statTotal }}</span>
+          <span class="ms-item"><i class="ms-dot ms-dot-run" />{{ statRunning }}</span>
+          <span class="ms-item"><i class="ms-dot ms-dot-stop" />{{ statStopped }}</span>
+          <span class="ms-item"><i class="ms-dot ms-dot-tpl" />{{ statTemplate }}</span>
         </div>
       </div>
-    </div>
-
-    <!-- 搜索 & 筛选 -->
-    <div class="toolbar">
-      <el-input
-        v-model="search"
-        :placeholder="t('containers.searchPlaceholder')"
-        clearable
-        prefix-icon="Search"
-        class="toolbar-search"
-        @input="debounceLoad"
-      />
-      <el-select v-model="nodeFilter" :placeholder="t('containers.nodeFilter')" clearable style="width:150px" @change="loadData">
-        <el-option v-for="n in nodes" :key="n.id" :label="n.node_name" :value="n.id" />
-      </el-select>
-      <el-select v-model="statusFilter" :placeholder="t('containers.statusFilter')" clearable style="width:110px" @change="loadData">
-        <el-option :label="t('containers.running')" value="running" />
-        <el-option :label="t('containers.stopped')" value="stopped" />
-      </el-select>
-      <el-select v-model="typeFilter" :placeholder="t('containers.typeFilter')" clearable style="width:110px" @change="loadData">
-        <el-option :label="t('containers.typeContainer')" value="container" />
-        <el-option :label="t('containers.typeTemplate')" value="template" />
-      </el-select>
+      <div class="page-top-right">
+        <el-input v-model="search" :placeholder="t('containers.searchPlaceholder')" clearable prefix-icon="Search" size="small" class="top-search" @input="debounceLoad" />
+        <el-select v-model="nodeFilter" :placeholder="t('containers.nodeFilter')" clearable size="small" style="width:130px" @change="loadData">
+          <el-option v-for="n in nodes" :key="n.id" :label="n.node_name" :value="n.id" />
+        </el-select>
+        <el-select v-model="statusFilter" :placeholder="t('containers.statusFilter')" clearable size="small" style="width:100px" @change="loadData">
+          <el-option :label="t('containers.running')" value="running" />
+          <el-option :label="t('containers.stopped')" value="stopped" />
+        </el-select>
+        <el-select v-model="typeFilter" :placeholder="t('containers.typeFilter')" clearable size="small" style="width:100px" @change="loadData">
+          <el-option :label="t('containers.typeContainer')" value="container" />
+          <el-option :label="t('containers.typeTemplate')" value="template" />
+        </el-select>
+      </div>
     </div>
 
     <!-- Master-Detail 双面板 -->
@@ -205,9 +188,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Loading, Monitor, Box, CircleCheckFilled, WarningFilled, Document } from '@element-plus/icons-vue'
+import { Loading, Monitor } from '@element-plus/icons-vue'
 import { getContainers, getContainerDetail } from '@/api/containers'
 import type { ContainerInfo, ContainerDetail } from '@/api/containers'
 import { getNodes } from '@/api/nodes'
@@ -240,12 +223,10 @@ const filteredContainers = computed(() => {
   return data
 })
 
-const statCards = computed(() => [
-  { key: 'total', label: t('containers.total') || '容器总数', value: filteredContainers.value.length, icon: Box, iconBg: 'rgba(64,158,255,0.12)' },
-  { key: 'running', label: t('containers.running'), value: filteredContainers.value.filter(c => c.status === 'running').length, icon: CircleCheckFilled, iconBg: 'rgba(103,194,58,0.12)' },
-  { key: 'stopped', label: t('containers.stopped'), value: filteredContainers.value.filter(c => c.status !== 'running').length, icon: WarningFilled, iconBg: 'rgba(245,108,108,0.12)' },
-  { key: 'template', label: t('containers.typeTemplate'), value: filteredContainers.value.filter(c => c.has_template).length, icon: Document, iconBg: 'rgba(230,162,60,0.12)' },
-])
+const statTotal = computed(() => filteredContainers.value.length)
+const statRunning = computed(() => filteredContainers.value.filter(c => c.status === 'running').length)
+const statStopped = computed(() => filteredContainers.value.filter(c => c.status !== 'running').length)
+const statTemplate = computed(() => filteredContainers.value.filter(c => c.has_template).length)
 
 const memPercent = computed(() => {
   const c = detailData.value?.container
@@ -286,6 +267,11 @@ async function loadData() {
     ])
     nodes.value = nodeData
     containers.value = ctData
+    // 默认选中第一个
+    await nextTick()
+    if (filteredContainers.value.length) {
+      selectItem(filteredContainers.value[0])
+    }
   } catch {} finally { loading.value = false }
 }
 
@@ -325,63 +311,69 @@ function fmtUptime(s: number) {
 </script>
 
 <style scoped>
-.page-container { max-width: 1560px; margin: 0 auto; }
-.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
-.page-title { font-size: 24px; font-weight: 700; color: var(--text-heading); margin: 0; }
-.page-desc { font-size: 14px; color: var(--text-muted); margin: 4px 0 0; }
-
-/* ---- 统计卡片 ---- */
-.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
-.stat-card {
-  display: flex; align-items: center; gap: 14px;
-  padding: 16px 20px; border-radius: 12px;
-  background: var(--bg-secondary); border: 1px solid var(--border-color);
+.page-container {
+  display: flex; flex-direction: column;
+  height: calc(100vh - 56px - 48px); /* 顶栏56px + main-content padding上下24px×2 */
+  min-height: 0 !important; /* 覆盖 main-content > :first-child min-height */
+  padding: 0; max-width: none;
+  overflow: hidden;
 }
-.stat-icon { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 10px; flex-shrink: 0; color: var(--color-primary); }
-.stat-info { display: flex; flex-direction: column; }
-.stat-value { font-size: 22px; font-weight: 700; color: var(--text-heading); line-height: 1.2; }
-.stat-label { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
 
-/* ---- 工具栏 ---- */
-.toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
-.toolbar-search { width: 260px; }
-
-/* ---- Master-Detail 面板 ---- */
-.master-detail {
-  display: flex; gap: 0;
-  border-radius: 14px; overflow: hidden;
-  border: 1px solid var(--border-color);
+/* ---- 顶部一行：标题+统计+筛选 ---- */
+.page-top {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 24px; flex-shrink: 0;
+  border-bottom: 1px solid var(--border-color);
   background: var(--bg-secondary);
-  min-height: 560px;
+  gap: 16px; flex-wrap: wrap;
+}
+.page-top-left { display: flex; align-items: center; gap: 20px; }
+.page-title { font-size: 18px; font-weight: 700; color: var(--text-heading); margin: 0; white-space: nowrap; }
+.mini-stats { display: flex; align-items: center; gap: 16px; }
+.ms-item { display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.ms-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.ms-dot-total { background: var(--color-primary); }
+.ms-dot-run { background: #67c23a; box-shadow: 0 0 4px rgba(103,194,58,0.5); }
+.ms-dot-stop { background: #909399; }
+.ms-dot-tpl { background: #e6a23c; }
+.page-top-right { display: flex; align-items: center; gap: 8px; }
+.top-search { width: 200px; }
+
+/* ---- Master-Detail 面板：撑满剩余高度 ---- */
+.master-detail {
+  display: flex; flex: 1; min-height: 0;
+  border: none; border-radius: 0;
+  background: var(--bg-secondary);
+  overflow: hidden;
 }
 
-/* ---- 左侧列表 ---- */
+/* ---- 左侧列表：上下滚动 ---- */
 .master-panel {
-  width: 320px; flex-shrink: 0;
+  width: 300px; flex-shrink: 0;
   border-right: 1px solid var(--border-color);
   overflow-y: auto;
   background: var(--bg-secondary);
 }
 .master-list { display: flex; flex-direction: column; }
 .master-item {
-  padding: 14px 18px; cursor: pointer;
+  padding: 10px 16px; cursor: pointer;
   border-bottom: 1px solid var(--border-color);
   transition: background .15s;
 }
 .master-item:hover { background: rgba(64, 158, 255, 0.06); }
-.master-item.active { background: rgba(64, 158, 255, 0.12); border-left: 3px solid var(--color-primary); padding-left: 15px; }
-.mi-top { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.master-item.active { background: rgba(64, 158, 255, 0.12); border-left: 3px solid var(--color-primary); padding-left: 13px; }
+.mi-top { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
 .mi-vmid { font-size: 11px; font-family: 'SF Mono', 'Menlo', monospace; background: var(--bg-primary); padding: 1px 5px; border-radius: 4px; color: var(--text-muted); flex-shrink: 0; }
-.mi-name { font-size: 14px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
-.mi-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.dot-run { background: #67c23a; box-shadow: 0 0 6px rgba(103, 194, 58, 0.5); }
+.mi-name { font-size: 13px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.mi-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.dot-run { background: #67c23a; box-shadow: 0 0 5px rgba(103, 194, 58, 0.5); }
 .dot-stop { background: #909399; }
-.mi-bottom { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); }
-.mi-node { background: var(--bg-primary); padding: 1px 6px; border-radius: 4px; }
-.mi-template { color: #e6a23c; font-weight: 500; }
-.mi-ip { font-family: 'SF Mono', 'Menlo', monospace; font-size: 11px; }
+.mi-bottom { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-muted); }
+.mi-node { background: var(--bg-primary); padding: 1px 5px; border-radius: 3px; font-size: 11px; }
+.mi-template { color: #e6a23c; font-weight: 500; font-size: 11px; }
+.mi-ip { font-family: 'SF Mono', 'Menlo', monospace; font-size: 10px; }
 
-/* ---- 右侧详情 ---- */
+/* ---- 右侧详情：内部滚动 ---- */
 .detail-panel {
   flex: 1; min-width: 0;
   background: var(--bg-primary);
@@ -391,39 +383,39 @@ function fmtUptime(s: number) {
 
 /* 详情头部 */
 .dp-header {
-  padding: 20px 28px 16px;
+  padding: 16px 24px 12px;
   border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
 }
-.dp-header-info {}
 .dp-title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .dp-vmid { font-size: 12px; font-family: 'SF Mono', 'Menlo', monospace; background: var(--bg-secondary); padding: 2px 8px; border-radius: 6px; color: var(--text-muted); }
 .dp-name { font-size: 18px; font-weight: 700; color: var(--text-heading); margin: 0; }
-.dp-meta { display: flex; align-items: center; gap: 12px; margin-top: 6px; font-size: 13px; color: var(--text-muted); }
+.dp-meta { display: flex; align-items: center; gap: 12px; margin-top: 4px; font-size: 13px; color: var(--text-muted); }
 .dp-ip { font-family: 'SF Mono', 'Menlo', monospace; font-size: 12px; color: var(--text-secondary); }
 
 /* 资源概览 */
 .dp-resources {
-  display: flex; align-items: center; gap: 28px;
-  padding: 16px 28px;
+  display: flex; align-items: center; gap: 24px;
+  padding: 12px 24px;
   border-bottom: 1px solid var(--border-color);
-  flex-wrap: wrap;
+  flex-wrap: wrap; flex-shrink: 0;
 }
-.res-item { display: flex; flex-direction: column; gap: 4px; min-width: 140px; }
+.res-item { display: flex; flex-direction: column; gap: 3px; min-width: 130px; }
 .res-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
-.res-text { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-.res-value { font-size: 14px; font-weight: 600; color: var(--text-primary); margin-top: 2px; }
-.res-item :deep(.el-progress) { width: 140px; }
+.res-text { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
+.res-value { font-size: 14px; font-weight: 600; color: var(--text-primary); margin-top: 1px; }
+.res-item :deep(.el-progress) { width: 130px; }
 
 /* Tab */
 .dp-tabs { flex: 1; overflow-y: auto; }
-.dp-tabs :deep(.el-tabs__header) { margin: 0; padding: 0 28px; background: var(--bg-secondary); }
+.dp-tabs :deep(.el-tabs__header) { margin: 0; padding: 0 24px; background: var(--bg-secondary); flex-shrink: 0; }
 .dp-tabs :deep(.el-tabs__nav-wrap::after) { display: none; }
-.dp-tabs :deep(.el-tabs__content) { padding: 20px 28px; }
-.dp-tabs :deep(.el-tab-pane) { min-height: 200px; }
+.dp-tabs :deep(.el-tabs__content) { padding: 16px 24px; }
+.dp-tabs :deep(.el-tab-pane) { min-height: 120px; }
 
 /* KV 网格 */
 .dp-kv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }
-.dp-kv { display: flex; align-items: center; padding: 8px 0; border-bottom: 1px dashed var(--border-color); }
+.dp-kv { display: flex; align-items: center; padding: 7px 0; border-bottom: 1px dashed var(--border-color); }
 .dp-kv-label { font-size: 13px; color: var(--text-muted); min-width: 76px; flex-shrink: 0; }
 .dp-kv-val { font-size: 13px; color: var(--text-primary); word-break: break-all; }
 .mono { font-family: 'SF Mono', 'Menlo', monospace; font-size: 12px; }
@@ -431,7 +423,7 @@ function fmtUptime(s: number) {
 /* 设备列表 */
 .dp-devices { display: flex; flex-direction: column; gap: 8px; }
 .dp-device {
-  padding: 12px 16px; border-radius: 10px;
+  padding: 10px 14px; border-radius: 10px;
   background: var(--bg-secondary); border: 1px solid var(--border-color);
 }
 .dp-device-head { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
@@ -445,19 +437,18 @@ function fmtUptime(s: number) {
 .dp-device-meta { display: flex; gap: 16px; font-size: 12px; color: var(--text-muted); margin-top: 4px; }
 
 /* 空状态 & 加载 */
-.dp-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--text-muted); font-size: 14px; min-height: 400px; }
+.dp-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--text-muted); font-size: 14px; }
 .dp-loading { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 60px; color: var(--text-secondary); font-size: 14px; }
 
 /* ---- 响应式 ---- */
 @media (max-width: 1200px) {
-  .stats-row { grid-template-columns: repeat(2, 1fr); }
-  .master-panel { width: 260px; }
+  .master-panel { width: 240px; }
   .dp-kv-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 768px) {
-  .stats-row { grid-template-columns: repeat(2, 1fr); }
-  .master-detail { flex-direction: column; min-height: auto; }
-  .master-panel { width: 100%; max-height: 320px; border-right: none; border-bottom: 1px solid var(--border-color); }
-  .dp-resources { gap: 16px; }
+  .page-top { flex-direction: column; align-items: flex-start; }
+  .master-detail { flex-direction: column; min-height: 0; }
+  .master-panel { width: 100%; max-height: 280px; border-right: none; border-bottom: 1px solid var(--border-color); flex-shrink: 0; }
+  .dp-resources { gap: 12px; }
 }
 </style>
