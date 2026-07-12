@@ -1,180 +1,222 @@
 <template>
   <div class="page-container">
-    <div class="page-header">
-      <div>
+    <!-- 标题 + 统计 + 筛选 -->
+    <div class="page-top">
+      <div class="page-top-left">
         <h2 class="page-title">{{ t('vms.title') }}</h2>
-        <p class="page-desc">{{ t('vms.subtitle') }}</p>
+        <div class="mini-stats" v-if="!loading && vms.length">
+          <span class="ms-item"><i class="ms-dot ms-dot-total" />{{ statTotal }}</span>
+          <span class="ms-item"><i class="ms-dot ms-dot-run" />{{ statRunning }}</span>
+          <span class="ms-item"><i class="ms-dot ms-dot-stop" />{{ statStopped }}</span>
+          <span class="ms-item"><i class="ms-dot ms-dot-pause" />{{ statPaused }}</span>
+          <span class="ms-item"><i class="ms-dot ms-dot-tpl" />{{ statTemplate }}</span>
+        </div>
       </div>
-      <div class="header-actions">
-        <el-select v-model="nodeFilter" :placeholder="t('vms.nodeFilter')" clearable style="width: 160px" @change="loadData">
+      <div class="page-top-right">
+        <el-input v-model="search" :placeholder="t('vms.searchPlaceholder')" clearable prefix-icon="Search" size="small" class="top-search" @input="debounceLoad" />
+        <el-select v-model="nodeFilter" :placeholder="t('vms.nodeFilter')" clearable size="small" style="width:130px" @change="loadData">
           <el-option v-for="n in nodes" :key="n.id" :label="n.node_name" :value="n.id" />
         </el-select>
-        <el-select v-model="statusFilter" :placeholder="t('vms.statusFilter')" clearable style="width: 110px" @change="loadData">
+        <el-select v-model="statusFilter" :placeholder="t('vms.statusFilter')" clearable size="small" style="width:100px" @change="loadData">
           <el-option :label="t('vms.running')" value="running" />
           <el-option :label="t('vms.stopped')" value="stopped" />
           <el-option :label="t('vms.paused')" value="paused" />
         </el-select>
-        <el-input v-model="search" :placeholder="t('vms.searchPlaceholder')" clearable prefix-icon="Search" style="width: 220px" @input="debounceLoad" />
       </div>
     </div>
-    <el-card shadow="hover" class="table-card">
-      <div v-if="loading" class="loading-box">
-        <el-icon class="is-loading" :size="20"><Loading /></el-icon>
-        <span>{{ t('common.loading') }}</span>
+
+    <!-- Master-Detail 双面板 -->
+    <div class="master-detail" v-loading="loading">
+      <!-- 左侧列表 -->
+      <div class="master-panel">
+        <div class="master-list" v-if="filteredVMs.length">
+          <div
+            v-for="item in filteredVMs"
+            :key="item.id"
+            class="master-item"
+            :class="{ active: selectedId === item.id }"
+            @click="selectItem(item)"
+          >
+            <div class="mi-top">
+              <code class="mi-vmid">{{ item.vmid }}</code>
+              <span class="mi-name">{{ item.name }}</span>
+              <span class="mi-dot" :class="item.status === 'running' ? 'dot-run' : item.status === 'paused' ? 'dot-pause' : 'dot-stop'" />
+            </div>
+            <div class="mi-bottom">
+              <span class="mi-node">{{ item.node_name }}</span>
+              <span v-if="item.has_template" class="mi-template">{{ t('vms.template') }}</span>
+              <span class="mi-cpu">{{ Math.round(item.cpu_usage || 0) }}% · {{ fmtMB(item.memory_used_mb) }}</span>
+            </div>
+          </div>
+        </div>
+        <el-empty v-else-if="!loading" :description="t('vms.emptyDesc')" :image-size="80" />
       </div>
-      <el-table v-else :data="vms" style="width: 100%" stripe :default-sort="{ prop: 'vmid', order: 'ascending' }">
-        <el-table-column label="VMID" width="80" align="center" sortable sort-by="vmid">
-          <template #default="{ row }"><code class="vmid">{{ row.vmid }}</code></template>
-        </el-table-column>
-        <el-table-column prop="name" :label="t('vms.name')" min-width="160" fixed>
-          <template #default="{ row }">
-            <span class="vm-name">{{ row.name }}</span>
-            <div class="sub-text">{{ row.node_name }}</div>
-          </template>
-        </el-table-column>
-        <el-table-column prop="status" :label="t('common.status')" width="90" align="center" sortable sort-by="status">
-          <template #default="{ row }">
-            <el-tag :type="statusType(row.status)" size="small" disable-transitions>{{ statusLabel(row.status) }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column :label="t('vms.cpu')" min-width="120" sortable :sort-method="(a, b) => (a.cpu_usage || 0) - (b.cpu_usage || 0)">
-          <template #default="{ row }">
-            <div class="usage-cell">
-              <el-progress :percentage="Math.round(row.cpu_usage || 0)" :stroke-width="8" :color="cpuColor(Math.round(row.cpu_usage || 0))" :show-text="false" />
-              <span class="usage-text">{{ Math.round(row.cpu_usage || 0) }}% · {{ row.cpu_cores || '?' }}{{ t('common.cores') }}</span>
+
+      <!-- 右侧详情 -->
+      <div class="detail-panel">
+        <template v-if="detailData">
+          <!-- 详情头部 -->
+          <div class="dp-header">
+            <div class="dp-title-row">
+              <code class="dp-vmid">{{ detailData.vm.vmid }}</code>
+              <h3 class="dp-name">{{ detailData.vm.name }}</h3>
+              <el-tag :type="statusType(detailData.vm.status)" size="small" disable-transitions>{{ statusLabel(detailData.vm.status) }}</el-tag>
+              <el-tag v-if="detailData.vm.has_template" type="warning" size="small" effect="plain">{{ t('vms.template') }}</el-tag>
             </div>
-          </template>
-        </el-table-column>
-        <el-table-column :label="t('vms.memory')" min-width="140" sortable :sort-method="(a, b) => (a.memory_mb || 0) - (b.memory_mb || 0)">
-          <template #default="{ row }">
-            <span>{{ fmtMB(row.memory_used_mb) }} / {{ fmtMB(row.memory_mb) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column :label="t('vms.disk')" min-width="110" sortable :sort-method="(a, b) => (a.max_disk_gb || 0) - (b.max_disk_gb || 0)">
-          <template #default="{ row }">
-            <span>{{ row.max_disk_gb || 0 }}GB</span>
-          </template>
-        </el-table-column>
-        <el-table-column :label="t('vms.networkTotal')" min-width="140">
-          <template #default="{ row }">
-            <span class="net-text">↓{{ fmtBytes(row.net_in_bps) }} ↑{{ fmtBytes(row.net_out_bps) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column :label="t('vms.runtime')" min-width="100">
-          <template #default="{ row }">{{ fmtUptime(row.uptime_seconds) }}</template>
-        </el-table-column>
-        <el-table-column prop="os_type" :label="t('vms.os')" width="90">
-          <template #default="{ row }">{{ row.os_type || '-' }}</template>
-        </el-table-column>
-        <el-table-column :label="t('common.operation')" width="80" align="center" fixed="right">
-          <template #default="{ row }">
-            <el-button type="primary" link size="small" @click="showDetail(row)">{{ t('common.detail') }}</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-      <el-empty v-if="!loading && !vms.length" :description="t('vms.emptyDesc')" />
-    </el-card>
-    <!-- VM 详情弹窗 -->
-    <el-dialog v-model="detailVisible" :title="detailData?.vm?.name || t('vms.vmDetailTitle')" width="720px" destroy-on-close top="5vh">
-      <div v-if="detailLoading" class="loading-box">
-        <el-icon class="is-loading" :size="20"><Loading /></el-icon>
-        <span>{{ t('common.loading') }}</span>
+            <div class="dp-meta">
+              <span class="dp-meta-item">{{ detailData.vm.node_name }}</span>
+              <span v-if="detailData.vm.os_type" class="dp-meta-item">{{ detailData.vm.os_type }}</span>
+            </div>
+          </div>
+
+          <!-- 资源概览卡片 -->
+          <div class="dp-resources-card">
+            <div class="res-item">
+              <div class="res-header">
+                <span class="res-label">{{ t('vms.cpu') }}</span>
+                <span class="res-pct" :style="{ color: cpuColor(Math.round(detailData.vm.cpu_usage || 0)) }">{{ Math.round(detailData.vm.cpu_usage || 0) }}%</span>
+              </div>
+              <el-progress :percentage="Math.round(detailData.vm.cpu_usage || 0)" :stroke-width="8" :color="cpuColor(Math.round(detailData.vm.cpu_usage || 0))" :show-text="false" />
+              <span class="res-sub">{{ detailData.vm.cpu_cores || '?' }}{{ t('common.cores') }} × {{ detailData.vm.cpu_sockets || 1 }}</span>
+            </div>
+            <div class="res-item">
+              <div class="res-header">
+                <span class="res-label">{{ t('vms.memory') }}</span>
+                <span class="res-pct">{{ memPercent }}%</span>
+              </div>
+              <el-progress :percentage="memPercent" :stroke-width="8" color="#409eff" :show-text="false" />
+              <span class="res-sub">{{ fmtMB(detailData.vm.memory_used_mb) }} / {{ fmtMB(detailData.vm.memory_mb) }}</span>
+            </div>
+            <div class="res-item">
+              <div class="res-header">
+                <span class="res-label">{{ t('vms.disk') }}</span>
+                <span class="res-pct">{{ diskPercent }}%</span>
+              </div>
+              <el-progress :percentage="diskPercent" :stroke-width="8" color="#e6a23c" :show-text="false" />
+              <span class="res-sub">{{ detailData.vm.disk_gb || 0 }}GB / {{ detailData.vm.max_disk_gb || 0 }}GB</span>
+            </div>
+            <div class="res-item res-item-plain">
+              <span class="res-label">{{ t('vms.networkTotal') }}</span>
+              <span class="res-value res-value-sm">↓{{ fmtBytes(detailData.vm.net_in_bps) }} ↑{{ fmtBytes(detailData.vm.net_out_bps) }}</span>
+            </div>
+            <div class="res-item res-item-plain" v-if="detailData.vm.uptime_seconds">
+              <span class="res-label">{{ t('vms.runtime') }}</span>
+              <span class="res-value res-value-sm">{{ fmtUptime(detailData.vm.uptime_seconds) }}</span>
+            </div>
+          </div>
+
+          <!-- Tab 切换 -->
+          <el-tabs v-model="activeTab" class="dp-tabs">
+            <!-- Tab: 基本信息 -->
+            <el-tab-pane :label="t('vms.basicInfo')" name="basic">
+              <div class="dp-section-card">
+                <div class="dp-kv-grid">
+                  <div class="dp-kv"><span class="dp-kv-label">VMID</span><span class="dp-kv-val mono">{{ detailData.vm.vmid }}</span></div>
+                  <div class="dp-kv"><span class="dp-kv-label">{{ t('common.status') }}</span><span class="dp-kv-val"><el-tag :type="statusType(detailData.vm.status)" size="small" disable-transitions>{{ statusLabel(detailData.vm.status) }}</el-tag></span></div>
+                  <div class="dp-kv"><span class="dp-kv-label">{{ t('common.name') }}</span><span class="dp-kv-val">{{ detailData.vm.node_name }}</span></div>
+                  <div class="dp-kv"><span class="dp-kv-label">{{ t('vms.cluster') }}</span><span class="dp-kv-val">{{ detailData.vm.cluster_name }}</span></div>
+                  <div class="dp-kv" v-if="detailData.vm.has_template"><span class="dp-kv-label">{{ t('common.type') }}</span><span class="dp-kv-val"><el-tag type="warning" size="small" effect="plain">{{ t('vms.template') }}</el-tag></span></div>
+                  <div class="dp-kv"><span class="dp-kv-label">{{ t('vms.os') }}</span><span class="dp-kv-val">{{ detailData.vm.os_type || '-' }}</span></div>
+                  <div class="dp-kv"><span class="dp-kv-label">{{ t('vms.cpu') }}</span><span class="dp-kv-val">{{ detailData.vm.cpu_usage }}% · {{ detailData.vm.cpu_cores }}{{ t('common.cores') }} × {{ detailData.vm.cpu_sockets || 1 }}</span></div>
+                  <div class="dp-kv"><span class="dp-kv-label">{{ t('vms.memory') }}</span><span class="dp-kv-val">{{ fmtMB(detailData.vm.memory_used_mb) }} / {{ fmtMB(detailData.vm.memory_mb) }}</span></div>
+                  <div class="dp-kv" v-if="detailData.vm.balloon_min_mb"><span class="dp-kv-label">Balloon</span><span class="dp-kv-val">{{ fmtMB(detailData.vm.balloon_min_mb) }} ~ {{ fmtMB(detailData.vm.balloon_max_mb) }}</span></div>
+                  <div class="dp-kv"><span class="dp-kv-label">{{ t('vms.disk') }}</span><span class="dp-kv-val">{{ detailData.vm.disk_gb }}GB / {{ detailData.vm.max_disk_gb }}GB</span></div>
+                  <div class="dp-kv"><span class="dp-kv-label">{{ t('vms.networkTotal') }}</span><span class="dp-kv-val">↓{{ fmtBits(detailData.vm.net_in_bps) }} ↑{{ fmtBits(detailData.vm.net_out_bps) }}</span></div>
+                  <div class="dp-kv"><span class="dp-kv-label">{{ t('vms.diskIOPS') }}</span><span class="dp-kv-val">{{ t('vms.read') }} {{ detailData.vm.disk_read_iops?.toFixed(1) || 0 }} / {{ t('vms.write') }} {{ detailData.vm.disk_write_iops?.toFixed(1) || 0 }}</span></div>
+                  <div class="dp-kv" v-if="detailData.vm.uptime_seconds"><span class="dp-kv-label">{{ t('vms.runtime') }}</span><span class="dp-kv-val">{{ fmtUptime(detailData.vm.uptime_seconds) }}</span></div>
+                  <div class="dp-kv" v-if="detailData.vm.snapshot_count"><span class="dp-kv-label">{{ t('vms.snapshotCount') }}</span><span class="dp-kv-val">{{ detailData.vm.snapshot_count }}</span></div>
+                  <div class="dp-kv" v-if="detailData.vm.tags"><span class="dp-kv-label">{{ t('vms.tags') }}</span><span class="dp-kv-val"><el-tag v-for="tag in detailData.vm.tags.split(',')" :key="tag" size="small" effect="plain" style="margin-right:4px">{{ tag.trim() }}</el-tag></span></div>
+                  <div class="dp-kv" v-if="detailData.vm.description"><span class="dp-kv-label">{{ t('clusters.description') }}</span><span class="dp-kv-val">{{ detailData.vm.description }}</span></div>
+                  <div class="dp-kv"><span class="dp-kv-label">{{ t('common.scanTime') }}</span><span class="dp-kv-val mono">{{ fmtTime(detailData.vm.scanned_at) }}</span></div>
+                </div>
+              </div>
+            </el-tab-pane>
+
+            <!-- Tab: 配置 -->
+            <el-tab-pane :label="t('vms.config')" name="config" v-if="detailData.config">
+              <div class="dp-section-card">
+                <div class="dp-kv-grid">
+                  <div class="dp-kv"><span class="dp-kv-label">{{ t('vms.cpuType') }}</span><span class="dp-kv-val mono">{{ detailData.config.cpu_type || 'host' }}</span></div>
+                  <div class="dp-kv"><span class="dp-kv-label">{{ t('vms.cpuCores') }}</span><span class="dp-kv-val">{{ detailData.config.cpu_cores }}{{ t('common.cores') }} × {{ detailData.config.cpu_sockets || 1 }}</span></div>
+                  <div class="dp-kv"><span class="dp-kv-label">{{ t('vms.memory') }}</span><span class="dp-kv-val">{{ detailData.config.memory_mb ? fmtMB(detailData.config.memory_mb) : '-' }}</span></div>
+                  <div class="dp-kv" v-if="detailData.config.balloon_min_mb"><span class="dp-kv-label">Balloon</span><span class="dp-kv-val">{{ fmtMB(detailData.config.balloon_min_mb) }}</span></div>
+                  <div class="dp-kv" v-if="detailData.config.os_type"><span class="dp-kv-label">{{ t('vms.osType') }}</span><span class="dp-kv-val">{{ detailData.config.os_type }}</span></div>
+                  <div class="dp-kv"><span class="dp-kv-label">{{ t('vms.bootOrder') }}</span><span class="dp-kv-val mono">{{ detailData.config.boot_order || '-' }}</span></div>
+                  <div class="dp-kv"><span class="dp-kv-label">{{ t('vms.qemuAgent') }}</span><span class="dp-kv-val"><el-tag :type="detailData.config.agent_enabled ? 'success' : 'info'" size="small">{{ detailData.config.agent_enabled ? t('common.enabled') : t('common.disabled') }}</el-tag></span></div>
+                  <div class="dp-kv"><span class="dp-kv-label">{{ t('vms.ha') }}</span><span class="dp-kv-val"><el-tag :type="detailData.config.ha_enabled ? 'success' : 'info'" size="small">{{ detailData.config.ha_enabled ? (detailData.config.ha_group || t('common.enabled')) : t('common.disabled') }}</el-tag></span></div>
+                  <div class="dp-kv" v-if="detailData.config.tags"><span class="dp-kv-label">{{ t('vms.tags') }}</span><span class="dp-kv-val">{{ detailData.config.tags }}</span></div>
+                  <div class="dp-kv" v-if="detailData.config.description"><span class="dp-kv-label">{{ t('clusters.description') }}</span><span class="dp-kv-val">{{ detailData.config.description }}</span></div>
+                </div>
+              </div>
+            </el-tab-pane>
+
+            <!-- Tab: 存储 -->
+            <el-tab-pane :label="t('vms.scsiDisks')" name="storage" v-if="detailData.config?.scsi_disks?.length || detailData.config?.ide_disks?.length">
+              <div class="dp-devices">
+                <div v-for="d in (detailData.config?.scsi_disks || [])" :key="'scsi-' + d.slot" class="dp-device">
+                  <div class="dp-device-head">
+                    <span class="dp-device-tag">scsi{{ d.slot }}</span>
+                    <span class="dp-device-name">{{ d.storage || '-' }}</span>
+                  </div>
+                  <code class="dp-device-raw">{{ d.raw }}</code>
+                </div>
+                <div v-for="d in (detailData.config?.ide_disks || [])" :key="'ide-' + d.slot" class="dp-device">
+                  <div class="dp-device-head">
+                    <span class="dp-device-tag">ide{{ d.slot }}</span>
+                    <span class="dp-device-name">{{ d.storage || '-' }}</span>
+                    <el-tag v-if="d.media" size="small" type="info" effect="plain">{{ d.media }}</el-tag>
+                  </div>
+                  <code class="dp-device-raw">{{ d.raw }}</code>
+                </div>
+              </div>
+            </el-tab-pane>
+
+            <!-- Tab: 网络 -->
+            <el-tab-pane :label="t('vms.nics')" name="network" v-if="detailData.config?.net_devices?.length">
+              <div class="dp-devices">
+                <div v-for="n in detailData.config.net_devices" :key="n.slot" class="dp-device">
+                  <div class="dp-device-head">
+                    <span class="dp-device-tag">net{{ n.slot }}</span>
+                    <span class="dp-device-name">{{ n.model || '-' }}</span>
+                    <span class="dp-device-sub">{{ t('vms.bridge') }} {{ n.bridge || '-' }}</span>
+                  </div>
+                  <div class="dp-device-meta">
+                    <span v-if="n.mac" class="mono">{{ n.mac }}</span>
+                    <span v-if="n.hwaddr" class="mono">{{ n.hwaddr }}</span>
+                  </div>
+                </div>
+              </div>
+            </el-tab-pane>
+          </el-tabs>
+        </template>
+
+        <!-- 未选中状态 -->
+        <div v-else-if="!loading && !detailLoading" class="dp-empty">
+          <el-icon :size="48" color="var(--text-muted)"><Monitor /></el-icon>
+          <p>{{ t('vms.emptyDesc') }}</p>
+        </div>
+
+        <!-- 详情加载中 -->
+        <div v-if="detailLoading" class="dp-loading">
+          <el-icon class="is-loading" :size="24"><Loading /></el-icon>
+          <span>{{ t('common.loading') }}</span>
+        </div>
       </div>
-      <div v-else-if="detailData" class="detail-content">
-        <!-- 基本信息 -->
-        <div class="detail-section">
-          <h4>{{ t('vms.basicInfo') }}</h4>
-          <div class="detail-kv">
-            <div class="kv-row"><span class="kv-label">VMID</span><span class="kv-val mono">{{ detailData.vm.vmid }}</span></div>
-            <div class="kv-row"><span class="kv-label">{{ t('common.status') }}</span><span class="kv-val"><el-tag :type="detailData.vm.status === 'running' ? 'success' : 'danger'" size="small">{{ detailData.vm.status === 'running' ? t('vms.running') : detailData.vm.status === 'paused' ? t('vms.paused') : t('vms.stopped') }}</el-tag></span></div>
-            <div class="kv-row"><span class="kv-label">{{ t('common.name') }}</span><span class="kv-val">{{ detailData.vm.node_name }}</span></div>
-            <div class="kv-row"><span class="kv-label">{{ t('vms.cluster') }}</span><span class="kv-val">{{ detailData.vm.cluster_name }}</span></div>
-            <div class="kv-row" v-if="detailData.vm.has_template"><span class="kv-label">{{ t('common.type') }}</span><span class="kv-val"><el-tag type="warning" size="small" effect="plain">{{ t('vms.template') }}</el-tag></span></div>
-            <div class="kv-row"><span class="kv-label">{{ t('vms.os') }}</span><span class="kv-val">{{ detailData.vm.os_type || '-' }}</span></div>
-            <div class="kv-row"><span class="kv-label">{{ t('vms.cpu') }}</span><span class="kv-val">{{ detailData.vm.cpu_usage }}% · {{ detailData.vm.cpu_cores }}{{ t('common.cores') }} × {{ detailData.vm.cpu_sockets || 1 }}{{ t('nodes.cpuSockets') }}</span></div>
-            <div class="kv-row"><span class="kv-label">{{ t('vms.memory') }}</span><span class="kv-val">{{ fmtMB(detailData.vm.memory_used_mb) }} / {{ fmtMB(detailData.vm.memory_mb) }}</span></div>
-            <div class="kv-row" v-if="detailData.vm.balloon_min_mb"><span class="kv-label">Balloon</span><span class="kv-val">{{ fmtMB(detailData.vm.balloon_min_mb) }} ~ {{ fmtMB(detailData.vm.balloon_max_mb) }}</span></div>
-            <div class="kv-row"><span class="kv-label">{{ t('vms.disk') }}</span><span class="kv-val">{{ detailData.vm.disk_gb }}GB / {{ detailData.vm.max_disk_gb }}GB</span></div>
-            <div class="kv-row"><span class="kv-label">{{ t('common.type') }}</span><span class="kv-val">↓{{ fmtBits(detailData.vm.net_in_bps) }} ↑{{ fmtBits(detailData.vm.net_out_bps) }}</span></div>
-            <div class="kv-row"><span class="kv-label">{{ t('vms.diskIOPS') }}</span><span class="kv-val">{{ t('vms.read') }} {{ detailData.vm.disk_read_iops?.toFixed(1) || 0 }} / {{ t('vms.write') }} {{ detailData.vm.disk_write_iops?.toFixed(1) || 0 }}</span></div>
-            <div class="kv-row" v-if="detailData.vm.uptime_seconds"><span class="kv-label">{{ t('vms.runtime') }}</span><span class="kv-val">{{ fmtUptime(detailData.vm.uptime_seconds) }}</span></div>
-            <div class="kv-row" v-if="detailData.vm.snapshot_count"><span class="kv-label">{{ t('vms.snapshotCount') }}</span><span class="kv-val">{{ detailData.vm.snapshot_count }}</span></div>
-            <div class="kv-row" v-if="detailData.vm.tags"><span class="kv-label">{{ t('vms.tags') }}</span><span class="kv-val">{{ detailData.vm.tags }}</span></div>
-            <div class="kv-row" v-if="detailData.vm.description"><span class="kv-label">{{ t('clusters.description') }}</span><span class="kv-val">{{ detailData.vm.description }}</span></div>
-            <div class="kv-row"><span class="kv-label">{{ t('common.scanTime') }}</span><span class="kv-val mono">{{ fmtTime(detailData.vm.scanned_at) }}</span></div>
-          </div>
-        </div>
-        <!-- 配置信息 -->
-        <div class="detail-section" v-if="detailData.config">
-          <h4>{{ t('vms.config') }}</h4>
-          <div class="detail-kv">
-            <div class="kv-row"><span class="kv-label">{{ t('vms.cpuType') }}</span><span class="kv-val mono">{{ detailData.config.cpu_type || 'host' }}</span></div>
-            <div class="kv-row"><span class="kv-label">{{ t('vms.cpuCores') }}</span><span class="kv-val">{{ detailData.config.cpu_cores }}{{ t('common.cores') }} × {{ detailData.config.cpu_sockets || 1 }}{{ t('vms.cpuSockets') }}</span></div>
-            <div class="kv-row"><span class="kv-label">{{ t('vms.memory') }}</span><span class="kv-val">{{ detailData.config.memory_mb ? fmtMB(detailData.config.memory_mb) : '-' }}</span></div>
-            <div class="kv-row" v-if="detailData.config.balloon_min_mb"><span class="kv-label">Balloon</span><span class="kv-val">{{ fmtMB(detailData.config.balloon_min_mb) }}</span></div>
-            <div class="kv-row" v-if="detailData.config.os_type"><span class="kv-label">{{ t('vms.osType') }}</span><span class="kv-val">{{ detailData.config.os_type }}</span></div>
-            <div class="kv-row"><span class="kv-label">{{ t('vms.bootOrder') }}</span><span class="kv-val mono">{{ detailData.config.boot_order || '-' }}</span></div>
-            <div class="kv-row"><span class="kv-label">{{ t('vms.qemuAgent') }}</span><span class="kv-val"><el-tag :type="detailData.config.agent_enabled ? 'success' : 'info'" size="small">{{ detailData.config.agent_enabled ? t('common.enabled') : t('common.disabled') }}</el-tag></span></div>
-            <div class="kv-row"><span class="kv-label">{{ t('vms.ha') }}</span><span class="kv-val"><el-tag :type="detailData.config.ha_enabled ? 'success' : 'info'" size="small">{{ detailData.config.ha_enabled ? (detailData.config.ha_group || t('common.enabled')) : t('common.disabled') }}</el-tag></span></div>
-            <div class="kv-row" v-if="detailData.config.tags"><span class="kv-label">{{ t('vms.tags') }}</span><span class="kv-val">{{ detailData.config.tags }}</span></div>
-            <div class="kv-row" v-if="detailData.config.description"><span class="kv-label">{{ t('clusters.description') }}</span><span class="kv-val">{{ detailData.config.description }}</span></div>
-          </div>
-        </div>
-        <!-- SCSI 磁盘 -->
-        <div class="detail-section" v-if="detailData.config?.scsi_disks?.length">
-          <h4>{{ t('vms.scsiDisks') }}</h4>
-          <div class="device-list">
-            <div v-for="d in detailData.config.scsi_disks" :key="d.slot" class="device-chip">
-              <span class="chip-tag">scsi{{ d.slot }}</span>
-              <span class="chip-body">{{ d.storage || '-' }}</span>
-              <span class="chip-sub mono">{{ d.raw }}</span>
-            </div>
-          </div>
-        </div>
-        <!-- IDE 设备 -->
-        <div class="detail-section" v-if="detailData.config?.ide_disks?.length">
-          <h4>{{ t('vms.ideDevices') }}</h4>
-          <div class="device-list">
-            <div v-for="d in detailData.config.ide_disks" :key="d.slot" class="device-chip">
-              <span class="chip-tag">ide{{ d.slot }}</span>
-              <span class="chip-body">{{ d.storage || '-' }}</span>
-              <el-tag v-if="d.media" size="small" type="info" effect="plain">{{ d.media }}</el-tag>
-              <span class="chip-sub mono">{{ d.raw }}</span>
-            </div>
-          </div>
-        </div>
-        <!-- 网卡 -->
-        <div class="detail-section" v-if="detailData.config?.net_devices?.length">
-          <h4>{{ t('vms.nics') }}</h4>
-          <div class="device-list">
-            <div v-for="n in detailData.config.net_devices" :key="n.slot" class="device-chip">
-              <span class="chip-tag">net{{ n.slot }}</span>
-              <span class="chip-body">{{ n.model || '-' }}</span>
-              <span class="chip-sub">{{ t('vms.bridge') }} {{ n.bridge || '-' }}</span>
-              <span class="chip-sub mono">{{ n.hwaddr || '-' }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-      <template #footer>
-        <el-button @click="detailVisible = false">{{ t('common.close') }}</el-button>
-      </template>
-    </el-dialog>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Loading } from '@element-plus/icons-vue'
-
-const { t } = useI18n()
+import { Loading, Monitor } from '@element-plus/icons-vue'
 import { getVMs, getVMDetail } from '@/api/vms'
 import type { VMInfo, VMDetail } from '@/api/vms'
 import { getNodes } from '@/api/nodes'
 import type { NodeInfo } from '@/api/nodes'
 import { useClusterStore } from '@/stores/cluster'
 
+const { t } = useI18n()
 const clusterStore = useClusterStore()
 
 const loading = ref(true)
@@ -183,10 +225,36 @@ const search = ref('')
 const statusFilter = ref('')
 const nodeFilter = ref<number | ''>('')
 const nodes = ref<NodeInfo[]>([])
-const detailVisible = ref(false)
-const detailLoading = ref(false)
-const detailData = ref<VMDetail | null>(null)
 let timer: ReturnType<typeof setTimeout> | null = null
+
+const selectedId = ref<number | null>(null)
+const detailData = ref<VMDetail | null>(null)
+const detailLoading = ref(false)
+const activeTab = ref('basic')
+
+/* ---- 计算属性 ---- */
+
+const filteredVMs = computed(() => vms.value)
+
+const statTotal = computed(() => filteredVMs.value.length)
+const statRunning = computed(() => filteredVMs.value.filter(v => v.status === 'running').length)
+const statStopped = computed(() => filteredVMs.value.filter(v => v.status === 'stopped').length)
+const statPaused = computed(() => filteredVMs.value.filter(v => v.status === 'paused').length)
+const statTemplate = computed(() => filteredVMs.value.filter(v => v.has_template).length)
+
+const memPercent = computed(() => {
+  const v = detailData.value?.vm
+  if (!v || !v.memory_mb) return 0
+  return Math.round((v.memory_used_mb / v.memory_mb) * 100)
+})
+
+const diskPercent = computed(() => {
+  const v = detailData.value?.vm
+  if (!v || !v.max_disk_gb) return 0
+  return Math.round((v.disk_gb / v.max_disk_gb) * 100)
+})
+
+/* ---- 生命周期 ---- */
 
 onMounted(async () => {
   if (!clusterStore.clusterList.length) await clusterStore.fetchClusters()
@@ -195,15 +263,28 @@ onMounted(async () => {
 
 watch(() => clusterStore.currentClusterId, () => { loadData() })
 
+/* ---- 数据加载 ---- */
+
 async function loadData() {
   loading.value = true
+  selectedId.value = null
+  detailData.value = null
   try {
     const params: Record<string, any> = {}
     if (clusterStore.currentClusterId) params.cluster_id = clusterStore.currentClusterId
     if (statusFilter.value) params.status = statusFilter.value
     if (search.value) params.search = search.value
     if (nodeFilter.value !== '') params.node_id = nodeFilter.value
-    vms.value = await getVMs(params)
+    const [nodeData, vmData] = await Promise.all([
+      getNodes(clusterStore.currentClusterId ? { cluster_id: clusterStore.currentClusterId } : undefined),
+      getVMs(params),
+    ])
+    nodes.value = nodeData
+    vms.value = vmData
+    await nextTick()
+    if (filteredVMs.value.length) {
+      selectItem(filteredVMs.value[0])
+    }
   } catch {} finally { loading.value = false }
 }
 
@@ -212,13 +293,22 @@ function debounceLoad() {
   timer = setTimeout(loadData, 300)
 }
 
-async function showDetail(row: VMInfo) {
-  detailVisible.value = true
+async function selectItem(item: VMInfo) {
+  if (selectedId.value === item.id) return
+  selectedId.value = item.id
+  activeTab.value = 'basic'
   detailLoading.value = true
+  detailData.value = null
   try {
-    detailData.value = await getVMDetail(row.id)
-  } catch { detailData.value = null } finally { detailLoading.value = false }
+    detailData.value = await getVMDetail(item.id)
+  } catch {
+    detailData.value = null
+  } finally {
+    detailLoading.value = false
+  }
 }
+
+/* ---- 工具函数 ---- */
 
 function statusType(s: string) { return s === 'running' ? 'success' : s === 'stopped' ? 'danger' : 'warning' }
 function statusLabel(s: string) { return s === 'running' ? t('vms.running') : s === 'stopped' ? t('vms.stopped') : s === 'paused' ? t('vms.paused') : s }
@@ -250,49 +340,189 @@ function fmtUptime(s: number) {
 </script>
 
 <style scoped>
-.page-container { max-width: 1400px; margin: 0 auto; }
-.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; flex-wrap: wrap; gap: 12px; }
-.page-title { font-size: 24px; font-weight: 700; color: var(--text-heading); margin: 0; }
-.page-desc { font-size: 14px; color: var(--text-muted); margin: 4px 0 0; }
-.header-actions { display: flex; gap: 8px; align-items: center; }
-.table-card { border-radius: 16px; }
-.loading-box { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 40px; color: var(--text-secondary); }
-.vmid { font-size: 12px; background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px; }
-.vm-name { font-weight: 600; color: var(--text-primary); }
-.sub-text { font-size: 12px; color: var(--text-muted); }
-.usage-cell { display: flex; flex-direction: column; gap: 4px; }
-.usage-text { font-size: 12px; color: var(--text-muted); }
-.net-text { font-size: 12px; color: var(--text-secondary); }
-.detail-content { max-height: 70vh; overflow-y: auto; }
-.detail-section { margin-bottom: 16px; }
-.detail-section:last-child { margin-bottom: 0; }
-.detail-section h4 { font-size: 13px; font-weight: 600; color: var(--text-secondary); margin: 0 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border-color); text-transform: uppercase; letter-spacing: 0.5px; }
-.detail-kv { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 20px; }
-.kv-row { display: flex; align-items: center; padding: 5px 0; border-bottom: 1px dashed var(--border-color); }
-.kv-label { font-size: 13px; color: var(--text-muted); min-width: 72px; flex-shrink: 0; }
-.kv-val { font-size: 13px; color: var(--text-primary); }
+.page-container {
+  display: flex; flex-direction: column;
+  height: calc(100vh - 56px - 48px);
+  min-height: 0 !important;
+  padding: 0; max-width: none;
+  overflow: hidden;
+}
+
+/* ========== 顶部一行 ========== */
+.page-top {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 20px; flex-shrink: 0;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  gap: 12px; flex-wrap: wrap;
+}
+.page-top-left { display: flex; align-items: center; gap: 20px; }
+.page-title { font-size: 18px; font-weight: 700; color: var(--text-heading); margin: 0; white-space: nowrap; }
+.mini-stats { display: flex; align-items: center; gap: 14px; }
+.ms-item { display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.ms-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.ms-dot-total { background: var(--color-primary); }
+.ms-dot-run { background: #67c23a; box-shadow: 0 0 4px rgba(103,194,58,0.5); }
+.ms-dot-stop { background: #909399; }
+.ms-dot-pause { background: #e6a23c; }
+.ms-dot-tpl { background: #e6a23c; }
+.page-top-right { display: flex; align-items: center; gap: 8px; }
+.top-search { width: 200px; }
+
+/* ========== Master-Detail ========== */
+.master-detail {
+  display: flex; flex: 1; min-height: 0;
+  background: var(--bg-primary);
+  overflow: hidden;
+}
+
+/* ========== 左侧列表 ========== */
+.master-panel {
+  width: 300px; flex-shrink: 0;
+  border-right: 1px solid var(--border-color);
+  overflow-y: scroll;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  background: var(--bg-secondary);
+}
+.master-panel::-webkit-scrollbar { display: none; }
+.master-list { display: flex; flex-direction: column; }
+.master-item {
+  padding: 12px 16px; cursor: pointer;
+  border-bottom: 1px solid var(--border-color);
+  transition: all .2s;
+  border-left: 3px solid transparent;
+}
+.master-item:hover { background: rgba(64, 158, 255, 0.06); }
+.master-item.active {
+  background: var(--bg-primary);
+  border-left-color: var(--color-primary);
+  box-shadow: inset 0 0 20px rgba(64, 158, 255, 0.04);
+}
+.mi-top { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+.mi-vmid { font-size: 11px; font-family: 'SF Mono', 'Menlo', monospace; background: var(--bg-primary); padding: 1px 5px; border-radius: 4px; color: var(--text-muted); flex-shrink: 0; }
+.master-item.active .mi-vmid { background: var(--bg-secondary); }
+.mi-name { font-size: 13px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.mi-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.dot-run { background: #67c23a; box-shadow: 0 0 5px rgba(103, 194, 58, 0.5); }
+.dot-stop { background: #909399; }
+.dot-pause { background: #e6a23c; box-shadow: 0 0 5px rgba(230,162,60,0.5); }
+.mi-bottom { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-muted); }
+.mi-node { background: var(--bg-primary); padding: 1px 5px; border-radius: 3px; font-size: 11px; }
+.master-item.active .mi-node { background: var(--bg-secondary); }
+.mi-template { color: #e6a23c; font-weight: 500; font-size: 11px; }
+.mi-cpu { font-family: 'SF Mono', 'Menlo', monospace; font-size: 10px; }
+
+/* ========== 右侧详情 ========== */
+.detail-panel {
+  flex: 1; min-width: 0; min-height: 0;
+  background: var(--bg-primary);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  padding: 20px 24px;
+  gap: 16px;
+}
+
+/* 详情头部卡片 */
+.dp-header {
+  padding: 18px 22px;
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+.dp-title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.dp-vmid { font-size: 12px; font-family: 'SF Mono', 'Menlo', monospace; background: var(--bg-primary); padding: 2px 10px; border-radius: 6px; color: var(--text-muted); }
+.dp-name { font-size: 18px; font-weight: 700; color: var(--text-heading); margin: 0; }
+.dp-meta { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.dp-meta-item { font-size: 13px; color: var(--text-muted); background: var(--bg-primary); padding: 2px 10px; border-radius: 6px; }
+
+/* 资源概览卡片 */
+.dp-resources-card {
+  display: flex; align-items: stretch; gap: 12px;
+  padding: 16px 20px;
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+.res-item { flex: 1; display: flex; flex-direction: column; gap: 4px; padding: 8px 12px; background: var(--bg-primary); border-radius: 8px; min-width: 0; }
+.res-item-plain { justify-content: center; }
+.res-header { display: flex; align-items: center; justify-content: space-between; }
+.res-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.res-pct { font-size: 16px; font-weight: 700; color: var(--text-heading); line-height: 1; }
+.res-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.res-value { font-size: 18px; font-weight: 700; color: var(--text-heading); }
+.res-value-sm { font-size: 14px; }
+.res-item :deep(.el-progress) { width: 100%; }
+
+/* Tab — 整体卡片化 */
+.dp-tabs {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+}
+.dp-tabs :deep(.el-tabs__header) { margin: 0; padding: 0 8px; background: transparent; border-bottom: 1px solid var(--border-color); flex-shrink: 0; }
+.dp-tabs :deep(.el-tabs__nav-wrap::after) { display: none; }
+.dp-tabs :deep(.el-tabs__content) { padding: 0; flex: 1; min-height: 0; overflow-y: auto; }
+.dp-tabs :deep(.el-tab-pane) { min-height: 100%; }
+
+/* 信息区块 */
+.dp-section-card {
+  padding: 16px 22px;
+}
+
+/* KV 网格 */
+.dp-kv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
+.dp-kv { display: flex; align-items: center; padding: 8px 0; border-bottom: 1px dashed var(--border-color); }
+.dp-kv:last-child { border-bottom: none; }
+.dp-kv-label { font-size: 13px; color: var(--text-muted); min-width: 72px; flex-shrink: 0; }
+.dp-kv-val { font-size: 13px; color: var(--text-primary); word-break: break-all; }
 .mono { font-family: 'SF Mono', 'Menlo', monospace; font-size: 12px; }
-.device-list { display: flex; flex-direction: column; gap: 4px; }
-.device-chip { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--bg-secondary); border-radius: 8px; }
-.chip-tag { font-size: 12px; font-weight: 600; color: var(--color-primary); background: rgba(64, 158, 255, 0.1); padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
-.chip-body { font-size: 13px; font-weight: 500; color: var(--text-primary); }
-.chip-sub { font-size: 12px; color: var(--text-muted); }
-:deep(.el-table) { background: var(--el-card-bg-color); --el-table-bg-color: var(--el-card-bg-color); --el-table-tr-bg-color: var(--el-card-bg-color); --el-table-header-bg-color: var(--el-card-bg-color); --el-table-border-color: var(--border-color); --el-table-text-color: var(--text-primary); --el-table-header-text-color: var(--text-secondary); }
-:deep(.el-table::before) { display: none; }
-:deep(.el-table th.el-table__cell) { background-color: var(--el-card-bg-color); }
-:deep(.el-table--enable-row-hover .el-table__body tr:hover > td) { background-color: rgba(64, 158, 255, 0.05); }
-:deep(.el-tag--success) { --el-tag-bg-color: rgba(103, 194, 58, 0.15); --el-tag-text-color: #67c23a; --el-tag-border-color: transparent; }
-:deep(.el-tag--danger) { --el-tag-bg-color: rgba(245, 108, 108, 0.15); --el-tag-text-color: #f56c6c; --el-tag-border-color: transparent; }
-/* 固定列强制不透明背景 */
-:deep(.el-table__fixed td),
-:deep(.el-table__fixed-right td),
-:deep(.el-table .el-table-fixed-column--left),
-:deep(.el-table .el-table-fixed-column--right) {
-  background-color: var(--el-card-bg-color) !important;
+
+/* 设备列表 */
+.dp-devices { display: flex; flex-direction: column; gap: 8px; }
+.dp-device {
+  padding: 12px 16px; border-radius: 10px;
+  background: var(--bg-secondary); border: 1px solid var(--border-color);
+  transition: border-color .2s;
 }
-:deep(.el-table__fixed th),
-:deep(.el-table__fixed-right th) {
-  background-color: var(--el-card-bg-color) !important;
+.dp-device:hover { border-color: rgba(64, 158, 255, 0.3); }
+.dp-device-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.dp-device-tag {
+  font-size: 12px; font-weight: 600; color: var(--color-primary);
+  background: rgba(64, 158, 255, 0.1); padding: 2px 10px; border-radius: 6px; white-space: nowrap;
 }
-:deep(.el-tag--warning) { --el-tag-bg-color: rgba(230, 162, 60, 0.15); --el-tag-text-color: #e6a23c; --el-tag-border-color: transparent; }
+.dp-device-name { font-size: 13px; font-weight: 500; color: var(--text-primary); }
+.dp-device-sub { font-size: 12px; color: var(--text-muted); }
+.dp-device-raw { font-size: 12px; color: var(--text-muted); display: block; word-break: break-all; margin-top: 4px; font-family: 'SF Mono', 'Menlo', monospace; background: var(--bg-primary); padding: 6px 10px; border-radius: 6px; }
+.dp-device-meta { display: flex; gap: 16px; font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+
+/* 空状态 & 加载 */
+.dp-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--text-muted); font-size: 14px; }
+.dp-loading { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 60px; color: var(--text-secondary); font-size: 14px; }
+
+/* ========== 滚动条美化 ========== */
+.dp-tabs :deep(.el-tabs__content)::-webkit-scrollbar { width: 6px; }
+.dp-tabs :deep(.el-tabs__content)::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
+.dp-tabs :deep(.el-tabs__content)::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+.dp-tabs :deep(.el-tabs__content)::-webkit-scrollbar-track { background: transparent; }
+
+/* ========== 响应式 ========== */
+@media (max-width: 1200px) {
+  .master-panel { width: 240px; }
+  .dp-kv-grid { grid-template-columns: 1fr; }
+  .dp-resources-card { flex-wrap: wrap; }
+}
+@media (max-width: 768px) {
+  .page-top { flex-direction: column; align-items: flex-start; }
+  .master-detail { flex-direction: column; }
+  .master-panel { width: 100%; max-height: 260px; border-right: none; border-bottom: 1px solid var(--border-color); flex-shrink: 0; }
+  .dp-resources-card { flex-direction: column; }
+}
 </style>
