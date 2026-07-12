@@ -20,23 +20,37 @@
     </div>
 
     <div class="graph-container" v-loading="loading">
-      <div class="resource-selector-overlay">
-        <div class="selector-item">
-          <label class="selector-label">{{ t('smartAnalysis.dependencyMapping.resourceType') }}</label>
-          <el-select v-model="selectedResourceType" :placeholder="t('smartAnalysis.dependencyMapping.selectResourcePlaceholder')" @change="onResourceTypeChange" style="width: 150px" size="small" clearable>
-            <el-option :label="t('smartAnalysis.dependencyMapping.legendVM')" value="vm" />
-            <el-option :label="t('smartAnalysis.dependencyMapping.legendContainer')" value="container" />
-          </el-select>
+      <!-- 统一浮动面板：资源选择 + 详情 -->
+      <div class="unified-panel">
+        <div class="panel-section">
+          <div class="selector-item">
+            <label class="selector-label">{{ t('smartAnalysis.dependencyMapping.resourceType') }}</label>
+            <el-select v-model="selectedResourceType" :placeholder="t('smartAnalysis.dependencyMapping.selectResourcePlaceholder')" @change="onResourceTypeChange" style="width: 150px" size="small" clearable>
+              <el-option :label="t('smartAnalysis.dependencyMapping.legendVM')" value="vm" />
+              <el-option :label="t('smartAnalysis.dependencyMapping.legendContainer')" value="container" />
+            </el-select>
+          </div>
+          <div class="selector-item" v-if="selectedResourceType">
+            <label class="selector-label">{{ t('smartAnalysis.dependencyMapping.selectResource') }}</label>
+            <el-select v-model="selectedResourceId" :placeholder="t('smartAnalysis.dependencyMapping.selectResourcePlaceholder')" filterable clearable @change="onResourceChange" style="width: 220px" size="small">
+              <el-option v-for="item in resourceOptions" :key="item.id" :value="item.id" :label="`${item.name} (${item.vmid})`">
+                <span>{{ item.name }} ({{ item.vmid }})</span>
+                <span v-if="item.ha_enabled" style="margin-left: 6px; color: #f97316; font-size: 11px; font-weight: 600;">HA</span>
+              </el-option>
+            </el-select>
+          </div>
         </div>
-        <div class="selector-item" v-if="selectedResourceType">
-          <label class="selector-label">{{ t('smartAnalysis.dependencyMapping.selectResource') }}</label>
-          <el-select v-model="selectedResourceId" :placeholder="t('smartAnalysis.dependencyMapping.selectResourcePlaceholder')" filterable clearable @change="onResourceChange" style="width: 220px" size="small">
-            <el-option v-for="item in resourceOptions" :key="item.id" :value="item.id" :label="`${item.name} (${item.vmid})`">
-              <span>{{ item.name }} ({{ item.vmid }})</span>
-              <span v-if="item.ha_enabled" style="margin-left: 6px; color: #f97316; font-size: 11px; font-weight: 600;">HA</span>
-            </el-option>
-          </el-select>
-        </div>
+
+        <transition name="fade">
+           <div v-if="selectedNode" class="panel-detail">
+             <div class="detail-body">
+               <div class="detail-row" v-for="(value, key) in selectedNode.details" :key="key">
+                 <span class="detail-label">{{ key }}</span>
+                 <span class="detail-value">{{ value }}</span>
+               </div>
+             </div>
+           </div>
+         </transition>
       </div>
 
       <div v-if="!loading && !initDone" class="empty-state">
@@ -149,22 +163,6 @@
         </g>
       </svg>
     </div>
-
-    <!-- 详情面板 -->
-    <transition name="slide">
-      <div v-if="selectedNode" class="detail-panel">
-        <div class="detail-header">
-          <h3>{{ selectedNode.name }}</h3>
-          <button class="detail-close" @click="selectedNode = null">×</button>
-        </div>
-        <div class="detail-body">
-          <div class="detail-row" v-for="(value, key) in selectedNode.details" :key="key">
-            <span class="detail-label">{{ key }}</span>
-            <span class="detail-value">{{ value }}</span>
-          </div>
-        </div>
-      </div>
-    </transition>
 
     <!-- 图例 -->
     <div class="legend-bar">
@@ -283,7 +281,7 @@ const legendItems = computed(() => [
   { type: 'storage', label: t('smartAnalysis.dependencyMapping.legendStorage'), color: '#f56c6c' },
   { type: 'network', label: t('smartAnalysis.dependencyMapping.legendNetwork'), color: '#8b5cf6' },
   { type: 'ceph', label: t('smartAnalysis.dependencyMapping.legendCeph'), color: '#06b6d4' },
-  { type: 'ha', label: 'HA 故障转移', color: '#f97316', dashed: true },
+  { type: 'ha', label: 'HA 故障转移', color: '#f97316' },
   { type: 'sdn_zone', label: t('smartAnalysis.dependencyMapping.legendSDN'), color: '#ec4899' },
 ])
 
@@ -291,6 +289,11 @@ function toggleType(type: string) {
   const s = new Set(hiddenTypes.value)
   if (s.has(type)) s.delete(type); else s.add(type)
   hiddenTypes.value = s
+  // 重新布局以反映隐藏/显示状态
+  nextTick(() => {
+    layoutGraph()
+    fitView()
+  })
 }
 
 function getSubLabel(n: any): string {
@@ -303,6 +306,9 @@ function getSubLabel(n: any): string {
   if (n.type === 'network') return `${n.net_type || ''} ${n.address || ''}`
   if (n.type === 'ceph') return `${n.health || ''} ${n.total_osds || 0} OSD`
   if (n.type === 'ha') return `成员: ${n.member_count || '?'}`
+  if (n.type === 'sdn_zone') return `类型: ${n.zone_type || '?'}`
+  if (n.type === 'sdn_vnet') return `VLAN: ${n.vlan || '?'}`
+  if (n.type === 'sdn_subnet') return `网关: ${n.gateway || '?'}`
   return ''
 }
 
@@ -314,18 +320,18 @@ function truncatedName(node: HNode): string {
 
 function getLeafWidth(id: string): number {
   const lf = leafList.value.find(l => l.id === id)
-  return lf?.width ?? 170
+  return lf?.width ?? 180
 }
 function getLeafHeight(id: string): number {
   const lf = leafList.value.find(l => l.id === id)
-  return lf?.height ?? 48
+  return lf?.height ?? 52
 }
 
 // ─── 层次结构构建（纯算法，不涉及 DOM） ───
 const nodeSizes: Record<string, [number, number]> = {
-  cluster: [160, 56], node: [150, 52], vm: [170, 48], container: [170, 48],
-  storage: [170, 48], network: [170, 48], ceph: [150, 48], ha: [140, 44],
-  sdn_zone: [130, 44], sdn_vnet: [120, 40], sdn_subnet: [120, 40],
+  cluster: [180, 60], node: [160, 56], vm: [180, 52], container: [180, 52],
+  storage: [180, 52], network: [175, 52], ceph: [160, 52], ha: [150, 48],
+  sdn_zone: [140, 48], sdn_vnet: [130, 44], sdn_subnet: [130, 44],
 }
 
 function buildHierarchy(apiData: DependencyGraph) {
@@ -351,41 +357,41 @@ function buildHierarchy(apiData: DependencyGraph) {
     if (cluster) nodeMap.get(cluster.id)!.leafs.push(hNode)
   })
 
-  // 预计算每个 node 的尺寸
-  const pad = 28, childW = 170, childH = 48, gap = 16, netW = 160
+  // 预计算每个 node 的尺寸（增大间距和内边距）
+  const pad = 36, childW = 180, childH = 52, gap = 22, netW = 175
   nodes.forEach(node => {
     const vms = node.leafs.filter(c => ['vm', 'container'].includes(c.type))
     const nets = node.leafs.filter(c => c.type === 'network')
     const stors = node.leafs.filter(c => c.type === 'storage')
     if (vms.length === 0 && nets.length === 0 && stors.length === 0) {
-      node.width = 180; node.height = 64; return
+      node.width = 200; node.height = 70; return
     }
-    const cols = Math.max(1, Math.min(vms.length, 3))
+    const cols = Math.max(1, Math.min(vms.length, 5))
     const vmRows = Math.ceil(vms.length / cols)
     const vmAreaW = cols * (childW + gap) - gap
     const vmAreaH = vmRows * (childH + gap) - gap
     const netAreaW = nets.length > 0 ? netW + gap : 0
     const storRowH = stors.length > 0 ? childH + gap : 0
-    node.width = Math.max(pad * 2 + vmAreaW + netAreaW, pad * 2 + stors.length * (childW + gap) - gap, 180)
-    node.height = pad + 28 + 12 + vmAreaH + storRowH + pad
+    node.width = Math.max(pad * 2 + vmAreaW + netAreaW, pad * 2 + stors.length * (childW + gap) - gap, 200)
+    node.height = pad + 32 + 16 + vmAreaH + storRowH + pad
   })
 
-  // 预计算 cluster 尺寸
+  // 预计算 cluster 尺寸（增大外边距）
   let clusterW: number, clusterH: number
   if (nodes.length === 1) {
     const n = nodes[0]
-    clusterW = n.width + pad * 2 + 40
-    clusterH = n.height + pad * 2 + 60 + 40
+    clusterW = n.width + pad * 2 + 60
+    clusterH = n.height + pad * 2 + 80 + 50
   } else {
     const maxW = Math.max(...nodes.map(n => n.width))
-    const gap2 = 40
+    const gap2 = 50
     clusterW = maxW + pad * 2 + gap2 * 2
-    clusterH = nodes.reduce((s, n) => s + n.height + gap2, 0) + 80
+    clusterH = nodes.reduce((s, n) => s + n.height + gap2, 0) + 100
   }
 
   const clusterHNode = nodeMap.get(cluster.id)!
-  clusterHNode.width = Math.max(clusterW, 300)
-  clusterHNode.height = Math.max(clusterH, 200)
+  clusterHNode.width = Math.max(clusterW, 350)
+  clusterHNode.height = Math.max(clusterH, 250)
 
   clusterNode.value = clusterHNode
   pveNodes.value = nodes
@@ -449,7 +455,7 @@ function layoutGraph() {
   const svgW = container.clientWidth
   const svgH = container.clientHeight
   const cx = svgW / 2, cy = svgH / 2
-  const pad = 28, childW = 170, childH = 48, gap = 16, netW = 160
+  const pad = 36, childW = 180, childH = 52, gap = 22, netW = 175
 
   // 初始化 positions
   positions[clusterNode.value.id] = {
@@ -459,27 +465,27 @@ function layoutGraph() {
     h: clusterNode.value.height,
   }
 
-  let ny = positions[clusterNode.value.id].y + pad + 36
+  let ny = positions[clusterNode.value.id].y + pad + 42
   pveNodes.value.forEach(nd => {
     const npX = positions[clusterNode.value.id].x + (positions[clusterNode.value.id].w - nd.width) / 2
     const npY = ny
     positions[nd.id] = { x: npX, y: npY, w: nd.width, h: nd.height }
-    ny += nd.height + 30
+    ny += nd.height + 40
 
     // 布局子节点
     const vms = nd.leafs.filter(c => ['vm', 'container'].includes(c.type))
     const nets = nd.leafs.filter(c => c.type === 'network')
     const stors = nd.leafs.filter(c => c.type === 'storage')
     const innerX = npX + pad
-    const innerY = npY + pad + 32
+    const innerY = npY + pad + 36
     const innerW = nd.width - pad * 2
-    const innerH = nd.height - pad * 2 - 32
+    const innerH = nd.height - pad * 2 - 36
 
     // 网络（右侧列）
-    let netX = npX + nd.width - pad - netW / 2 - 10
+    let netX = npX + nd.width - pad - netW / 2 - 12
     nets.forEach((n, i) => {
       positions[n.id] = {
-        x: netX, y: innerY + innerH / 2 + (i - (nets.length - 1) / 2) * (childH + 10),
+        x: netX, y: innerY + innerH / 2 + (i - (nets.length - 1) / 2) * (childH + 14),
         w: n.width, h: n.height,
       }
     })
@@ -496,9 +502,9 @@ function layoutGraph() {
       }
     })
 
-    // VM/容器（网格）
+    // VM/容器（网格，最多5列）
     vms.forEach(vm => {
-      const cols = Math.max(1, Math.min(vms.length, 3))
+      const cols = Math.max(1, Math.min(vms.length, 5))
       const idx = vms.indexOf(vm)
       const row = Math.floor(idx / cols), col = idx % cols
       const vmAreaW = cols * (childW + gap) - gap
@@ -513,7 +519,7 @@ function layoutGraph() {
     // 力模拟碰撞避免
     if (vms.length > 1) {
       const sim = forceSimulation<HNode>(vms)
-        .force('collision', forceCollide<HNode>().radius(() => Math.max(childW, childH) * 0.55).strength(0.8))
+        .force('collision', forceCollide<HNode>().radius(() => Math.max(childW, childH) * 0.6).strength(0.8))
         .force('x', forceX<HNode>(d => d.x!).strength(0.6))
         .force('y', forceY<HNode>(d => d.y!).strength(0.6))
         .stop()
@@ -550,28 +556,28 @@ function layoutGraph() {
       const vms = targetNd.leafs.filter(c => ['vm', 'container'].includes(c.type))
       const nets = targetNd.leafs.filter(c => c.type === 'network')
       const stors = targetNd.leafs.filter(c => c.type === 'storage')
-      const cols = Math.max(1, Math.min(vms.length, 3))
+      const cols = Math.max(1, Math.min(vms.length, 5))
       const vmRows = Math.ceil(vms.length / cols)
       const vmAreaW = cols * (childW + gap) - gap
       const vmAreaH = vmRows * (childH + gap) - gap
       const netAreaW = nets.length > 0 ? netW + gap : 0
       const storRowH = stors.length > 0 ? childH + gap : 0
-      targetNd.width = Math.max(pad * 2 + vmAreaW + netAreaW, pad * 2 + stors.length * (childW + gap) - gap, 180)
-      targetNd.height = Math.max(pad + 28 + 12 + vmAreaH + storRowH + pad, 64)
+      targetNd.width = Math.max(pad * 2 + vmAreaW + netAreaW, pad * 2 + stors.length * (childW + gap) - gap, 200)
+      targetNd.height = Math.max(pad + 32 + 16 + vmAreaH + storRowH + pad, 70)
       // 更新节点位置
       const np = positions[targetNd.id]
       np.w = targetNd.width
       np.h = targetNd.height
       // 重新布局该节点的子节点
       const innerX = np.x + pad
-      const innerY = np.y + pad + 32
+      const innerY = np.y + pad + 36
       const innerW = np.width - pad * 2
-      const innerH = np.height - pad * 2 - 32
+      const innerH = np.height - pad * 2 - 36
       // 网络（右侧列）
-      let netX = np.x + np.width - pad - netW / 2 - 10
+      let netX = np.x + np.width - pad - netW / 2 - 12
       nets.forEach((n, i) => {
         positions[n.id] = {
-          x: netX, y: innerY + innerH / 2 + (i - (nets.length - 1) / 2) * (childH + 10),
+          x: netX, y: innerY + innerH / 2 + (i - (nets.length - 1) / 2) * (childH + 14),
           w: n.width, h: n.height,
         }
       })
@@ -586,7 +592,7 @@ function layoutGraph() {
           w: s.width, h: s.height,
         }
       })
-      // VM/容器（网格）
+      // VM/容器（网格，最多5列）
       vms.forEach(vm => {
         const idx = vms.indexOf(vm)
         const row = Math.floor(idx / cols), col = idx % cols
@@ -610,9 +616,9 @@ function layoutGraph() {
 }
 
 // ─── 碰撞检测与约束算法 ───
-const LABEL_AREA_H = 40
-const INNER_PAD = 28
-const TITLE_H = 36
+const LABEL_AREA_H = 44
+const INNER_PAD = 36
+const TITLE_H = 42
 
 function rectsOverlap(ax: number, ay: number, aw: number, ah: number, bx: number, by: number, bw: number, bh: number) {
   return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by
@@ -622,7 +628,7 @@ function recalcParent(nodeId: string) {
   const np = getPos(nodeId)
   const childIds = childMap.value.get(nodeId) || []
   if (!np || childIds.length === 0) return
-  const edgePad = 20
+  const edgePad = 26
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
   childIds.forEach(cid => {
     const cp = getPos(cid)
@@ -951,11 +957,13 @@ function fitView() {
   const pad = 60
   const contentW = maxX - minX + pad * 2
   const contentH = maxY - minY + pad * 2
-  const k = Math.min(rect.width / contentW, rect.height / contentH, 2)
+  // 确保图不超出画布，使用更保守的缩放
+  const k = Math.min(rect.width / contentW, rect.height / contentH, 1.2)
   const centerX = (minX + maxX) / 2
   const centerY = (minY + maxY) / 2
   scale.value = Math.max(minScale, Math.min(maxScale, k))
-  panX.value = rect.width / 2 - centerX * scale.value
+  // 偏右显示，留出左侧空间给选择器和详情面板
+  panX.value = rect.width * 0.6 - centerX * scale.value
   panY.value = rect.height / 2 - centerY * scale.value
 }
 
@@ -988,15 +996,44 @@ function onResourceChange() {
   loadData()
 }
 
-/** 平移视图使指定叶子节点居中显示 */
+/** 平移视图使指定叶子节点居中显示，并调整缩放以展示上下文 */
 function panToLeaf(leafId: string) {
   const pos = getPos(leafId)
   if (!pos || !svgRef.value) return
   const rect = svgRef.value.getBoundingClientRect()
-  const cx = rect.width / 2
-  const cy = rect.height / 2
-  panX.value = cx - pos.x * scale.value
-  panY.value = cy - pos.y * scale.value
+  
+  // 计算包含该叶子节点及其父节点的包围盒
+  const parentId = nodeParentMap.value.get(leafId)
+  const parentPos = parentId ? getPos(parentId) : null
+  
+  let minX = pos.x - pos.w / 2
+  let minY = pos.y - pos.h / 2
+  let maxX = pos.x + pos.w / 2
+  let maxY = pos.y + pos.h / 2
+  
+  // 如果有父节点，扩展包围盒以包含父节点
+  if (parentPos) {
+    minX = Math.min(minX, parentPos.x - parentPos.w / 2)
+    minY = Math.min(minY, parentPos.y - parentPos.h / 2)
+    maxX = Math.max(maxX, parentPos.x + parentPos.w / 2)
+    maxY = Math.max(maxY, parentPos.y + parentPos.h / 2)
+  }
+  
+  const contentW = maxX - minX
+  const contentH = maxY - minY
+  
+  // 目标：占画布70%的宽或高
+  const targetW = rect.width * 0.7
+  const targetH = rect.height * 0.7
+  const k = Math.min(targetW / contentW, targetH / contentH, 1.2)
+  
+  scale.value = Math.max(minScale, Math.min(maxScale, k))
+  
+  const centerX = (minX + maxX) / 2
+  const centerY = (minY + maxY) / 2
+  // 居中显示
+  panX.value = rect.width / 2 - centerX * scale.value
+  panY.value = rect.height / 2 - centerY * scale.value
 }
 
 async function loadResourceLists() {
@@ -1045,6 +1082,8 @@ async function loadData() {
       const leaf = leafList.value[0]
       if (leaf) {
         highlightedLeafId.value = leaf.id
+        // 延迟一帧再调整视图，确保布局已生效
+        await nextTick()
         panToLeaf(leaf.id)
       }
     } else {
@@ -1099,9 +1138,11 @@ watch(() => clusterStore.currentClusterId, async () => {
 .toolbar-btn-text:active { transform: scale(0.92); }
 
 .graph-container { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; position: relative; }
-.resource-selector-overlay { position: absolute; top: 12px; left: 12px; z-index: 10; display: flex; flex-direction: column; gap: 8px; background: var(--bg-card, #fff); border: 1px solid var(--border-color, #e4e7ed); border-radius: 10px; padding: 10px 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
-.resource-selector-overlay .selector-item { display: flex; align-items: center; gap: 8px; }
-.resource-selector-overlay .selector-label { font-size: 12px; color: var(--text-secondary, #606266); white-space: nowrap; min-width: 56px; text-align: right; }
+.unified-panel { position: absolute; top: 12px; left: 12px; z-index: 10; display: flex; flex-direction: column; gap: 10px; background: var(--bg-card, #fff); border: 1px solid var(--border-color, #e4e7ed); border-radius: 10px; padding: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); max-width: 320px; }
+.panel-section { display: flex; flex-direction: column; gap: 8px; }
+.panel-section .selector-item { display: flex; align-items: center; gap: 8px; }
+.panel-section .selector-label { font-size: 12px; color: var(--text-secondary, #606266); white-space: nowrap; min-width: 56px; text-align: right; }
+.panel-detail { border-top: 1px solid var(--border-color, #e4e7ed); padding-top: 10px; }
 .empty-state { display: flex; align-items: center; justify-content: center; flex: 1; }
 .graph-svg { display: block; width: 100%; flex: 1; min-height: 0; cursor: grab; }
 .graph-svg:active { cursor: grabbing; }
@@ -1129,17 +1170,16 @@ watch(() => clusterStore.currentClusterId, async () => {
 .legend-item:hover { background: rgba(64,158,255,0.06); }
 .legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
 
-/* 详情面板 */
-.detail-panel { position: absolute; right: 20px; top: 80px; width: 240px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 100; }
-.detail-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border-color); }
-.detail-header h3 { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.detail-close { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border: none; background: transparent; color: var(--text-muted); font-size: 18px; cursor: pointer; border-radius: 6px; transition: all 0.2s; }
-.detail-close:hover { background: rgba(245,108,108,0.1); color: #f56c6c; }
-.detail-body { padding: 12px 14px; }
-.detail-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px dashed var(--border-color); }
-.detail-row:last-child { border-bottom: none; }
-.detail-label { font-size: 13px; color: var(--text-muted); }
-.detail-value { font-size: 13px; color: var(--text-primary); font-weight: 500; }
-.slide-enter-active, .slide-leave-active { transition: all 0.3s ease; }
-.slide-enter-from, .slide-leave-to { transform: translateX(20px); opacity: 0; }
+/* 详情面板（统一面板内） */
+.panel-detail .detail-header { display: flex; align-items: center; justify-content: space-between; padding: 0 0 8px; }
+.panel-detail .detail-header h3 { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.panel-detail .detail-close { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border: none; background: transparent; color: var(--text-muted); font-size: 16px; cursor: pointer; border-radius: 6px; transition: all 0.2s; }
+.panel-detail .detail-close:hover { background: rgba(245,108,108,0.1); color: #f56c6c; }
+.panel-detail .detail-body { padding: 0; }
+.panel-detail .detail-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px dashed var(--border-color); }
+.panel-detail .detail-row:last-child { border-bottom: none; }
+.panel-detail .detail-label { font-size: 12px; color: var(--text-muted); }
+.panel-detail .detail-value { font-size: 12px; color: var(--text-primary); font-weight: 500; }
+.fade-enter-active, .fade-leave-active { transition: all 0.3s ease; }
+.fade-enter-from, .fade-leave-to { opacity: 0; transform: translateY(-10px); }
 </style>
