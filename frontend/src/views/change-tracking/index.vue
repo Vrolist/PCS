@@ -67,6 +67,8 @@
             <el-checkbox-button value="memory">内存</el-checkbox-button>
             <el-checkbox-button value="cpu">CPU</el-checkbox-button>
             <el-checkbox-button value="storage">存储池</el-checkbox-button>
+            <el-checkbox-button value="storage_added">存储增加</el-checkbox-button>
+            <el-checkbox-button value="storage_removed">存储移除</el-checkbox-button>
             <el-checkbox-button value="network">网络</el-checkbox-button>
             <el-checkbox-button value="node_added">节点增加</el-checkbox-button>
             <el-checkbox-button value="node_removed">节点移除</el-checkbox-button>
@@ -157,7 +159,8 @@ function severityLabel(severity: string) {
 function changeTagType(type: string) {
   const map: Record<string, string> = {
     disk: 'success', memory: 'primary', cpu: 'warning',
-    storage: 'success', network: 'info',
+    storage: 'success', storage_added: 'success', storage_removed: 'danger',
+    network: 'info',
     node_added: 'success', node_removed: 'danger',
     vm_count: 'primary', container_count: 'primary',
   }
@@ -167,7 +170,8 @@ function changeTagType(type: string) {
 function changeTypeLabel(type: string) {
   const map: Record<string, string> = {
     disk: '磁盘', memory: '内存', cpu: 'CPU',
-    storage: '存储池', network: '网络',
+    storage: '存储池', storage_added: '存储增加', storage_removed: '存储移除',
+    network: '网络',
     node_added: '节点增加', node_removed: '节点移除',
     vm_count: '虚拟机', container_count: '容器',
   }
