@@ -1,11 +1,14 @@
+from datetime import timedelta
+
 from django.db.models import Max, Q
+from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.clusters.models import Cluster
 from .models import (ClusterNode, VM, LXC, VMConfig, LXCConfig, VMSnapshot, HAResource,
-                     Storage, NetworkInterface, CephStatus, SDNZone, SDNVNet, SDNSubnet,
+                     Storage, NetworkInterface, CephStatus, ScanHistory, SDNZone, SDNVNet, SDNSubnet,
                      BackupStorage, BackupJob, BackupHistory, ReplicationJob,
                      FirewallOptions, FirewallRule, FirewallIPSet, FirewallIPSetEntry, FirewallAlias)
 
@@ -1976,3 +1979,259 @@ class DependencyGraphView(APIView):
                 })
 
         return Response({"nodes": nodes_list, "edges": edges_list})
+
+
+
+class ChangeTrackingView(APIView):
+    """变更追踪 API — 对比相邻扫描记录，检测硬件/存储/网络/节点变化"""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        cluster_id = request.query_params.get("cluster_id")
+        days = int(request.query_params.get("days", 7))
+
+        if not cluster_id:
+            return Response({"error": "cluster_id is required"}, status=400)
+
+        cutoff = timezone.now() - timedelta(days=days)
+        changes: list[dict] = []
+
+        # 1. 节点硬件变更（内存/根分区/CPU）
+        self._detect_node_changes(cluster_id, cutoff, changes)
+
+        # 2. 存储变更（存储池增减/容量变化）
+        self._detect_storage_changes(cluster_id, cutoff, changes)
+
+        # 3. 网络接口变更（网卡增减/IP变化）
+        self._detect_network_changes(cluster_id, cutoff, changes)
+
+        # 4. 节点增减
+        self._detect_node_membership_changes(cluster_id, cutoff, changes)
+
+        # 5. VM/LXC 数量变化（基于 ScanHistory）
+        self._detect_vm_count_changes(cluster_id, cutoff, changes)
+
+        # 按时间倒序排列
+        changes.sort(key=lambda x: x["detected_at"], reverse=True)
+
+        return Response({"changes": changes, "total": len(changes)})
+
+    def _detect_node_changes(self, cluster_id, cutoff, changes):
+        """检测节点内存/根分区/CPU 核心数变化"""
+        nodes = (
+            ClusterNode.objects.filter(cluster_id=cluster_id, scanned_at__gte=cutoff)
+            .order_by("node_name", "scanned_at")
+        )
+
+        grouped: dict[str, list] = {}
+        for n in nodes:
+            grouped.setdefault(n.node_name, []).append(n)
+
+        for node_name, records in grouped.items():
+            if len(records) < 2:
+                continue
+            prev, curr = records[-2], records[-1]
+
+            # 内存变化（MB → GB 显示）
+            if prev.memory_total_mb != curr.memory_total_mb:
+                delta = curr.memory_total_mb - prev.memory_total_mb
+                changes.append({
+                    "type": "memory",
+                    "severity": "info",
+                    "node": node_name,
+                    "title": f"节点 {node_name} 内存{'增加' if delta > 0 else '减少'}",
+                    "detail": f"{prev.memory_total_mb} MB → {curr.memory_total_mb} MB ({'+' if delta > 0 else ''}{delta} MB)",
+                    "old_value": prev.memory_total_mb,
+                    "new_value": curr.memory_total_mb,
+                    "unit": "MB",
+                    "detected_at": curr.scanned_at.isoformat(),
+                })
+
+            # 根分区变化
+            if prev.rootfs_total_gb != curr.rootfs_total_gb:
+                delta = round(curr.rootfs_total_gb - prev.rootfs_total_gb, 2)
+                changes.append({
+                    "type": "disk",
+                    "severity": "info",
+                    "node": node_name,
+                    "title": f"节点 {node_name} 根分区{'扩容' if delta > 0 else '缩减'}",
+                    "detail": f"{prev.rootfs_total_gb} GB → {curr.rootfs_total_gb} GB ({'+' if delta > 0 else ''}{delta} GB)",
+                    "old_value": prev.rootfs_total_gb,
+                    "new_value": curr.rootfs_total_gb,
+                    "unit": "GB",
+                    "detected_at": curr.scanned_at.isoformat(),
+                })
+
+            # CPU 核心数变化
+            if prev.cpu_cores != curr.cpu_cores:
+                changes.append({
+                    "type": "cpu",
+                    "severity": "warning",
+                    "node": node_name,
+                    "title": f"节点 {node_name} CPU 核心数变化",
+                    "detail": f"{prev.cpu_cores} 核 → {curr.cpu_cores} 核",
+                    "old_value": prev.cpu_cores,
+                    "new_value": curr.cpu_cores,
+                    "unit": "核",
+                    "detected_at": curr.scanned_at.isoformat(),
+                })
+
+    def _detect_storage_changes(self, cluster_id, cutoff, changes):
+        """检测存储池增减和容量变化"""
+        storages = (
+            Storage.objects.filter(node__cluster_id=cluster_id, scanned_at__gte=cutoff)
+            .order_by("storage_name", "scanned_at")
+        )
+
+        # 按存储名 + 节点分组
+        grouped: dict[str, list] = {}
+        for s in storages:
+            key = f"{s.node.node_name}:{s.storage_name}"
+            grouped.setdefault(key, []).append(s)
+
+        for key, records in grouped.items():
+            if len(records) < 2:
+                continue
+            prev, curr = records[-2], records[-1]
+            node_name = curr.node.node_name
+
+            if prev.total_gb != curr.total_gb:
+                delta = round(curr.total_gb - prev.total_gb, 2)
+                changes.append({
+                    "type": "storage",
+                    "severity": "info",
+                    "node": node_name,
+                    "title": f"存储 {curr.storage_name} 容量{'增加' if delta > 0 else '减少'}",
+                    "detail": f"{prev.total_gb} GB → {curr.total_gb} GB ({'+' if delta > 0 else ''}{delta} GB)",
+                    "old_value": prev.total_gb,
+                    "new_value": curr.total_gb,
+                    "unit": "GB",
+                    "detected_at": curr.scanned_at.isoformat(),
+                })
+
+    def _detect_network_changes(self, cluster_id, cutoff, changes):
+        """检测网卡增减和 IP 变化"""
+        nets = (
+            NetworkInterface.objects.filter(node__cluster_id=cluster_id, scanned_at__gte=cutoff)
+            .order_by("name", "scanned_at")
+        )
+
+        grouped: dict[str, list] = {}
+        for n in nets:
+            key = f"{n.node.node_name}:{n.name}"
+            grouped.setdefault(key, []).append(n)
+
+        for key, records in grouped.items():
+            if len(records) < 2:
+                continue
+            prev, curr = records[-2], records[-1]
+            node_name = curr.node.node_name
+
+            if prev.address != curr.address:
+                changes.append({
+                    "type": "network",
+                    "severity": "warning",
+                    "node": node_name,
+                    "title": f"网卡 {curr.name} IP 变化",
+                    "detail": f"{prev.address or '无'} → {curr.address or '无'}",
+                    "old_value": prev.address or "",
+                    "new_value": curr.address or "",
+                    "unit": "",
+                    "detected_at": curr.scanned_at.isoformat(),
+                })
+
+    def _detect_node_membership_changes(self, cluster_id, cutoff, changes):
+        """检测节点增减"""
+        all_names = set(
+            ClusterNode.objects.filter(cluster_id=cluster_id)
+            .values_list("node_name", flat=True)
+            .distinct()
+        )
+        old_names = set(
+            ClusterNode.objects.filter(cluster_id=cluster_id, scanned_at__lt=cutoff)
+            .values_list("node_name", flat=True)
+            .distinct()
+        )
+
+        # 新增节点
+        for name in all_names - old_names:
+            first = ClusterNode.objects.filter(
+                cluster_id=cluster_id, node_name=name
+            ).order_by("scanned_at").first()
+            if first:
+                changes.append({
+                    "type": "node_added",
+                    "severity": "info",
+                    "node": name,
+                    "title": f"新增节点 {name}",
+                    "detail": f"内存 {first.memory_total_mb} MB, 根分区 {first.rootfs_total_gb} GB",
+                    "old_value": "",
+                    "new_value": name,
+                    "unit": "",
+                    "detected_at": first.scanned_at.isoformat(),
+                })
+
+        # 移除节点
+        for name in old_names - all_names:
+            last = ClusterNode.objects.filter(
+                cluster_id=cluster_id, node_name=name
+            ).order_by("-scanned_at").first()
+            if last:
+                changes.append({
+                    "type": "node_removed",
+                    "severity": "critical",
+                    "node": name,
+                    "title": f"节点 {name} 已移除",
+                    "detail": f"最后在线时间: {last.scanned_at.strftime('%Y-%m-%d %H:%M')}",
+                    "old_value": name,
+                    "new_value": "",
+                    "unit": "",
+                    "detected_at": last.scanned_at.isoformat(),
+                })
+
+    def _detect_vm_count_changes(self, cluster_id, cutoff, changes):
+        """基于 ScanHistory.snapshot_data 检测 VM/LXC 数量变化"""
+        histories = (
+            ScanHistory.objects.filter(cluster_id=cluster_id, scanned_at__gte=cutoff)
+            .order_by("scanned_at")
+        )
+
+        if histories.count() < 2:
+            return
+
+        prev, curr = histories.first(), histories.last()
+        prev_data = prev.snapshot_data or {}
+        curr_data = curr.snapshot_data or {}
+
+        prev_vms = prev_data.get("total_vms", 0)
+        curr_vms = curr_data.get("total_vms", 0)
+        if prev_vms != curr_vms:
+            delta = curr_vms - prev_vms
+            changes.append({
+                "type": "vm_count",
+                "severity": "info" if delta > 0 else "warning",
+                "node": "",
+                "title": f"虚拟机数量{'增加' if delta > 0 else '减少'}",
+                "detail": f"{prev_vms} 台 → {curr_vms} 台 ({'+' if delta > 0 else ''}{delta})",
+                "old_value": prev_vms,
+                "new_value": curr_vms,
+                "unit": "台",
+                "detected_at": curr.scanned_at.isoformat(),
+            })
+
+        prev_ct = prev_data.get("total_containers", 0)
+        curr_ct = curr_data.get("total_containers", 0)
+        if prev_ct != curr_ct:
+            delta = curr_ct - prev_ct
+            changes.append({
+                "type": "container_count",
+                "severity": "info" if delta > 0 else "warning",
+                "node": "",
+                "title": f"容器数量{'增加' if delta > 0 else '减少'}",
+                "detail": f"{prev_ct} 个 → {curr_ct} 个 ({'+' if delta > 0 else ''}{delta})",
+                "old_value": prev_ct,
+                "new_value": curr_ct,
+                "unit": "个",
+                "detected_at": curr.scanned_at.isoformat(),
+            })
