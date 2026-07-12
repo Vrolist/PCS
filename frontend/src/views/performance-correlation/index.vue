@@ -87,7 +87,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import * as echarts from 'echarts'
 import VChart from 'vue-echarts'
@@ -164,15 +164,20 @@ function setupObserver() {
 
 onMounted(() => {
   loadData()
-  // nextTick 后 observe（DOM 已渲染）
-  setTimeout(setupObserver, 100)
 })
 
 onUnmounted(() => {
   observer?.disconnect()
 })
 
-watch(() => clusterStore.currentClusterId, loadData)
+watch(() => clusterStore.currentClusterId, () => { scatterVisible.value = false; storageVisible.value = false; loadData() })
+
+// 数据加载完成后，DOM 渲染完毕，再设置 observer
+watch(loading, (val) => {
+  if (!val) {
+    nextTick(setupObserver)
+  }
+})
 
 // ── 1. 节点多指标趋势图 ──
 const nodeTrendOption = computed(() => {
