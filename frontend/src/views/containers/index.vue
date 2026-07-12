@@ -394,10 +394,10 @@ function fmtUptime(s: number) {
 
 /* ========== 右侧详情 ========== */
 .detail-panel {
-  flex: 1; min-width: 0;
+  flex: 1; min-width: 0; min-height: 0;
   background: var(--bg-primary);
   display: flex; flex-direction: column;
-  overflow-y: auto;
+  overflow: hidden;
   padding: 20px 24px;
   gap: 16px;
 }
@@ -408,6 +408,7 @@ function fmtUptime(s: number) {
   background: var(--bg-secondary);
   border-radius: 12px;
   border: 1px solid var(--border-color);
+  flex-shrink: 0;
 }
 .dp-title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .dp-vmid { font-size: 12px; font-family: 'SF Mono', 'Menlo', monospace; background: var(--bg-primary); padding: 2px 10px; border-radius: 6px; color: var(--text-muted); }
@@ -423,6 +424,7 @@ function fmtUptime(s: number) {
   background: var(--bg-secondary);
   border-radius: 12px;
   border: 1px solid var(--border-color);
+  flex-shrink: 0;
 }
 .res-item { flex: 1; display: flex; flex-direction: column; gap: 4px; padding: 8px 12px; background: var(--bg-primary); border-radius: 8px; min-width: 0; }
 .res-item-plain { justify-content: center; }
@@ -436,22 +438,21 @@ function fmtUptime(s: number) {
 /* Tab — 整体卡片化 */
 .dp-tabs {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   background: var(--bg-secondary);
   border-radius: 12px;
   border: 1px solid var(--border-color);
   overflow: hidden;
 }
-.dp-tabs :deep(.el-tabs__header) { margin: 0; padding: 0 8px; background: transparent; border-bottom: 1px solid var(--border-color); }
+.dp-tabs :deep(.el-tabs__header) { margin: 0; padding: 0 8px; background: transparent; border-bottom: 1px solid var(--border-color); flex-shrink: 0; }
 .dp-tabs :deep(.el-tabs__nav-wrap::after) { display: none; }
-.dp-tabs :deep(.el-tabs__content) { padding: 0; }
-.dp-tabs :deep(.el-tab-pane) { min-height: 120px; }
+.dp-tabs :deep(.el-tabs__content) { padding: 0; flex: 1; min-height: 0; overflow-y: auto; }
+.dp-tabs :deep(.el-tab-pane) { min-height: 100%; }
 
-/* 信息区块卡片 */
+/* 信息区块（Tab 内容区） */
 .dp-section-card {
-  background: var(--bg-secondary);
-  border-radius: 0 0 12px 12px;
-  border: 1px solid var(--border-color);
-  border-top: none;
   padding: 16px 22px;
 }
 
@@ -486,14 +487,10 @@ function fmtUptime(s: number) {
 .dp-loading { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 60px; color: var(--text-secondary); font-size: 14px; }
 
 /* ========== 滚动条美化 ========== */
-.master-panel::-webkit-scrollbar,
-.detail-panel::-webkit-scrollbar { width: 6px; }
-.master-panel::-webkit-scrollbar-thumb,
-.detail-panel::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
-.master-panel::-webkit-scrollbar-thumb:hover,
-.detail-panel::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
-.master-panel::-webkit-scrollbar-track,
-.detail-panel::-webkit-scrollbar-track { background: transparent; }
+.dp-tabs :deep(.el-tabs__content)::-webkit-scrollbar { width: 6px; }
+.dp-tabs :deep(.el-tabs__content)::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
+.dp-tabs :deep(.el-tabs__content)::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+.dp-tabs :deep(.el-tabs__content)::-webkit-scrollbar-track { background: transparent; }
 
 /* ========== 响应式 ========== */
 @media (max-width: 1200px) {
