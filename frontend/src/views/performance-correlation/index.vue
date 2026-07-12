@@ -6,10 +6,6 @@
         <p class="page-desc">{{ t('smartAnalysis.performanceCorrelation.subtitle') }}</p>
       </div>
       <div class="header-controls">
-        <el-select v-model="selectedNode" size="default" clearable :placeholder="t('smartAnalysis.performanceCorrelation.selectNode')" style="width: 180px">
-          <el-option :label="t('smartAnalysis.performanceCorrelation.allNodes')" value="" />
-          <el-option v-for="n in nodeNames" :key="n" :label="n" :value="n" />
-        </el-select>
         <el-select v-model="timeRange" size="default" style="width: 130px" @change="loadData">
           <el-option :label="t('smartAnalysis.performanceCorrelation.last7Days')" :value="7" />
           <el-option :label="t('smartAnalysis.performanceCorrelation.last15Days')" :value="15" />
@@ -73,7 +69,6 @@ const clusterStore = useClusterStore()
 
 const loading = ref(false)
 const timeRange = ref(7)
-const selectedNode = ref('')
 const activeTab = ref('trend')
 const rawData = ref<CorrelationData>({ node_trends: [], current: [], correlation_matrix: [] })
 
@@ -93,13 +88,6 @@ const tooltipStyle = computed(() => ({
 
 const NODE_COLORS = ['#409eff', '#8b5cf6', '#f59e0b', '#10b981', '#ef4444', '#06b6d4', '#ec4899', '#84cc16']
 
-const nodeNames = computed(() => rawData.value.node_trends.map(n => n.node_name))
-
-const filteredTrends = computed(() => {
-  if (!selectedNode.value) return rawData.value.node_trends
-  return rawData.value.node_trends.filter(n => n.node_name === selectedNode.value)
-})
-
 async function loadData() {
   const clusterId = clusterStore.currentClusterId || undefined
   loading.value = true
@@ -115,32 +103,70 @@ async function loadData() {
 onMounted(loadData)
 watch(() => clusterStore.currentClusterId, loadData)
 
-// ── 1. 节点多指标趋势图（固定 3 条线，多节点取平均）──
+// ── 1. 节点多指标趋势图（每节点一色，同色三线型，legend 只显示节点名）──
 const nodeTrendOption = computed(() => {
-  const trends = filteredTrends.value
+  const trends = rawData.value.node_trends
   if (!trends.length) return {}
 
   const allTs = [...new Set(trends.flatMap(t => t.timestamps))].sort()
+  const series: any[] = []
 
-  // 多节点时按时间戳聚合取平均
-  function avgAlign(key: 'cpu_load' | 'memory_usage_pct' | 'disk_io_delay_ms'): (number | null)[] {
-    return allTs.map(ts => {
-      let sum = 0, cnt = 0
-      for (const node of trends) {
-        const idx = node.timestamps.indexOf(ts)
-        if (idx >= 0 && node[key]) { sum += node[key]![idx]!; cnt++ }
-      }
-      return cnt > 0 ? Math.round(sum / cnt * 100) / 100 : null
+  trends.forEach((node, ni) => {
+    const color = NODE_COLORS[ni % NODE_COLORS.length]
+    const name = node.node_name
+    // 用 node name 作为 legend 项，CPU 线显示在 legend 中
+    series.push({
+      name, id: `${name}-cpu`, type: 'line', smooth: true, symbol: 'none',
+      data: alignData(allTs, node.timestamps, node.cpu_load),
+      lineStyle: { color, width: 2.5 }, itemStyle: { color }, yAxisIndex: 0,
     })
-  }
-
-  const cpuColor = '#409eff'
-  const memColor = '#f59e0b'
-  const ioColor = '#10b981'
+    // MEM 和 IO 用隐藏名称，通过 legendselectchanged 事件联动
+    series.push({
+      name: `${name}_mem`, id: `${name}-mem`, type: 'line', smooth: true, symbol: 'none',
+      data: alignData(allTs, node.timestamps, node.memory_usage_pct),
+      lineStyle: { color, width: 2, type: 'dashed' as const }, itemStyle: { color }, yAxisIndex: 1,
+    })
+    series.push({
+      name: `${name}_io`, id: `${name}-io`, type: 'line', smooth: true, symbol: 'none',
+      data: alignData(allTs, node.timestamps, node.disk_io_delay_ms),
+      lineStyle: { color, width: 1.5, type: 'dotted' as const }, itemStyle: { color }, yAxisIndex: 2,
+    })
+  })
 
   return {
-    tooltip: { trigger: 'axis' as const, ...tooltipStyle.value, axisPointer: { type: 'cross' as const } },
-    legend: { top: 0, textStyle: { color: textColor.value } },
+    tooltip: {
+      trigger: 'axis' as const, ...tooltipStyle.value, axisPointer: { type: 'cross' as const },
+      formatter: (params: any) => {
+        if (!Array.isArray(params)) return ''
+        const time = params[0].axisValue
+        // 按节点分组
+        const grouped: Record<string, { cpu?: number; mem?: number; io?: number; color: string }> = {}
+        for (const p of params) {
+          const s = p.seriesName as string
+          const idx = s.lastIndexOf('_')
+          const isMetric = idx > 0 && ['mem', 'io'].includes(s.slice(idx + 1))
+          const nodeName = isMetric ? s.slice(0, idx) : s
+          if (!grouped[nodeName]) grouped[nodeName] = { color: p.color }
+          if (!isMetric) grouped[nodeName].cpu = p.value
+          else if (s.endsWith('_mem')) grouped[nodeName].mem = p.value
+          else grouped[nodeName].io = p.value
+        }
+        let html = `<div style="margin-bottom:4px;font-weight:600">${time}</div>`
+        for (const [name, v] of Object.entries(grouped)) {
+          html += `<div style="margin:2px 0"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${v.color};margin-right:6px"></span><b>${name}</b>`
+          if (v.cpu != null) html += ` &nbsp;CPU: ${v.cpu.toFixed(1)}%`
+          if (v.mem != null) html += ` &nbsp;MEM: ${v.mem.toFixed(1)}%`
+          if (v.io != null) html += ` &nbsp;IO: ${v.io.toFixed(1)}ms`
+          html += '</div>'
+        }
+        return html
+      },
+    },
+    legend: {
+      top: 0, textStyle: { color: textColor.value, fontSize: 12 },
+      // 只显示节点名，不显示 _mem/_io
+      data: trends.map(n => ({ name: n.node_name, icon: 'roundRect' })),
+    },
     grid: { left: 55, right: 80, bottom: 30, top: 50 },
     xAxis: {
       type: 'category' as const, data: allTs, boundaryGap: false,
@@ -152,11 +178,7 @@ const nodeTrendOption = computed(() => {
       { type: 'value' as const, position: 'right' as const, max: 100, name: 'MEM %', nameTextStyle: { color: textColor.value }, axisLabel: { formatter: '{value}%', color: textColor.value }, splitLine: { show: false } },
       { type: 'value' as const, position: 'right' as const, offset: 50, name: 'IO ms', nameTextStyle: { color: textColor.value }, axisLabel: { color: textColor.value }, splitLine: { show: false } },
     ],
-    series: [
-      { name: t('smartAnalysis.performanceCorrelation.cpuLoad'), type: 'line', smooth: true, symbol: 'none', data: avgAlign('cpu_load'), lineStyle: { color: cpuColor, width: 2 }, itemStyle: { color: cpuColor }, yAxisIndex: 0, areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: `${cpuColor}20` }, { offset: 1, color: `${cpuColor}02` }] } } },
-      { name: t('smartAnalysis.performanceCorrelation.memoryUsage'), type: 'line', smooth: true, symbol: 'none', data: avgAlign('memory_usage_pct'), lineStyle: { color: memColor, width: 2 }, itemStyle: { color: memColor }, yAxisIndex: 1, areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: `${memColor}20` }, { offset: 1, color: `${memColor}02` }] } } },
-      { name: t('smartAnalysis.performanceCorrelation.diskIO'), type: 'line', smooth: true, symbol: 'none', data: avgAlign('disk_io_delay_ms'), lineStyle: { color: ioColor, width: 2 }, itemStyle: { color: ioColor }, yAxisIndex: 2, areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: `${ioColor}20` }, { offset: 1, color: `${ioColor}02` }] } } },
-    ],
+    series,
   }
 })
 
