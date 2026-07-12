@@ -235,11 +235,15 @@ const chartOption = computed(() => {
   const tooltipBorder = isDark ? '#2a2a50' : '#e2e5ed'
   const tooltipText = isDark ? '#e0e0f0' : '#303133'
 
-  const seriesConfigs: Record<string, { dim: PredictionDimension; color: string; label: string }> = {
-    cpu: { dim: p.cpu, color: '#409eff', label: 'CPU' },
-    memory: { dim: p.memory, color: '#8b5cf6', label: t('smartAnalysis.capacityPlanning.memory') },
-    storage: { dim: p.storage, color: '#e6a23c', label: t('smartAnalysis.capacityPlanning.storage') },
-    rootfs: { dim: p.rootfs, color: '#67c23a', label: t('smartAnalysis.capacityPlanning.rootfs') },
+  // 获取存储/根分区总容量，用于百分比归一化
+  const storageTotal = p.storage.total_gb || 0
+  const rootfsTotal = p.rootfs.total_gb || 0
+
+  const seriesConfigs: Record<string, { dim: PredictionDimension; color: string; label: string; toPct: (v: number) => number }> = {
+    cpu: { dim: p.cpu, color: '#409eff', label: 'CPU', toPct: (v) => v },
+    memory: { dim: p.memory, color: '#8b5cf6', label: t('smartAnalysis.capacityPlanning.memory'), toPct: (v) => v },
+    storage: { dim: p.storage, color: '#e6a23c', label: t('smartAnalysis.capacityPlanning.storage'), toPct: (v) => storageTotal > 0 ? (v / storageTotal) * 100 : v },
+    rootfs: { dim: p.rootfs, color: '#67c23a', label: t('smartAnalysis.capacityPlanning.rootfs'), toPct: (v) => rootfsTotal > 0 ? (v / rootfsTotal) * 100 : v },
   }
 
   // 收集所有日期
@@ -252,16 +256,19 @@ const chartOption = computed(() => {
   }
   const sortedDates = Array.from(allDates).sort()
 
+  /** 钳制值到 [0, 100] 物理边界 */
+  const clamp = (v: number) => Math.max(0, Math.min(100, v))
+
   const series: any[] = []
   for (const key of visibleSeries.value) {
     const cfg = seriesConfigs[key]
     if (!cfg) continue
-    const { dim, color, label } = cfg
+    const { dim, color, label, toPct } = cfg
 
-    // 历史数据
-    const historyData = new Map(dim.chart.dates.map((d, i) => [d, dim.chart.values[i]]))
-    // 预测数据
-    const predictData = new Map(dim.chart.predicted_dates.map((d, i) => [d, dim.chart.predicted_values[i]]))
+    // 历史数据（归一化为百分比，钳制到 0-100）
+    const historyData = new Map(dim.chart.dates.map((d, i) => [d, clamp(toPct(dim.chart.values[i]))]))
+    // 预测数据（归一化为百分比，钳制到 0-100）
+    const predictData = new Map(dim.chart.predicted_dates.map((d, i) => [d, clamp(toPct(dim.chart.predicted_values[i]))]))
 
     series.push({
       name: label,
@@ -279,9 +286,11 @@ const chartOption = computed(() => {
       },
     })
 
-    // 预测虚线
+    // 预测虚线（从最后一个历史点开始，确保线条无缝衔接）
     const hasPrediction = dim.chart.predicted_dates.length > 0
     if (hasPrediction) {
+      const lastHistoryDate = dim.chart.dates[dim.chart.dates.length - 1]
+      const lastHistoryPct = lastHistoryDate ? historyData.get(lastHistoryDate) : undefined
       series.push({
         name: `${label} (${t('smartAnalysis.capacityPlanning.prediction')})`,
         type: 'line',
@@ -291,7 +300,7 @@ const chartOption = computed(() => {
         itemStyle: { color },
         data: sortedDates.map(d => {
           if (predictData.has(d)) return predictData.get(d)
-          if (historyData.has(d)) return null
+          if (d === lastHistoryDate && lastHistoryPct !== undefined) return lastHistoryPct
           return null
         }),
       })

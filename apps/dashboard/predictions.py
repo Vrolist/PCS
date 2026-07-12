@@ -130,7 +130,7 @@ def _build_dimension(daily_data, field, capacity=None, unit="pct", display_multi
         if days_until_full and days_until_full > 365:
             predicted_full_date, days_until_full = None, None
 
-    # 预测线：延伸到满载日期或最多再加 30 天
+    # 预测线：延伸到满载日期或最多再加 30 天，超出物理边界时截断
     predicted_dates = []
     predicted_values = []
     if slope is not None and intercept is not None:
@@ -138,9 +138,17 @@ def _build_dimension(daily_data, field, capacity=None, unit="pct", display_multi
         from datetime import datetime as dt
         base_date = dt.strptime(dates[-1], "%Y-%m-%d")
         for i in range(1, extend_days + 1):
+            raw_val = slope * (len(values) - 1 + i) + intercept
+            display_val = round(raw_val * display_multiplier, 2)
+            # 百分比指标超出 [0, 100] 时截断预测线
+            if unit == "pct" and (display_val < 0 or display_val > 100):
+                break
+            # 容量指标超出 [0, capacity] 时截断预测线
+            if unit == "gb" and capacity and (display_val < 0 or display_val > capacity * display_multiplier):
+                break
             future_date = base_date + timedelta(days=i)
             predicted_dates.append(future_date.strftime("%Y-%m-%d"))
-            predicted_values.append(round((slope * (len(values) - 1 + i) + intercept) * display_multiplier, 2))
+            predicted_values.append(display_val)
 
     return {
         "current": round(current * display_multiplier, 2),
@@ -206,7 +214,7 @@ def _build_storage_from_tables(cluster_id, days):
         if days_until_full and days_until_full > 365:
             predicted_full_date, days_until_full = None, None
 
-    # 预测线
+    # 预测线（超出 [0, total_gb] 时截断）
     predicted_dates = []
     predicted_values = []
     if slope is not None and intercept is not None:
@@ -214,9 +222,12 @@ def _build_storage_from_tables(cluster_id, days):
         from datetime import datetime as dt
         base_date = dt.strptime(dates[-1], "%Y-%m-%d")
         for i in range(1, extend_days + 1):
+            val = round(slope * (len(used_values) - 1 + i) + intercept, 2)
+            if val < 0 or val > total_gb:
+                break
             future_date = base_date + timedelta(days=i)
             predicted_dates.append(future_date.strftime("%Y-%m-%d"))
-            predicted_values.append(round(slope * (len(used_values) - 1 + i) + intercept, 2))
+            predicted_values.append(val)
 
     return {
         "current_used_gb": round(current_used, 2),
@@ -281,7 +292,7 @@ def _build_rootfs_from_tables(cluster_id, days):
         if days_until_full and days_until_full > 365:
             predicted_full_date, days_until_full = None, None
 
-    # 预测线
+    # 预测线（超出 [0, total_gb] 时截断）
     predicted_dates = []
     predicted_values = []
     if slope is not None and intercept is not None:
@@ -289,9 +300,12 @@ def _build_rootfs_from_tables(cluster_id, days):
         from datetime import datetime as dt
         base_date = dt.strptime(dates[-1], "%Y-%m-%d")
         for i in range(1, extend_days + 1):
+            val = round(slope * (len(used_values) - 1 + i) + intercept, 2)
+            if val < 0 or val > total_gb:
+                break
             future_date = base_date + timedelta(days=i)
             predicted_dates.append(future_date.strftime("%Y-%m-%d"))
-            predicted_values.append(round(slope * (len(used_values) - 1 + i) + intercept, 2))
+            predicted_values.append(val)
 
     return {
         "current_used_gb": round(current_used, 2),
