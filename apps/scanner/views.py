@@ -2310,3 +2310,223 @@ class ChangeTrackingView(APIView):
                 "unit": "个",
                 "detected_at": curr.scanned_at.isoformat(),
             })
+
+
+class ResourceReclamationView(APIView):
+    """GET /api/scanner/resource-reclamation/ — 资源回收建议"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        cluster_filter = request.query_params.get("cluster_id")
+        cluster_ids = _user_cluster_ids(request.user)
+        
+        # 获取最新扫描的节点
+        node_ids = _latest_node_ids(request.user)
+        
+        # 1. 僵尸VM检测（停止状态且运行时长为0）
+        zombie_vms = self._detect_zombie_vms(node_ids, cluster_filter)
+        
+        # 2. 僵尸容器检测
+        zombie_containers = self._detect_zombie_containers(node_ids, cluster_filter)
+        
+        # 3. 旧快照检测（超过30天）
+        old_snapshots = self._detect_old_snapshots(cluster_ids, cluster_filter)
+        
+        # 4. 低使用率存储检测
+        low_usage_storages = self._detect_low_usage_storages(node_ids, cluster_filter)
+        
+        # 5. 空闲资源检测（CPU和内存使用率都为0）
+        idle_resources = self._detect_idle_resources(node_ids, cluster_filter)
+        
+        # 计算可回收空间
+        reclaimable_space_gb = self._calculate_reclaimable_space(
+            old_snapshots, zombie_vms, zombie_containers
+        )
+        
+        return Response({
+            "summary": {
+                "zombie_vms_count": len(zombie_vms),
+                "zombie_containers_count": len(zombie_containers),
+                "old_snapshots_count": len(old_snapshots),
+                "low_usage_storages_count": len(low_usage_storages),
+                "idle_resources_count": len(idle_resources),
+                "reclaimable_space_gb": reclaimable_space_gb,
+            },
+            "zombie_vms": zombie_vms,
+            "zombie_containers": zombie_containers,
+            "old_snapshots": old_snapshots,
+            "low_usage_storages": low_usage_storages,
+            "idle_resources": idle_resources,
+        })
+    
+    def _detect_zombie_vms(self, node_ids, cluster_filter):
+        """检测僵尸VM（停止状态且运行时长为0）"""
+        vms = VM.objects.filter(
+            node_id__in=node_ids,
+            status="stopped",
+            uptime_seconds=0
+        ).select_related("node", "node__cluster")
+        
+        if cluster_filter:
+            vms = vms.filter(node__cluster_id=cluster_filter)
+        
+        return [{
+            "id": vm.id,
+            "vmid": vm.vmid,
+            "name": vm.name,
+            "node_name": vm.node.node_name,
+            "cluster_name": vm.node.cluster.name,
+            "cpu_cores": vm.cpu_cores,
+            "memory_mb": vm.memory_mb,
+            "disk_gb": vm.disk_gb,
+            "status": vm.status,
+            "scanned_at": vm.scanned_at.isoformat(),
+        } for vm in vms]
+    
+    def _detect_zombie_containers(self, node_ids, cluster_filter):
+        """检测僵尸容器"""
+        containers = LXC.objects.filter(
+            node_id__in=node_ids,
+            status="stopped",
+            uptime_seconds=0
+        ).select_related("node", "node__cluster")
+        
+        if cluster_filter:
+            containers = containers.filter(node__cluster_id=cluster_filter)
+        
+        return [{
+            "id": ct.id,
+            "vmid": ct.vmid,
+            "name": ct.name,
+            "node_name": ct.node.node_name,
+            "cluster_name": ct.node.cluster.name,
+            "cpu_cores": ct.cpu_cores,
+            "memory_mb": ct.memory_mb,
+            "disk_gb": ct.disk_gb,
+            "status": ct.status,
+            "scanned_at": ct.scanned_at.isoformat(),
+        } for ct in containers]
+    
+    def _detect_old_snapshots(self, cluster_ids, cluster_filter):
+        """检测旧快照（超过30天）"""
+        cutoff_date = timezone.now() - timedelta(days=30)
+        
+        snapshots = VMSnapshot.objects.filter(
+            vm__node__cluster_id__in=cluster_ids,
+            snap_time__lt=cutoff_date
+        ).select_related("vm", "vm__node", "vm__node__cluster")
+        
+        if cluster_filter:
+            snapshots = snapshots.filter(vm__node__cluster_id=cluster_filter)
+        
+        return [{
+            "id": snap.id,
+            "snapid": snap.snapid,
+            "name": snap.name,
+            "vm_name": snap.vm.name,
+            "vm_vmid": snap.vm.vmid,
+            "node_name": snap.vm.node.node_name,
+            "cluster_name": snap.vm.node.cluster.name,
+            "snap_time": snap.snap_time.isoformat() if snap.snap_time else None,
+            "size_mb": snap.size_mb,
+            "size_gb": round(snap.size_mb / 1024, 2) if snap.size_mb else 0,
+        } for snap in snapshots]
+    
+    def _detect_low_usage_storages(self, node_ids, cluster_filter):
+        """检测低使用率存储（使用率<30%）"""
+        storages = Storage.objects.filter(
+            node_id__in=node_ids,
+            used_fraction__lt=0.3
+        ).select_related("node", "node__cluster")
+        
+        if cluster_filter:
+            storages = storages.filter(node__cluster_id=cluster_filter)
+        
+        return [{
+            "id": s.id,
+            "storage_name": s.storage_name,
+            "type": s.type,
+            "node_name": s.node.node_name,
+            "cluster_name": s.node.cluster.name,
+            "total_gb": s.total_gb,
+            "used_gb": s.used_gb,
+            "avail_gb": s.avail_gb,
+            "used_fraction": s.used_fraction,
+            "scanned_at": s.scanned_at.isoformat(),
+        } for s in storages]
+    
+    def _detect_idle_resources(self, node_ids, cluster_filter):
+        """检测空闲资源（CPU和内存使用率都为0）"""
+        # 空闲VM
+        idle_vms = VM.objects.filter(
+            node_id__in=node_ids,
+            cpu_usage=0,
+            memory_used_mb=0,
+            status="running"
+        ).select_related("node", "node__cluster")
+        
+        if cluster_filter:
+            idle_vms = idle_vms.filter(node__cluster_id=cluster_filter)
+        
+        idle_resources = []
+        for vm in idle_vms:
+            idle_resources.append({
+                "id": vm.id,
+                "type": "vm",
+                "vmid": vm.vmid,
+                "name": vm.name,
+                "node_name": vm.node.node_name,
+                "cluster_name": vm.node.cluster.name,
+                "cpu_cores": vm.cpu_cores,
+                "memory_mb": vm.memory_mb,
+                "disk_gb": vm.disk_gb,
+                "scanned_at": vm.scanned_at.isoformat(),
+            })
+        
+        # 空闲容器
+        idle_containers = LXC.objects.filter(
+            node_id__in=node_ids,
+            cpu_usage=0,
+            memory_used_mb=0,
+            status="running"
+        ).select_related("node", "node__cluster")
+        
+        if cluster_filter:
+            idle_containers = idle_containers.filter(node__cluster_id=cluster_filter)
+        
+        for ct in idle_containers:
+            idle_resources.append({
+                "id": ct.id,
+                "type": "container",
+                "vmid": ct.vmid,
+                "name": ct.name,
+                "node_name": ct.node.node_name,
+                "cluster_name": ct.node.cluster.name,
+                "cpu_cores": ct.cpu_cores,
+                "memory_mb": ct.memory_mb,
+                "disk_gb": ct.disk_gb,
+                "scanned_at": ct.scanned_at.isoformat(),
+            })
+        
+        return idle_resources
+    
+    def _calculate_reclaimable_space(self, old_snapshots, zombie_vms, zombie_containers):
+        """计算可回收空间（GB）"""
+        total_gb = 0
+        
+        # 旧快照空间
+        for snap in old_snapshots:
+            if snap.get("size_gb"):
+                total_gb += snap["size_gb"]
+        
+        # 僵尸VM磁盘空间（假设可以回收）
+        for vm in zombie_vms:
+            if vm.get("disk_gb"):
+                total_gb += vm["disk_gb"]
+        
+        # 僵尸容器磁盘空间
+        for ct in zombie_containers:
+            if ct.get("disk_gb"):
+                total_gb += ct["disk_gb"]
+        
+        return round(total_gb, 2)
