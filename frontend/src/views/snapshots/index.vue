@@ -25,10 +25,14 @@
         >
           <el-option
             v-for="node in nodeList"
-            :key="node"
-            :label="node"
-            :value="node"
-          />
+            :key="node.name"
+            :label="node.name"
+            :value="node.name"
+            :disabled="!node.hasVms"
+          >
+            <span>{{ node.name }}</span>
+            <span v-if="!node.hasVms" style="color: var(--text-muted); font-size: 12px; margin-left: 8px;">{{ t('snapshots.noVms') }}</span>
+          </el-option>
         </el-select>
       </div>
       
@@ -48,7 +52,7 @@
               <span class="node">{{ vm.nodeName }}</span>
             </div>
           </div>
-          <el-badge :value="vm.snapCount" :max="99" class="snap-badge" />
+          <span class="snap-count-tag">{{ vm.snapCount }} {{ t('snapshots.snaps') }}</span>
         </div>
         
         <el-empty v-if="!loading && filteredVmList.length === 0" :description="t('snapshots.noVms')" :image-size="60" />
@@ -152,6 +156,8 @@ import { useI18n } from 'vue-i18n'
 import { VideoPlay, Camera } from '@element-plus/icons-vue'
 import { getSnapshots } from '@/api/snapshots'
 import type { SnapshotInfo } from '@/api/snapshots'
+import { getNodes } from '@/api/nodes'
+import type { NodeInfo } from '@/api/nodes'
 import { useClusterStore } from '@/stores/cluster'
 
 const { t } = useI18n()
@@ -161,6 +167,7 @@ const clusterStore = useClusterStore()
 const loading = ref(false)
 const snapshotLoading = ref(false)
 const snapshots = ref<SnapshotInfo[]>([])
+const nodes = ref<NodeInfo[]>([])
 const vmSearch = ref('')
 const selectedNode = ref('')
 const selectedVmId = ref<number | null>(null)
@@ -187,20 +194,25 @@ interface TreeNode extends SnapshotInfo {
 // 加载数据
 onMounted(async () => {
   if (!clusterStore.clusterList.length) await clusterStore.fetchClusters()
-  loadSnapshots()
+  loadData()
 })
 
 watch(() => clusterStore.currentClusterId, () => {
-  loadSnapshots()
+  loadData()
   selectedVmId.value = null
 })
 
-async function loadSnapshots() {
+async function loadData() {
   loading.value = true
   try {
     const params: Record<string, any> = {}
     if (clusterStore.currentClusterId) params.cluster_id = clusterStore.currentClusterId
-    snapshots.value = await getSnapshots(params)
+    const [snapshotsData, nodesData] = await Promise.all([
+      getSnapshots(params),
+      getNodes(params)
+    ])
+    snapshots.value = snapshotsData
+    nodes.value = nodesData
   } catch {} finally { loading.value = false }
 }
 
@@ -225,10 +237,17 @@ const vmList = computed<VmGroup[]>(() => {
   return Array.from(groups.values()).sort((a, b) => a.vmName.localeCompare(b.vmName))
 })
 
-// 节点列表
+// 有VM的节点集合
+const nodesWithVms = computed(() => {
+  return new Set(vmList.value.map(v => v.nodeName))
+})
+
+// 节点列表（所有节点，标记是否有VM）
 const nodeList = computed(() => {
-  const nodes = new Set(vmList.value.map(v => v.nodeName))
-  return Array.from(nodes).sort()
+  return nodes.value.map(node => ({
+    name: node.node_name,
+    hasVms: nodesWithVms.value.has(node.node_name)
+  })).sort((a, b) => a.name.localeCompare(b.name))
 })
 
 // 筛选后的 VM 列表
@@ -455,8 +474,14 @@ function formatTime(iso: string | null) {
   color: var(--text-muted);
 }
 
-.snap-badge {
+.snap-count-tag {
   flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--bg-secondary);
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
 }
 
 .pagination {

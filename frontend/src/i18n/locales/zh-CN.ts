@@ -798,6 +798,7 @@ export default {
   snapshots: {
     vmList: '虚拟机列表',
     units: '台',
+    snaps: '快照',
     searchVm: '搜索 VM 名称/ID',
     allNodes: '全部节点',
     noVms: '暂无虚拟机',

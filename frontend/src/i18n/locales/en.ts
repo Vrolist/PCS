@@ -791,6 +791,7 @@ export default {
   snapshots: {
     vmList: 'VM List',
     units: 'units',
+    snaps: 'snaps',
     searchVm: 'Search VM name/ID',
     allNodes: 'All Nodes',
     noVms: 'No VMs',

@@ -660,6 +660,7 @@ export default {
   snapshots: {
     vmList: '仮想マシン一覧',
     units: '台',
+    snaps: 'スナップ',
     searchVm: 'VM名/IDで検索',
     allNodes: '全ノード',
     noVms: '仮想マシンがありません',

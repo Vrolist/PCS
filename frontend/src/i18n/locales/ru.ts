@@ -667,6 +667,7 @@ export default {
   snapshots: {
     vmList: 'Список ВМ',
     units: 'шт.',
+    snaps: 'снимки',
     searchVm: 'Поиск по имени/ID ВМ',
     allNodes: 'Все узлы',
     noVms: 'Нет ВМ',

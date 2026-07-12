@@ -660,6 +660,7 @@ export default {
   snapshots: {
     vmList: '가상 머신 목록',
     units: '대',
+    snaps: '스냅',
     searchVm: 'VM 이름/ID 검색',
     allNodes: '전체 노드',
     noVms: '가상 머신이 없습니다',

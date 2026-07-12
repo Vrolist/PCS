@@ -667,6 +667,7 @@ export default {
   snapshots: {
     vmList: 'VM-Liste',
     units: 'Einheiten',
+    snaps: 'Snaps',
     searchVm: 'VM-Name/ID suchen',
     allNodes: 'Alle Knoten',
     noVms: 'Keine VMs',
