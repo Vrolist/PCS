@@ -787,6 +787,26 @@ export default {
     exportFailed: 'Export failed, please try again',
   },
 
+  // Snapshot Management
+  snapshots: {
+    vmList: 'VM List',
+    units: 'units',
+    searchVm: 'Search VM name/ID',
+    allNodes: 'All Nodes',
+    noVms: 'No VMs',
+    node: 'Node',
+    cluster: 'Cluster',
+    status: 'Status',
+    snapshotCount: 'Snapshots',
+    maxDepth: 'Max Depth',
+    totalSize: 'Total Size',
+    noSnapshots: 'No snapshots for this VM',
+    selectVmHint: 'Select a VM from the left to view snapshots',
+    current: 'Current',
+    saveMemory: 'Save Memory',
+    saveState: 'Save State',
+  },
+
   // Advanced Info Placeholder Pages
   advanced: {
     ha: {

@@ -663,6 +663,26 @@ export default {
     adequacyModerate: 'Moderate Data', adequacyModerateDesc: '{days} days of data. 14+ days recommended for accurate prediction.',
   },
 
+  // Snapshot-Verwaltung
+  snapshots: {
+    vmList: 'VM-Liste',
+    units: 'Einheiten',
+    searchVm: 'VM-Name/ID suchen',
+    allNodes: 'Alle Knoten',
+    noVms: 'Keine VMs',
+    node: 'Knoten',
+    cluster: 'Cluster',
+    status: 'Status',
+    snapshotCount: 'Snapshots',
+    maxDepth: 'Max. Tiefe',
+    totalSize: 'Gesamtgröße',
+    noSnapshots: 'Keine Snapshots für diese VM',
+    selectVmHint: 'Wählen Sie links eine VM aus, um Snapshots anzuzeigen',
+    current: 'Aktuell',
+    saveMemory: 'Speicher speichern',
+    saveState: 'Zustand speichern',
+  },
+
   // Erweiterte Informationen (Platzhalter)
   advanced: {
     ha: { title: 'HA-Verwaltung', subtitle: 'HA-Ressourcenverwaltung und Statusüberwachung', comingSoon: 'HA-Hochverfügbarkeitsfunktion in Entwicklung' },

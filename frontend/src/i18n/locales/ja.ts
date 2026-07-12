@@ -656,6 +656,26 @@ export default {
     adequacyModerate: 'Moderate Data', adequacyModerateDesc: '{days} days of data. 14+ days recommended for accurate prediction.',
   },
 
+  // スナップショット管理
+  snapshots: {
+    vmList: '仮想マシン一覧',
+    units: '台',
+    searchVm: 'VM名/IDで検索',
+    allNodes: '全ノード',
+    noVms: '仮想マシンがありません',
+    node: 'ノード',
+    cluster: 'クラスタ',
+    status: 'ステータス',
+    snapshotCount: 'スナップショット数',
+    maxDepth: '最大深度',
+    totalSize: '合計サイズ',
+    noSnapshots: 'このVMのスナップショットはありません',
+    selectVmHint: '左側からVMを選択してスナップショットを表示',
+    current: '現在',
+    saveMemory: 'メモリ保存',
+    saveState: '状態保存',
+  },
+
   // 上級情報プレースホルダーページ
   advanced: {
     ha: { title: 'HA（高可用性）管理', subtitle: 'HA リソースグループの管理とステータス監視', comingSoon: 'HA 高可用性機能は開発中です' },

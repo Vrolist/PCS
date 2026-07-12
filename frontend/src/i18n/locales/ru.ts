@@ -663,6 +663,26 @@ export default {
     adequacyModerate: 'Moderate Data', adequacyModerateDesc: '{days} days of data. 14+ days recommended for accurate prediction.',
   },
 
+  // Управление снимками
+  snapshots: {
+    vmList: 'Список ВМ',
+    units: 'шт.',
+    searchVm: 'Поиск по имени/ID ВМ',
+    allNodes: 'Все узлы',
+    noVms: 'Нет ВМ',
+    node: 'Узел',
+    cluster: 'Кластер',
+    status: 'Статус',
+    snapshotCount: 'Снимков',
+    maxDepth: 'Макс. глубина',
+    totalSize: 'Общий размер',
+    noSnapshots: 'Нет снимков для этой ВМ',
+    selectVmHint: 'Выберите ВМ слева для просмотра снимков',
+    current: 'Текущий',
+    saveMemory: 'Сохранить память',
+    saveState: 'Сохранить состояние',
+  },
+
   // Заглушки расширенных разделов
   advanced: {
     ha: { title: 'Управление высокой доступностью', subtitle: 'Управление группами ресурсов HA и мониторинг состояния', comingSoon: 'Функционал HA в разработке' },

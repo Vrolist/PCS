@@ -663,6 +663,26 @@ export default {
     adequacyModerate: 'Moderate Data', adequacyModerateDesc: '{days} days of data. 14+ days recommended for accurate prediction.',
   },
 
+  // Gerenciamento de snapshots
+  snapshots: {
+    vmList: 'Lista de VMs',
+    units: 'unidades',
+    searchVm: 'Buscar nome/ID da VM',
+    allNodes: 'Todos os nós',
+    noVms: 'Nenhuma VM',
+    node: 'Nó',
+    cluster: 'Cluster',
+    status: 'Status',
+    snapshotCount: 'Snapshots',
+    maxDepth: 'Profundidade máx.',
+    totalSize: 'Tamanho total',
+    noSnapshots: 'Nenhum snapshot para esta VM',
+    selectVmHint: 'Selecione uma VM à esquerda para ver os snapshots',
+    current: 'Atual',
+    saveMemory: 'Salvar memória',
+    saveState: 'Salvar estado',
+  },
+
   // Páginas placeholder para informações avançadas
   advanced: {
     ha: { title: 'Gerenciamento de alta disponibilidade', subtitle: 'Gerenciamento e monitoramento de grupos de recursos HA', comingSoon: 'Funcionalidade HA em desenvolvimento' },

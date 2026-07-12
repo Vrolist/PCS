@@ -794,6 +794,26 @@ export default {
     exportFailed: '导出失败，请重试',
   },
 
+  // 快照管理
+  snapshots: {
+    vmList: '虚拟机列表',
+    units: '台',
+    searchVm: '搜索 VM 名称/ID',
+    allNodes: '全部节点',
+    noVms: '暂无虚拟机',
+    node: '节点',
+    cluster: '集群',
+    status: '状态',
+    snapshotCount: '快照数量',
+    maxDepth: '最大深度',
+    totalSize: '总大小',
+    noSnapshots: '该虚拟机暂无快照',
+    selectVmHint: '请从左侧选择虚拟机查看快照',
+    current: '当前',
+    saveMemory: '保存内存',
+    saveState: '保存状态',
+  },
+
   // 进阶信息占位页
   advanced: {
     ha: {

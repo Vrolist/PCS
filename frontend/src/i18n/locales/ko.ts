@@ -656,6 +656,26 @@ export default {
     adequacyModerate: 'Moderate Data', adequacyModerateDesc: '{days} days of data. 14+ days recommended for accurate prediction.',
   },
 
+  // 스냅샷 관리
+  snapshots: {
+    vmList: '가상 머신 목록',
+    units: '대',
+    searchVm: 'VM 이름/ID 검색',
+    allNodes: '전체 노드',
+    noVms: '가상 머신이 없습니다',
+    node: '노드',
+    cluster: '클러스터',
+    status: '상태',
+    snapshotCount: '스냅샷 수',
+    maxDepth: '최대 깊이',
+    totalSize: '총 크기',
+    noSnapshots: '이 VM의 스냅샷이 없습니다',
+    selectVmHint: '왼쪽에서 VM을 선택하여 스냅샷을查看하세요',
+    current: '현재',
+    saveMemory: '메모리 저장',
+    saveState: '상태 저장',
+  },
+
   // 고급 정보 플레이스홀더
   advanced: {
     ha: { title: '고가용성 관리', subtitle: '고가용성 리소스 그룹 관리 및 상태 모니터링', comingSoon: 'HA 고가용성 기능 개발 중' },
