@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
-from .models import User, PasswordResetCode, UserLog
+from .models import User, PasswordResetCode, UserLog, SystemConfig
 
 
 @admin.register(User)
@@ -26,3 +26,9 @@ class UserLogAdmin(admin.ModelAdmin):
     search_fields = ['username', 'detail']
     date_hierarchy = 'created_at'
     readonly_fields = ['username', 'action', 'resource_type', 'resource_id', 'detail', 'ip_address', 'user_agent', 'created_at']
+
+
+@admin.register(SystemConfig)
+class SystemConfigAdmin(admin.ModelAdmin):
+    list_display = ['key', 'value', 'updated_at']
+    search_fields = ['key']

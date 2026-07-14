@@ -80,3 +80,29 @@ class UserLog(models.Model):
 
     def __str__(self):
         return f"{self.username} - {self.get_action_display()} - {self.created_at:%Y-%m-%d %H:%M}"
+
+
+class SystemConfig(models.Model):
+    """系统配置（键值对，运行时动态修改）"""
+    key = models.CharField("配置键", max_length=128, unique=True)
+    value = models.TextField("配置值", blank=True)
+    updated_at = models.DateTimeField("更新时间", auto_now=True)
+
+    class Meta:
+        verbose_name = "系统配置"
+        verbose_name_plural = "系统配置"
+
+    def __str__(self):
+        return f"{self.key} = {self.value}"
+
+    @classmethod
+    def get(cls, key, default=None):
+        try:
+            return cls.objects.get(key=key).value
+        except cls.DoesNotExist:
+            return default
+
+    @classmethod
+    def set(cls, key, value):
+        obj, _ = cls.objects.update_or_create(key=key, defaults={"value": str(value)})
+        return obj

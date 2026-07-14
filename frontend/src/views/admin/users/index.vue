@@ -6,15 +6,6 @@
         <h2 class="page-title">{{ t('adminUsers.title') }}</h2>
         <p class="page-desc">{{ t('adminUsers.subtitle') }}</p>
       </div>
-      <div class="reg-switch-wrap">
-        <span class="reg-label">{{ t('adminUsers.registration') }}</span>
-        <el-switch
-          v-model="registrationEnabled"
-          :active-text="t('adminUsers.open')"
-          :inactive-text="t('adminUsers.closed')"
-          @change="toggleRegistration"
-        />
-      </div>
     </div>
 
     <!-- 统计卡片 -->
@@ -38,6 +29,19 @@
         <div class="stat-body">
           <span class="stat-val">{{ disabledCount }}</span>
           <span class="stat-lbl">{{ t('adminUsers.disabledUsers') }}</span>
+        </div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-icon reg"><el-icon><Switch /></el-icon></div>
+        <div class="stat-body">
+          <el-switch
+            v-model="registrationEnabled"
+            :active-text="t('adminUsers.open')"
+            :inactive-text="t('adminUsers.closed')"
+            inline-prompt
+            @change="toggleRegistration"
+          />
+          <span class="stat-lbl">{{ t('adminUsers.registration') }}</span>
         </div>
       </div>
     </div>
@@ -173,7 +177,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { User, CircleCheck, CircleClose, Search, Edit, Key, Lock, Unlock, MoreFilled } from '@element-plus/icons-vue'
-import { getAdminUsers, updateAdminUser, adminChangePassword, adminToggleUserActive, getRegistrationStatus } from '@/api/admin'
+import { getAdminUsers, updateAdminUser, adminChangePassword, adminToggleUserActive, getRegistrationStatus, toggleRegistration as toggleRegApi } from '@/api/admin'
 import type { AdminUser } from '@/api/admin'
 
 const { t } = useI18n()
@@ -276,7 +280,9 @@ async function handleToggleActive(user: AdminUser) {
 }
 
 async function toggleRegistration() {
-  ElMessage.info('注册开关需要修改配置后重启服务生效')
+  const result = await toggleRegApi()
+  registrationEnabled.value = result.enabled
+  ElMessage.success(result.detail)
 }
 
 onMounted(() => {
@@ -309,26 +315,10 @@ onMounted(() => {
   margin: 4px 0 0;
   color: var(--text-muted);
 }
-.reg-switch-wrap {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 18px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-}
-.reg-label {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  white-space: nowrap;
-}
-
 /* ========== 统计卡片 ========== */
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 16px;
   margin-bottom: 24px;
 }
@@ -337,10 +327,13 @@ onMounted(() => {
   align-items: center;
   gap: 16px;
   padding: 20px 24px;
-  background: var(--bg-primary);
+  background: #fff;
   border: 1px solid var(--border-color);
   border-radius: 12px;
   transition: transform .2s, box-shadow .2s;
+}
+.dark .stat-item {
+  background: var(--bg-primary);
 }
 .stat-item:hover {
   transform: translateY(-2px);
@@ -360,6 +353,7 @@ onMounted(() => {
 .stat-icon.total   { background: linear-gradient(135deg,#667eea,#764ba2); }
 .stat-icon.normal  { background: linear-gradient(135deg,#43e97b,#38f9d7); }
 .stat-icon.banned  { background: linear-gradient(135deg,#f093fb,#f5576c); }
+.stat-icon.reg     { background: linear-gradient(135deg,#4facfe,#00f2fe); }
 .stat-body {
   display: flex;
   flex-direction: column;
@@ -475,7 +469,7 @@ onMounted(() => {
 }
 
 /* 响应式 */
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 600px) {

@@ -13,6 +13,7 @@ urlpatterns = [
     path("logs/", views.user_logs_view, name="auth-user-logs"),
     path("cluster-logs/", views.cluster_logs_view, name="auth-cluster-logs"),
     path("registration-status/", views.registration_status_view, name="auth-registration-status"),
+    path("toggle-registration/", views.toggle_registration_view, name="auth-toggle-registration"),
     
     # 管理员专用API
     path("admin/users/", views.AdminUserListView.as_view(), name="admin-user-list"),

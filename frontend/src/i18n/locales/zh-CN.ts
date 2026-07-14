@@ -85,7 +85,7 @@ export default {
     complianceReport: '合规审计报告',
     healthReport: '定期健康报告',
     userInfo: '用户信息',
-    operationLogs: '操作日志',
+    operationLogs: '账户操作日志',
     clusterOperationLogs: '集群操作记录',
     notificationSettings: '通知设置',
     adminFunctions: '管理员功能',

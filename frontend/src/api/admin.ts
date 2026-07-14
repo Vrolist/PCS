@@ -38,3 +38,7 @@ export function adminToggleUserActive(id: number) {
 export function getRegistrationStatus() {
   return request.get<any, { enabled: boolean }>('/auth/registration-status/')
 }
+
+export function toggleRegistration() {
+  return request.post<any, { detail: string; enabled: boolean }>('/auth/toggle-registration/')
+}

@@ -1,6 +1,5 @@
 import logging
 
-from django.conf import settings
 from django.shortcuts import render
 from rest_framework import status, generics
 from rest_framework.decorators import api_view, permission_classes
@@ -8,7 +7,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import User, PasswordResetCode, UserLog
+from .models import User, PasswordResetCode, UserLog, SystemConfig
 from .serializers import (
     LoginSerializer,
     RegisterSerializer,
@@ -84,8 +83,8 @@ def login_view(request):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def register_view(request):
-    # 检查是否允许注册
-    if not getattr(settings, 'ALLOW_REGISTRATION', True):
+    # 检查是否允许注册（从数据库读取，可运行时修改）
+    if SystemConfig.get('ALLOW_REGISTRATION', 'True') != 'True':
         return Response({"detail": "注册功能已关闭"}, status=status.HTTP_403_FORBIDDEN)
     
     serializer = RegisterSerializer(data=request.data)
@@ -272,4 +271,17 @@ def admin_toggle_user_active_view(request, user_id):
 @permission_classes([AllowAny])
 def registration_status_view(request):
     """GET /api/auth/registration-status/ - 检查是否允许注册"""
-    return Response({"enabled": getattr(settings, 'ALLOW_REGISTRATION', True)})
+    enabled = SystemConfig.get('ALLOW_REGISTRATION', 'True') == 'True'
+    return Response({"enabled": enabled})
+
+
+@api_view(["POST"])
+@permission_classes([IsSuperUser])
+def toggle_registration_view(request):
+    """POST /api/auth/toggle-registration/ - 切换注册开关（立即生效）"""
+    current = SystemConfig.get('ALLOW_REGISTRATION', 'True')
+    new_value = 'False' if current == 'True' else 'True'
+    SystemConfig.set('ALLOW_REGISTRATION', new_value)
+    enabled = new_value == 'True'
+    log_user_action(request.user, "update", "system", "", f"注册开关已{'开启' if enabled else '关闭'}", request)
+    return Response({"detail": f"注册功能已{'开启' if enabled else '关闭'}", "enabled": enabled})
