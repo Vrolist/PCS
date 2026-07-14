@@ -30,7 +30,7 @@ _SNAPSHOT_EXTRA = [
 
 
 def _all_cluster_ids():
-    return list(Cluster.objects.filter(user=user).values_list("id", flat=True))
+    return list(Cluster.objects.values_list("id", flat=True))
 
 
 def _safe(val):

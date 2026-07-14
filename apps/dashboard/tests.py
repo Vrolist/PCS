@@ -19,9 +19,6 @@ class DashboardStatsTest(TestCase):
         self.user = User.objects.create_user(
             username="testuser", password="testpass123", email="test@test.com"
         )
-        self.other_user = User.objects.create_user(
-            username="other", password="testpass123", email="other@test.com"
-        )
         self.client.force_authenticate(user=self.user)
         self.url = "/api/dashboard/stats/"
 
@@ -48,10 +45,10 @@ class DashboardStatsTest(TestCase):
         resp = self.client.get(self.url)
         self.assertEqual(resp.data["total_clusters"], 2)
 
-    def test_other_user_clusters_not_counted(self):
-        Cluster.objects.create(user=self.other_user, name="其他集群")
+    def test_clusters_all_visible(self):
+        Cluster.objects.create(name="所有集群")
         resp = self.client.get(self.url)
-        self.assertEqual(resp.data["total_clusters"], 0)
+        self.assertEqual(resp.data["total_clusters"], 1)
 
     def test_total_nodes_from_cluster_model(self):
         Cluster.objects.create(name="集群A", total_nodes=5, total_vms=10)
@@ -121,13 +118,10 @@ class DashboardAlertsTest(TestCase):
         self.user = User.objects.create_user(
             username="testuser", password="testpass123", email="test@test.com"
         )
-        self.other_user = User.objects.create_user(
-            username="other", password="testpass123", email="other@test.com"
-        )
         self.client.force_authenticate(user=self.user)
         self.url = "/api/dashboard/alerts/"
         self.cluster = Cluster.objects.create(name="生产集群")
-        self.other_cluster = Cluster.objects.create(user=self.other_user, name="其他集群")
+        self.other_cluster = Cluster.objects.create(name="其他集群")
 
     def test_unauthenticated(self):
         self.client.force_authenticate(user=None)
@@ -212,14 +206,14 @@ class DashboardAlertsTest(TestCase):
         self.assertEqual(item["cluster_name"], "生产集群")
         self.assertIn("created_at", item)
 
-    def test_other_user_alerts_not_included(self):
+    def test_other_user_alerts_included(self):
         now = timezone.now()
         DetectionResult.objects.create(
             cluster=self.other_cluster, category="resource", severity="critical",
-            title="其他用户告警", detail="...", is_resolved=False, created_at=now,
+            title="其他集群告警", detail="...", is_resolved=False, created_at=now,
         )
         resp = self.client.get(self.url)
-        self.assertEqual(len(resp.data), 0)
+        self.assertEqual(len(resp.data), 1)
 
 
 class DashboardTrendsTest(TestCase):
@@ -229,9 +223,6 @@ class DashboardTrendsTest(TestCase):
         self.client = APIClient()
         self.user = User.objects.create_user(
             username="testuser", password="testpass123", email="test@test.com"
-        )
-        self.other_user = User.objects.create_user(
-            username="other", password="testpass123", email="other@test.com"
         )
         self.client.force_authenticate(user=self.user)
         self.url = "/api/dashboard/trends/"
@@ -318,21 +309,22 @@ class DashboardTrendsTest(TestCase):
         self.assertEqual(resp.data["cpu_avg"], [30.0])  # (20+40)/2 = 30
         self.assertEqual(resp.data["memory_avg"], [60.0])  # (50+70)/2 = 60
 
-    def test_other_user_trends_not_included(self):
+    def test_all_clusters_trends_included(self):
         now = timezone.now()
+        yesterday = now - timezone.timedelta(days=1)
         ScanHistory.objects.create(
             cluster=self.cluster,
             snapshot_data={"avg_cpu_usage": 0.35, "avg_memory_usage": 0.62},
             scanned_at=now,
         )
-        other_cluster = Cluster.objects.create(user=self.other_user, name="其他集群")
+        other_cluster = Cluster.objects.create(name="其他集群")
         ScanHistory.objects.create(
             cluster=other_cluster,
             snapshot_data={"avg_cpu_usage": 0.90, "avg_memory_usage": 0.95},
-            scanned_at=now,
+            scanned_at=yesterday,
         )
         resp = self.client.get(self.url)
-        self.assertEqual(len(resp.data["dates"]), 1)
+        self.assertEqual(len(resp.data["dates"]), 2)
 
 
 class DashboardNodesTest(TestCase):
@@ -342,9 +334,6 @@ class DashboardNodesTest(TestCase):
         self.client = APIClient()
         self.user = User.objects.create_user(
             username="testuser", password="testpass123", email="test@test.com"
-        )
-        self.other_user = User.objects.create_user(
-            username="other", password="testpass123", email="other@test.com"
         )
         self.client.force_authenticate(user=self.user)
         self.url = "/api/dashboard/nodes/"
@@ -411,15 +400,15 @@ class DashboardNodesTest(TestCase):
         names = {n["name"] for n in resp.data}
         self.assertEqual(names, {"pve-1", "pve-2"})
 
-    def test_other_user_nodes_not_included(self):
+    def test_all_clusters_nodes_included(self):
         now = timezone.now()
-        other_cluster = Cluster.objects.create(user=self.other_user, name="其他集群")
+        other_cluster = Cluster.objects.create(name="其他集群")
         ClusterNode.objects.create(
             cluster=other_cluster, node_name="pve-x", status="online",
             scanned_at=now,
         )
         resp = self.client.get(self.url)
-        self.assertEqual(len(resp.data), 0)
+        self.assertEqual(len(resp.data), 1)
 
     def test_response_fields(self):
         now = timezone.now()
