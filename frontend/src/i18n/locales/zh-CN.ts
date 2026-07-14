@@ -43,6 +43,7 @@ export default {
     description: '描述',
     scanTime: '扫描时间',
     search: '搜索',
+    time: '时间',
   },
 
   // 导航
@@ -54,6 +55,7 @@ export default {
     changePassword: '修改密码',
     dashboard: '控制台',
     clusters: '集群管理',
+    agentManagement: 'Agent 管理',
     selectCluster: '选择集群',
     noCluster: '暂无集群',
     basicInfo: '基本信息',
@@ -345,6 +347,32 @@ export default {
     agentOnline: '在线',
     agentOffline: '离线',
     agentPaused: '暂停',
+    agents: 'Agent 列表',
+    agentEvents: 'Agent 事件',
+    eventTypeFilter: '筛选事件类型',
+    eventType: '事件类型',
+    eventRegister: '注册',
+    eventScanUpload: '扫描上报',
+    eventScanFailed: '扫描失败',
+    eventVersionUpgrade: '版本升级',
+    eventStatusChange: '状态变更',
+    eventError: '错误',
+    eventUnregister: '卸载',
+  },
+
+  // Agent 管理
+  agents: {
+    subtitle: '跨集群 Agent 实例管理与事件监控',
+    filterCluster: '按集群筛选',
+    filterStatus: '按状态筛选',
+    online: '在线',
+    offline: '离线',
+    error: '错误',
+    paused: '暂停',
+    ipAddress: 'IP 地址',
+    platform: '平台',
+    lastScan: '最后扫描',
+    agentEvents: 'Agent 事件',
   },
 
   // 节点管理

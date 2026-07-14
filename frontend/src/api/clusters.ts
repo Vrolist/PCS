@@ -67,3 +67,61 @@ export interface AgentVersion {
 export function getLatestAgentVersion() {
   return request.get<any, AgentVersion>('/agent/version/')
 }
+
+// Agent 事件
+export interface AgentEvent {
+  id: number
+  agent_id: string
+  agent_hostname: string
+  cluster_id: number
+  cluster_name: string
+  event_type: string
+  event_type_display: string
+  version: string
+  old_version: string
+  detail: string
+  ip_address: string | null
+  created_at: string
+}
+
+export interface AgentEventParams {
+  cluster_id?: number
+  agent_id?: string
+  event_type?: string
+  page?: number
+  page_size?: number
+}
+
+export function getAgentEvents(params?: AgentEventParams) {
+  return request.get<any, { count: number; results: AgentEvent[] }>('/agent/events/', { params })
+}
+
+// Agent 实例
+export interface AgentInstance {
+  id: number
+  agent_id: string
+  hostname: string
+  version: string
+  status: string
+  status_display: string
+  cluster_id: number
+  cluster_name: string
+  ip_address: string | null
+  platform: string
+  total_scans: number
+  failed_scans: number
+  last_heartbeat_at: string | null
+  last_scan_at: string | null
+  started_at: string
+}
+
+export interface AgentInstanceParams {
+  cluster_id?: number
+  status?: string
+  page?: number
+  page_size?: number
+}
+
+export function getAgentInstances(params?: AgentInstanceParams) {
+  return request.get<any, { count: number; results: AgentInstance[] }>('/agent/instances/', { params })
+}

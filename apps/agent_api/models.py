@@ -4,6 +4,50 @@ from django.utils import timezone
 from apps.clusters.models import Cluster
 
 
+class AgentEvent(models.Model):
+    """Agent 事件日志 — 记录注册、心跳、扫描、升级、错误等关键事件（仅记录有意义的事件）"""
+
+    class EventType(models.TextChoices):
+        REGISTER = "register", "注册"
+        SCAN_UPLOAD = "scan_upload", "扫描上报"
+        SCAN_FAILED = "scan_failed", "扫描失败"
+        VERSION_UPGRADE = "version_upgrade", "版本升级"
+        STATUS_CHANGE = "status_change", "状态变更"
+        ERROR = "error", "错误"
+        UNREGISTER = "unregister", "卸载"
+        DEACTIVATED = "deactivated", "集群停用"
+        CLUSTER_DELETED = "cluster_deleted", "集群删除"
+
+    agent = models.ForeignKey("AgentInstance", on_delete=models.CASCADE,
+                              related_name="events", verbose_name="Agent")
+    cluster = models.ForeignKey(Cluster, on_delete=models.SET_NULL,
+                                null=True, blank=True, verbose_name="集群")
+    event_type = models.CharField("事件类型", max_length=32, choices=EventType.choices)
+
+    # 版本信息（升级时记录新旧版本）
+    version = models.CharField("当前版本", max_length=32, blank=True)
+    old_version = models.CharField("旧版本", max_length=32, blank=True)
+
+    # 详情
+    detail = models.TextField("详情", blank=True)
+    ip_address = models.GenericIPAddressField("IP地址", null=True, blank=True)
+
+    created_at = models.DateTimeField("发生时间", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Agent事件"
+        verbose_name_plural = "Agent事件"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["cluster", "-created_at"]),
+            models.Index(fields=["agent", "-created_at"]),
+            models.Index(fields=["event_type", "-created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.agent.hostname} - {self.get_event_type_display()} ({self.created_at})"
+
+
 class AgentInstance(models.Model):
     """Agent 进程实例 — 支持多 Agent 部署"""
     class Status(models.TextChoices):

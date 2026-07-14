@@ -155,116 +155,170 @@
     </el-dialog>
 
     <!-- 集群详情弹窗 -->
-    <el-dialog v-model="showDetail" :title="detail?.name || t('clusters.basicInfo')" width="720px">
+    <el-dialog v-model="showDetail" :title="detail?.name || t('clusters.basicInfo')" width="800px">
       <template v-if="detail">
-        <div class="detail-section">
-          <h4>{{ t('clusters.basicInfo') }}</h4>
-          <div class="detail-grid">
-            <div class="detail-item">
-              <span class="detail-label">{{ t('common.status') }}</span>
-              <el-tag :type="statusType(detail.status)" size="small">{{ statusLabel(detail.status) }}</el-tag>
-            </div>
-            <div class="detail-item">
-              <span class="detail-label">{{ t('clusters.pveVersion') }}</span>
-              <span>{{ detail.pve_version || t('common.unknown') }}</span>
-            </div>
-            <div class="detail-item">
-              <span class="detail-label">{{ t('clusters.lastScan') }}</span>
-              <span>{{ detail.last_scanned_at ? formatTime(detail.last_scanned_at) : t('clusters.notScanned') }}</span>
-            </div>
-            <div class="detail-item">
-              <span class="detail-label">{{ t('common.nodes') }}</span>
-              <span>{{ detail.total_nodes }} {{ t('common.unitTai') }}</span>
-            </div>
-            <div class="detail-item">
-              <span class="detail-label">{{ t('common.vms') }}</span>
-              <span>{{ detail.total_vms }} {{ t('common.unitTai') }}</span>
-            </div>
-            <div class="detail-item">
-              <span class="detail-label">{{ t('common.containers') }}</span>
-              <span>{{ detail.total_lxc }} {{ t('common.unitTai') }}</span>
-            </div>
-            <div class="detail-item" v-if="detail.total_storage">
-              <span class="detail-label">{{ t('common.storage') }}</span>
-              <span>{{ detail.total_storage }} {{ t('common.unitGe') }}</span>
-            </div>
-            <div class="detail-item" v-if="detail.description">
-              <span class="detail-label">{{ t('clusters.description') }}</span>
-              <span>{{ detail.description }}</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="detail-section">
-          <el-collapse>
-            <el-collapse-item>
-              <template #title>
-                <div class="install-title-row">
-                  <h4>{{ t('clusters.installCommand') }}</h4>
-                  <el-button size="small" @click.stop="copyCommand(detail.install_command)">
-                    <el-icon><CopyDocument /></el-icon> {{ t('clusters.copy') }}
-                  </el-button>
+        <el-tabs v-model="detailTab">
+          <!-- 基本信息 Tab -->
+          <el-tab-pane :label="t('clusters.basicInfo')" name="info">
+            <div class="detail-section">
+              <div class="detail-grid">
+                <div class="detail-item">
+                  <span class="detail-label">{{ t('common.status') }}</span>
+                  <el-tag :type="statusType(detail.status)" size="small">{{ statusLabel(detail.status) }}</el-tag>
                 </div>
-              </template>
-              <div class="install-cmd-box">
-                <code>{{ detail.install_command }}</code>
+                <div class="detail-item">
+                  <span class="detail-label">{{ t('clusters.pveVersion') }}</span>
+                  <span>{{ detail.pve_version || t('common.unknown') }}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">{{ t('clusters.lastScan') }}</span>
+                  <span>{{ detail.last_scanned_at ? formatTime(detail.last_scanned_at) : t('clusters.notScanned') }}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">{{ t('common.nodes') }}</span>
+                  <span>{{ detail.total_nodes }} {{ t('common.unitTai') }}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">{{ t('common.vms') }}</span>
+                  <span>{{ detail.total_vms }} {{ t('common.unitTai') }}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">{{ t('common.containers') }}</span>
+                  <span>{{ detail.total_lxc }} {{ t('common.unitTai') }}</span>
+                </div>
+                <div class="detail-item" v-if="detail.total_storage">
+                  <span class="detail-label">{{ t('common.storage') }}</span>
+                  <span>{{ detail.total_storage }} {{ t('common.unitGe') }}</span>
+                </div>
+                <div class="detail-item" v-if="detail.description">
+                  <span class="detail-label">{{ t('clusters.description') }}</span>
+                  <span>{{ detail.description }}</span>
+                </div>
               </div>
-              <p class="install-hint">{{ t('clusters.installTip') }}</p>
-            </el-collapse-item>
-          </el-collapse>
-        </div>
+            </div>
 
-        <div class="detail-section">
-          <h4>{{ t('common.nodes') }} ({{ detail.agents.length }})</h4>
-          <el-table v-if="detail.agents.length > 0" :data="detail.agents" stripe>
-            <el-table-column prop="hostname" :label="t('clusters.hostname')" width="120" />
-            <el-table-column prop="agent_id" label="Agent ID" width="160">
-              <template #default="{ row }">
-                <code style="font-size: 12px">{{ row.agent_id.slice(0, 12) }}...</code>
-              </template>
-            </el-table-column>
-            <el-table-column :label="t('common.status')" width="80">
-              <template #default="{ row }">
-                <el-tag :type="agentStatusType(row.status)" size="small">{{ agentStatusLabel(row.status) }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column :label="t('common.version')" width="110">
-              <template #default="{ row }">
-                <span style="margin-right: 4px">{{ row.version }}</span>
-                <span
-                  v-if="latestAgentVersion && compareVersions(row.version, latestAgentVersion) < 0"
-                  class="version-tag version-outdated"
-                >{{ t('clusters.updateAvailable') }}</span>
-                <el-icon
-                  v-else-if="latestAgentVersion"
-                  class="version-check"
-                ><CircleCheckFilled /></el-icon>
-              </template>
-            </el-table-column>
-            <el-table-column prop="total_scans" :label="t('clusters.scanCount')" width="90" />
-            <el-table-column :label="t('clusters.lastHeartbeat')" min-width="140">
-              <template #default="{ row }">
-                {{ row.last_heartbeat_at ? formatTime(row.last_heartbeat_at) : t('clusters.never') }}
-              </template>
-            </el-table-column>
-          </el-table>
-          <el-empty v-else :description="t('clusters.noAgent')" :image-size="60" />
-        </div>
+            <div class="detail-section">
+              <el-collapse>
+                <el-collapse-item>
+                  <template #title>
+                    <div class="install-title-row">
+                      <h4>{{ t('clusters.installCommand') }}</h4>
+                      <el-button size="small" @click.stop="copyCommand(detail.install_command)">
+                        <el-icon><CopyDocument /></el-icon> {{ t('clusters.copy') }}
+                      </el-button>
+                    </div>
+                  </template>
+                  <div class="install-cmd-box">
+                    <code>{{ detail.install_command }}</code>
+                  </div>
+                  <p class="install-hint">{{ t('clusters.installTip') }}</p>
+                </el-collapse-item>
+              </el-collapse>
+            </div>
+          </el-tab-pane>
+
+          <!-- Agent 列表 Tab -->
+          <el-tab-pane :label="t('clusters.agents')" name="agents">
+            <div class="detail-section">
+              <el-table v-if="detail.agents.length > 0" :data="detail.agents" stripe>
+                <el-table-column prop="hostname" :label="t('clusters.hostname')" width="120" />
+                <el-table-column prop="agent_id" label="Agent ID" width="160">
+                  <template #default="{ row }">
+                    <code style="font-size: 12px">{{ row.agent_id.slice(0, 12) }}...</code>
+                  </template>
+                </el-table-column>
+                <el-table-column :label="t('common.status')" width="80">
+                  <template #default="{ row }">
+                    <el-tag :type="agentStatusType(row.status)" size="small">{{ agentStatusLabel(row.status) }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column :label="t('common.version')" width="110">
+                  <template #default="{ row }">
+                    <span style="margin-right: 4px">{{ row.version }}</span>
+                    <span
+                      v-if="latestAgentVersion && compareVersions(row.version, latestAgentVersion) < 0"
+                      class="version-tag version-outdated"
+                    >{{ t('clusters.updateAvailable') }}</span>
+                    <el-icon
+                      v-else-if="latestAgentVersion"
+                      class="version-check"
+                    ><CircleCheckFilled /></el-icon>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="total_scans" :label="t('clusters.scanCount')" width="90" />
+                <el-table-column :label="t('clusters.lastHeartbeat')" min-width="140">
+                  <template #default="{ row }">
+                    {{ row.last_heartbeat_at ? formatTime(row.last_heartbeat_at) : t('clusters.never') }}
+                  </template>
+                </el-table-column>
+              </el-table>
+              <el-empty v-else :description="t('clusters.noAgent')" :image-size="60" />
+            </div>
+          </el-tab-pane>
+
+          <!-- Agent 事件 Tab -->
+          <el-tab-pane :label="t('clusters.agentEvents')" name="events">
+            <div class="detail-section">
+              <div class="events-filter">
+                <el-select v-model="eventFilter" :placeholder="t('clusters.eventTypeFilter')" clearable size="small" @change="loadEvents">
+                  <el-option value="register" :label="t('clusters.eventRegister')" />
+                  <el-option value="scan_upload" :label="t('clusters.eventScanUpload')" />
+                  <el-option value="scan_failed" :label="t('clusters.eventScanFailed')" />
+                  <el-option value="version_upgrade" :label="t('clusters.eventVersionUpgrade')" />
+                  <el-option value="status_change" :label="t('clusters.eventStatusChange')" />
+                  <el-option value="error" :label="t('clusters.eventError')" />
+                  <el-option value="unregister" :label="t('clusters.eventUnregister')" />
+                </el-select>
+              </div>
+              <el-table :data="events" stripe v-loading="eventsLoading">
+                <el-table-column :label="t('common.time')" width="140">
+                  <template #default="{ row }">
+                    {{ formatTime(row.created_at) }}
+                  </template>
+                </el-table-column>
+                <el-table-column prop="agent_hostname" :label="t('clusters.hostname')" width="100" />
+                <el-table-column :label="t('clusters.eventType')" width="110">
+                  <template #default="{ row }">
+                    <el-tag :type="eventTypeTagType(row.event_type)" size="small">
+                      {{ row.event_type_display }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column :label="t('common.version')" width="130">
+                  <template #default="{ row }">
+                    <span v-if="row.old_version">{{ row.old_version }} → </span>
+                    <span>{{ row.version }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="detail" :label="t('common.detail')" min-width="200" show-overflow-tooltip />
+              </el-table>
+              <div class="pagination-wrapper" v-if="eventsTotal > 0">
+                <el-pagination
+                  v-model:current-page="eventsPage"
+                  :page-size="20"
+                  :total="eventsTotal"
+                  layout="prev, pager, next"
+                  @current-change="loadEvents"
+                />
+              </div>
+            </div>
+          </el-tab-pane>
+        </el-tabs>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const { t } = useI18n()
 import type { FormInstance } from 'element-plus'
 import { Loading, View, Delete, CopyDocument, VideoPause, CircleCheck, CircleCheckFilled } from '@element-plus/icons-vue'
-import { getClusters, getCluster, createCluster, updateCluster, deleteCluster, getLatestAgentVersion } from '@/api/clusters'
-import type { Cluster, ClusterDetail } from '@/api/clusters'
+import { getClusters, getCluster, createCluster, updateCluster, deleteCluster, getLatestAgentVersion, getAgentEvents } from '@/api/clusters'
+import type { Cluster, ClusterDetail, AgentEvent } from '@/api/clusters'
 
 const loading = ref(true)
 const clusters = ref<Cluster[]>([])
@@ -274,6 +328,14 @@ const showDetail = ref(false)
 const detail = ref<ClusterDetail | null>(null)
 const createFormRef = ref<FormInstance>()
 const latestAgentVersion = ref('')
+
+// Agent 事件相关
+const detailTab = ref('info')
+const events = ref<AgentEvent[]>([])
+const eventsLoading = ref(false)
+const eventsPage = ref(1)
+const eventsTotal = ref(0)
+const eventFilter = ref('')
 
 function compareVersions(a: string, b: string): number {
   const pa = a.split('.').map(Number)
@@ -335,8 +397,35 @@ async function viewDetail(cluster: Cluster) {
   try {
     detail.value = await getCluster(cluster.id)
     showDetail.value = true
+    detailTab.value = 'info'
+    events.value = []
+    eventsPage.value = 1
+    eventsTotal.value = 0
+    eventFilter.value = ''
   } catch {
     // error handled by interceptor
+  }
+}
+
+async function loadEvents() {
+  if (!detail.value) return
+  eventsLoading.value = true
+  try {
+    const params: any = {
+      cluster_id: detail.value.id,
+      page: eventsPage.value,
+      page_size: 20,
+    }
+    if (eventFilter.value) {
+      params.event_type = eventFilter.value
+    }
+    const res = await getAgentEvents(params)
+    events.value = res.results || []
+    eventsTotal.value = res.count || 0
+  } catch {
+    // error handled by interceptor
+  } finally {
+    eventsLoading.value = false
   }
 }
 
@@ -424,6 +513,26 @@ function agentStatusType(s: string) {
 function agentStatusLabel(s: string) {
   return { online: t('clusters.agentOnline'), offline: t('clusters.agentOffline'), error: t('clusters.error'), paused: t('clusters.agentPaused') }[s] || s
 }
+
+function eventTypeTagType(s: string) {
+  const map: Record<string, string> = {
+    register: 'success',
+    scan_upload: '',
+    scan_failed: 'danger',
+    version_upgrade: 'warning',
+    status_change: 'warning',
+    error: 'danger',
+    unregister: 'info',
+  }
+  return map[s] || ''
+}
+
+// 监听 Tab 切换，加载事件数据
+watch(detailTab, (val) => {
+  if (val === 'events' && events.value.length === 0) {
+    loadEvents()
+  }
+})
 
 onMounted(() => {
   loadClusters()
@@ -541,6 +650,20 @@ onMounted(() => {
 .install-title-row .el-button { margin-right: 4px; }
 .install-hint { font-size: 12px; color: var(--text-secondary, #909399); margin-top: 8px; }
 .form-hint { font-size: 12px; color: var(--text-secondary, #909399); margin: -8px 0 0 120px; }
+
+/* 事件过滤器 */
+.events-filter {
+  margin-bottom: 16px;
+  display: flex;
+  gap: 12px;
+}
+
+/* 分页 */
+.pagination-wrapper {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+}
 
 :deep(.el-collapse-item__header) {
   height: 32px;

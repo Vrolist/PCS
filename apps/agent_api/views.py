@@ -49,7 +49,7 @@ from apps.scanner.models import (
     HAResource,
 )
 
-from .models import AgentInstance, ScanTask
+from .models import AgentEvent, AgentInstance, ScanTask
 from .serializers import (
     AgentHeartbeatSerializer,
     AgentRegisterSerializer,
@@ -59,6 +59,22 @@ from .serializers import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _log_agent_event(agent, event_type, version="", old_version="", detail="", ip_address=None):
+    """记录 Agent 事件日志（仅记录有意义的事件，心跳仅记录状态变化）"""
+    try:
+        AgentEvent.objects.create(
+            agent=agent,
+            cluster=agent.cluster,
+            event_type=event_type,
+            version=version or agent.version,
+            old_version=old_version,
+            detail=detail,
+            ip_address=ip_address,
+        )
+    except Exception as e:
+        logger.warning(f"记录 Agent 事件失败: {e}")
 
 
 def _verify_agent(serializer_class):
@@ -129,6 +145,14 @@ class AgentRegisterView(APIView):
             cluster.status = Cluster.Status.ACTIVE
             cluster.save(update_fields=["status"])
 
+        # 记录注册事件
+        _log_agent_event(
+            agent, AgentEvent.EventType.REGISTER,
+            version=agent.version,
+            detail=f"Agent 注册成功，主机名: {agent.hostname}",
+            ip_address=request.META.get("REMOTE_ADDR"),
+        )
+
         return Response(
             {
                 "agent_id": agent.agent_id,
@@ -161,19 +185,45 @@ class AgentHeartbeatView(APIView):
                 status=410,
             )
 
+        # 检测版本升级
+        old_version = agent.version
+        new_version = d.get("version", "")
+        version_changed = new_version and new_version != old_version
+
+        # 检测状态变化
+        old_status = agent.status
+        new_status = d["status"]
+        status_changed = new_status != old_status
+
         agent.last_heartbeat_at = timezone.now()
-        agent.status = d["status"]
+        agent.status = new_status
         agent.current_task = d.get("current_task", "")
         agent.error_message = d.get("error_message", "")
-        if "version" in request.data and request.data["version"]:
-            agent.version = d["version"]
+        if new_version:
+            agent.version = new_version
         update_fields = [
             "last_heartbeat_at", "status", "current_task", "error_message",
             "updated_at",
         ]
-        if "version" in request.data and request.data["version"]:
+        if new_version:
             update_fields.append("version")
         agent.save(update_fields=update_fields)
+
+        # 记录版本升级事件
+        if version_changed:
+            _log_agent_event(
+                agent, AgentEvent.EventType.VERSION_UPGRADE,
+                version=new_version,
+                old_version=old_version,
+                detail=f"Agent 版本从 {old_version} 升级到 {new_version}",
+            )
+
+        # 记录状态变化事件（排除正常的心跳 online→online）
+        if status_changed and not (old_status == "online" and new_status == "online"):
+            _log_agent_event(
+                agent, AgentEvent.EventType.STATUS_CHANGE,
+                detail=f"状态从 {old_status} 变更为 {new_status}",
+            )
 
         # 心跳上报 PVE 版本时同步更新集群
         pve_ver = d.get("pve_version", "")
@@ -298,6 +348,14 @@ class ScanUploadView(APIView):
             cluster.pve_version = d["version"]
             cluster.save(update_fields=["last_scanned_at", "pve_version"])
 
+            # 记录扫描成功事件
+            total_vms = sum(len(n.get("vms", [])) for n in nodes_data)
+            total_lxc = sum(len(n.get("containers", [])) for n in nodes_data)
+            _log_agent_event(
+                agent, AgentEvent.EventType.SCAN_UPLOAD,
+                detail=f"扫描完成，{len(nodes_data)} 节点，{total_vms} VM，{total_lxc} 容器，耗时 {scan_task.duration_seconds:.1f}s",
+            )
+
             # 清理过期历史数据（事务外，失败不影响上传）
             try:
                 self._cleanup_expired(cluster)
@@ -314,6 +372,13 @@ class ScanUploadView(APIView):
             agent.error_message = str(e)
             agent.save(update_fields=["failed_scans", "error_message"])
             logger.exception("Scan upload failed")
+
+            # 记录扫描失败事件
+            _log_agent_event(
+                agent, AgentEvent.EventType.SCAN_FAILED,
+                detail=f"扫描失败: {str(e)[:500]}",
+            )
+
             return Response({"error": str(e)}, status=500)
 
     def _cleanup_expired(self, cluster):
@@ -1193,6 +1258,12 @@ class AgentUnregisterView(APIView):
         except AgentInstance.DoesNotExist:
             return Response({"error": "Agent not found"}, status=404)
 
+        # 记录卸载事件
+        _log_agent_event(
+            agent, AgentEvent.EventType.UNREGISTER,
+            detail=f"Agent 卸载，主机名: {agent.hostname}",
+        )
+
         # 标记为 offline
         agent.status = AgentInstance.Status.OFFLINE
         agent.save(update_fields=["status", "updated_at"])
@@ -1234,6 +1305,109 @@ class AgentPVEInfoView(APIView):
             "pve_endpoint": cluster.pve_endpoint,
             "pve_username": "root@pam",
             "pve_token": cluster.pve_token,
+        })
+
+
+class AgentEventListView(APIView):
+    """Agent 事件列表 — 支持按集群/Agent/事件类型筛选"""
+    permission_classes = [AllowAny]  # TODO: 改为 JWT 认证
+
+    def get(self, request):
+        from django.core.paginator import Paginator
+
+        queryset = AgentEvent.objects.select_related("agent", "cluster").all()
+
+        # 筛选参数
+        cluster_id = request.query_params.get("cluster_id")
+        agent_id = request.query_params.get("agent_id")
+        event_type = request.query_params.get("event_type")
+
+        if cluster_id:
+            queryset = queryset.filter(cluster_id=cluster_id)
+        if agent_id:
+            queryset = queryset.filter(agent__agent_id=agent_id)
+        if event_type:
+            queryset = queryset.filter(event_type=event_type)
+
+        # 分页
+        page = int(request.query_params.get("page", 1))
+        page_size = int(request.query_params.get("page_size", 20))
+        paginator = Paginator(queryset, page_size)
+        page_obj = paginator.get_page(page)
+
+        results = []
+        for event in page_obj:
+            results.append({
+                "id": event.id,
+                "agent_id": event.agent.agent_id,
+                "agent_hostname": event.agent.hostname,
+                "cluster_id": event.cluster_id,
+                "cluster_name": event.cluster.name if event.cluster else "",
+                "event_type": event.event_type,
+                "event_type_display": event.get_event_type_display(),
+                "version": event.version,
+                "old_version": event.old_version,
+                "detail": event.detail,
+                "ip_address": event.ip_address,
+                "created_at": event.created_at.isoformat() if event.created_at else "",
+            })
+
+        return Response({
+            "count": paginator.count,
+            "results": results,
+        })
+
+
+class AgentInstanceListView(APIView):
+    """跨集群 Agent 实例列表 — 支持按集群/状态筛选"""
+    permission_classes = [AllowAny]  # TODO: 改为 JWT 认证
+
+    def get(self, request):
+        from django.core.paginator import Paginator
+
+        queryset = AgentInstance.objects.select_related("cluster").all()
+
+        # 筛选参数
+        cluster_id = request.query_params.get("cluster_id")
+        status = request.query_params.get("status")
+
+        if cluster_id:
+            queryset = queryset.filter(cluster_id=cluster_id)
+        if status:
+            queryset = queryset.filter(status=status)
+
+        # 排序
+        queryset = queryset.order_by("-last_heartbeat_at")
+
+        # 分页
+        page = int(request.query_params.get("page", 1))
+        page_size = int(request.query_params.get("page_size", 20))
+        paginator = Paginator(queryset, page_size)
+        page_obj = paginator.get_page(page)
+
+        results = []
+        for agent in page_obj:
+            results.append({
+                "id": agent.id,
+                "agent_id": agent.agent_id,
+                "hostname": agent.hostname,
+                "version": agent.version,
+                "status": agent.status,
+                "status_display": agent.get_status_display(),
+                "cluster_id": agent.cluster_id,
+                "cluster_name": agent.cluster.name if agent.cluster else "",
+                "ip_address": agent.ip_address,
+                "platform": agent.platform,
+                "total_scans": agent.total_scans,
+                "failed_scans": agent.failed_scans,
+                "last_heartbeat_at": agent.last_heartbeat_at.isoformat() if agent.last_heartbeat_at else "",
+                "last_scan_at": agent.last_scan_at.isoformat() if agent.last_scan_at else "",
+                "started_at": agent.started_at.isoformat() if agent.started_at else "",
+            })
+
+        return Response({
+            "count": paginator.count,
+            "results": results,
         })
 
 

@@ -53,6 +53,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '集群管理', titleKey: 'nav.clusters', icon: 'Connection' },
       },
       {
+        path: 'agents',
+        name: 'Agents',
+        component: () => import('@/views/agents/index.vue'),
+        meta: { title: 'Agent 管理', titleKey: 'nav.agentManagement', icon: 'User' },
+      },
+      {
         path: 'nodes',
         name: 'Nodes',
         component: () => import('@/views/nodes/index.vue'),

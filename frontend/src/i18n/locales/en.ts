@@ -42,6 +42,7 @@ export default {
     description: 'Description',
     scanTime: 'Scan Time',
     search: 'Search',
+    time: 'Time',
   },
 
   // Navigation
@@ -53,6 +54,7 @@ export default {
     changePassword: 'Change Password',
     dashboard: 'Dashboard',
     clusters: 'Cluster Management',
+    agentManagement: 'Agent Management',
     selectCluster: 'Select Cluster',
     noCluster: 'No clusters yet',
     basicInfo: 'Basic Info',
@@ -339,6 +341,32 @@ export default {
     agentOnline: 'Online',
     agentOffline: 'Offline',
     agentPaused: 'Paused',
+    agents: 'Agents',
+    agentEvents: 'Agent Events',
+    eventTypeFilter: 'Filter by event type',
+    eventType: 'Event Type',
+    eventRegister: 'Register',
+    eventScanUpload: 'Scan Upload',
+    eventScanFailed: 'Scan Failed',
+    eventVersionUpgrade: 'Version Upgrade',
+    eventStatusChange: 'Status Change',
+    eventError: 'Error',
+    eventUnregister: 'Unregister',
+  },
+
+  // Agent Management
+  agents: {
+    subtitle: 'Cross-cluster Agent instance management and event monitoring',
+    filterCluster: 'Filter by cluster',
+    filterStatus: 'Filter by status',
+    online: 'Online',
+    offline: 'Offline',
+    error: 'Error',
+    paused: 'Paused',
+    ipAddress: 'IP Address',
+    platform: 'Platform',
+    lastScan: 'Last Scan',
+    agentEvents: 'Agent Events',
   },
 
   // Node Management

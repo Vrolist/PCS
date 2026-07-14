@@ -15,4 +15,7 @@ urlpatterns = [
     path("version/", views.AgentVersionView.as_view(), name="version"),
     path("pve-info/", views.AgentPVEInfoView.as_view(), name="pve-info"),
     path("install.sh", views.AgentInstallScriptView.as_view(), name="install-script"),
+    # Agent 事件与实例管理
+    path("events/", views.AgentEventListView.as_view(), name="events"),
+    path("instances/", views.AgentInstanceListView.as_view(), name="instances"),
 ]
