@@ -217,6 +217,13 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/user-notifications/index.vue'),
         meta: { title: '通知设置', titleKey: 'nav.notificationSettings', icon: 'Bell' },
       },
+      // 管理员专用
+      {
+        path: 'admin/users',
+        name: 'AdminUsers',
+        component: () => import('@/views/admin/users/index.vue'),
+        meta: { title: '用户管理', titleKey: 'nav.adminUsers', icon: 'User', adminOnly: true },
+      },
     ],
   },
 ]

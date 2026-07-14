@@ -258,6 +258,23 @@
         <template #title><span>{{ t('nav.notificationSettings') }}</span></template>
       </el-menu-item>
     </template>
+
+    <!-- 管理员功能（仅超级管理员可见） -->
+    <template v-if="isSuperUser">
+      <div v-if="!appStore.sidebarCollapsed" class="menu-section collapsible" @click="toggleSection('admin')">
+        <span class="menu-label">{{ t('nav.adminFunctions') }}</span>
+        <el-icon class="section-arrow" :class="{ expanded: expandedSections.admin }"><ArrowRight /></el-icon>
+      </div>
+      <div v-else class="menu-section">
+        <span class="menu-label" style="font-size:0"></span>
+      </div>
+      <template v-if="expandedSections.admin || appStore.sidebarCollapsed">
+        <el-menu-item index="/dashboard/admin/users" class="sidebar-item">
+          <div class="item-icon-wrap"><el-icon><User /></el-icon></div>
+          <template #title><span>{{ t('nav.adminUsers') }}</span></template>
+        </el-menu-item>
+      </template>
+    </template>
   </el-menu>
 </template>
 
@@ -268,6 +285,7 @@ import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { useThemeStore } from '@/stores/theme'
 import { useClusterStore } from '@/stores/cluster'
+import { useAuthStore } from '@/stores/auth'
 import { Monitor, Connection, Cpu, Box, Bell, Service, User, Document, Coin, Share, Lock, FolderOpened, CopyDocument, Camera, ArrowRight, ArrowDown, Check, DataAnalysis, Switch, Delete, Trophy, Histogram, Files } from '@element-plus/icons-vue'
 
 const route = useRoute()
@@ -275,6 +293,9 @@ const { t } = useI18n()
 const appStore = useAppStore()
 const themeStore = useThemeStore()
 const clusterStore = useClusterStore()
+const authStore = useAuthStore()
+
+const isSuperUser = computed(() => authStore.user?.is_superuser || false)
 
 // 集群选择器
 const clusterDropdownOpen = ref(false)
@@ -307,6 +328,7 @@ const sectionRoutes: Record<string, string[]> = {
   smart: ['/dashboard/capacity-planning', '/dashboard/change-tracking', '/dashboard/resource-reclamation', '/dashboard/performance-correlation', '/dashboard/dependency-mapping'],
   report: ['/dashboard/compliance-report', '/dashboard/health-report', '/dashboard/dr-score'],
   user: ['/dashboard/settings', '/dashboard/user-logs', '/dashboard/cluster-logs', '/dashboard/user-notifications'],
+  admin: ['/dashboard/admin/users'],
 }
 
 function getInitialSections(): Record<string, boolean> {

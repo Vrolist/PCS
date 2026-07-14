@@ -1,7 +1,8 @@
 import logging
 
+from django.conf import settings
 from django.shortcuts import render
-from rest_framework import status
+from rest_framework import status, generics
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -16,6 +17,8 @@ from .serializers import (
     PasswordResetConfirmSerializer,
     ChangePasswordSerializer,
     UserLogSerializer,
+    AdminUserUpdateSerializer,
+    AdminChangePasswordSerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -81,6 +84,10 @@ def login_view(request):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def register_view(request):
+    # 检查是否允许注册
+    if not getattr(settings, 'ALLOW_REGISTRATION', True):
+        return Response({"detail": "注册功能已关闭"}, status=status.HTTP_403_FORBIDDEN)
+    
     serializer = RegisterSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     user = serializer.save()
@@ -196,3 +203,73 @@ def cluster_logs_view(request):
         "page_size": page_size,
         "results": serializer.data,
     })
+
+
+class IsSuperUser(IsAuthenticated):
+    """仅允许超级管理员"""
+    def has_permission(self, request, view):
+        return super().has_permission(request, view) and request.user.is_superuser
+
+
+class AdminUserListView(generics.ListAPIView):
+    """GET /api/auth/admin/users/ - 获取用户列表（仅超级管理员）"""
+    permission_classes = [IsSuperUser]
+    serializer_class = UserSerializer
+    queryset = User.objects.all().order_by('-date_joined')
+
+
+class AdminUserDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """GET/PUT/PATCH/DELETE /api/auth/admin/users/<id>/ - 用户详情（仅超级管理员）"""
+    permission_classes = [IsSuperUser]
+    serializer_class = AdminUserUpdateSerializer
+    queryset = User.objects.all()
+
+    def perform_destroy(self, instance):
+        if instance.is_superuser:
+            return Response({"detail": "不能删除超级管理员"}, status=status.HTTP_400_BAD_REQUEST)
+        instance.delete()
+
+
+@api_view(["POST"])
+@permission_classes([IsSuperUser])
+def admin_change_password_view(request, user_id):
+    """POST /api/auth/admin/users/<id>/change-password/ - 管理员修改用户密码"""
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({"detail": "用户不存在"}, status=status.HTTP_404_NOT_FOUND)
+    
+    serializer = AdminChangePasswordSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    user.set_password(serializer.validated_data["new_password"])
+    user.save()
+    log_user_action(request.user, "admin_change_password", "user", user_id,
+                    f"管理员修改用户 {user.username} 的密码", request)
+    return Response({"detail": "密码修改成功"})
+
+
+@api_view(["POST"])
+@permission_classes([IsSuperUser])
+def admin_toggle_user_active_view(request, user_id):
+    """POST /api/auth/admin/users/<id>/toggle-active/ - 启用/禁用用户"""
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({"detail": "用户不存在"}, status=status.HTTP_404_NOT_FOUND)
+    
+    if user.is_superuser:
+        return Response({"detail": "不能禁用超级管理员"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    user.is_active = not user.is_active
+    user.save()
+    action = "启用" if user.is_active else "禁用"
+    log_user_action(request.user, "admin_toggle_user", "user", user_id,
+                    f"管理员{action}用户 {user.username}", request)
+    return Response({"detail": f"用户已{action}", "is_active": user.is_active})
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def registration_status_view(request):
+    """GET /api/auth/registration-status/ - 检查是否允许注册"""
+    return Response({"enabled": getattr(settings, 'ALLOW_REGISTRATION', True)})

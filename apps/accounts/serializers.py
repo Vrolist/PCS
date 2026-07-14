@@ -101,6 +101,24 @@ class ChangePasswordSerializer(serializers.Serializer):
         return data
 
 
+class AdminUserUpdateSerializer(serializers.ModelSerializer):
+    """管理员修改用户信息"""
+    class Meta:
+        model = User
+        fields = ["username", "email", "phone", "company", "is_active"]
+
+
+class AdminChangePasswordSerializer(serializers.Serializer):
+    """管理员修改用户密码"""
+    new_password = serializers.CharField(write_only=True, validators=[validate_password])
+    new_password2 = serializers.CharField(write_only=True, label="确认新密码")
+
+    def validate(self, data):
+        if data["new_password"] != data["new_password2"]:
+            raise serializers.ValidationError("两次密码不一致")
+        return data
+
+
 class UserLogSerializer(serializers.ModelSerializer):
     action_display = serializers.CharField(source="get_action_display", read_only=True)
 

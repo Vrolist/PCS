@@ -127,6 +127,9 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# 注册开关（可通过环境变量控制）
+ALLOW_REGISTRATION = True  # 设为 False 可关闭注册功能
+
 
 # CORS
 CORS_ALLOW_CREDENTIALS = True
