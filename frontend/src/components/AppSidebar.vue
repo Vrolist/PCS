@@ -114,6 +114,10 @@
         <div class="item-icon-wrap"><el-icon><Connection /></el-icon></div>
         <template #title><span>{{ t('nav.networkInterfaces') }}</span></template>
       </el-menu-item>
+      <el-menu-item index="/dashboard/agents" class="sidebar-item">
+        <div class="item-icon-wrap"><el-icon><User /></el-icon></div>
+        <template #title><span>{{ t('nav.agentManagement') }}</span></template>
+      </el-menu-item>
     </template>
 
     <!-- 进阶信息 -->
@@ -322,7 +326,7 @@ function handleClickOutside(e: MouseEvent) {
 
 // 菜单分组路由映射
 const sectionRoutes: Record<string, string[]> = {
-  basic: ['/dashboard/nodes', '/dashboard/vms', '/dashboard/containers', '/dashboard/storage', '/dashboard/networks'],
+  basic: ['/dashboard/nodes', '/dashboard/vms', '/dashboard/containers', '/dashboard/storage', '/dashboard/networks', '/dashboard/agents'],
   advanced: ['/dashboard/network-topology', '/dashboard/ceph', '/dashboard/ha', '/dashboard/sdn', '/dashboard/firewall', '/dashboard/backup', '/dashboard/replication', '/dashboard/snapshots'],
   ops: ['/dashboard/alerts', '/dashboard/services'],
   smart: ['/dashboard/capacity-planning', '/dashboard/change-tracking', '/dashboard/resource-reclamation', '/dashboard/performance-correlation', '/dashboard/dependency-mapping'],

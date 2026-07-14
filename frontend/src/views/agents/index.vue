@@ -3,16 +3,15 @@
     <div class="page-header">
       <div>
         <h2 class="page-title">{{ t('nav.agentManagement') }}</h2>
-        <p class="page-subtitle">{{ t('agents.subtitle') }}</p>
+        <p class="page-subtitle">
+          {{ clusterStore.currentCluster ? clusterStore.currentCluster.name : t('agents.subtitle') }}
+        </p>
       </div>
     </div>
 
     <!-- 筛选栏 -->
     <el-card shadow="hover" class="filter-card">
       <div class="filter-row">
-        <el-select v-model="filterCluster" :placeholder="t('agents.filterCluster')" clearable @change="loadAgents">
-          <el-option v-for="c in clusters" :key="c.id" :label="c.name" :value="c.id" />
-        </el-select>
         <el-select v-model="filterStatus" :placeholder="t('agents.filterStatus')" clearable @change="loadAgents">
           <el-option value="online" :label="t('agents.online')" />
           <el-option value="offline" :label="t('agents.offline')" />
@@ -32,7 +31,6 @@
             <code class="agent-id">{{ row.agent_id.slice(0, 12) }}...</code>
           </template>
         </el-table-column>
-        <el-table-column :label="t('clusters.name')" width="140" prop="cluster_name" />
         <el-table-column :label="t('common.status')" width="90">
           <template #default="{ row }">
             <el-tag :type="statusType(row.status)" size="small">{{ row.status_display }}</el-tag>
@@ -130,24 +128,24 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Refresh } from '@element-plus/icons-vue'
-import { getAgentInstances, getAgentEvents, getClusters, getLatestAgentVersion } from '@/api/clusters'
-import type { AgentInstance, AgentEvent, Cluster, AgentVersion } from '@/api/clusters'
+import { useClusterStore } from '@/stores/cluster'
+import { getAgentInstances, getAgentEvents, getLatestAgentVersion } from '@/api/clusters'
+import type { AgentInstance, AgentEvent } from '@/api/clusters'
 
 const { t } = useI18n()
+const clusterStore = useClusterStore()
 
 const loading = ref(false)
 const agents = ref<AgentInstance[]>([])
-const clusters = ref<Cluster[]>([])
 const latestVersion = ref('')
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(20)
 
 // 筛选
-const filterCluster = ref<number | ''>('')
 const filterStatus = ref('')
 
 // Agent 事件弹窗
@@ -158,15 +156,6 @@ const eventsLoading = ref(false)
 const eventsPage = ref(1)
 const eventsTotal = ref(0)
 const eventFilter = ref('')
-
-async function loadClusters() {
-  try {
-    const res = await getClusters()
-    clusters.value = res.results || []
-  } catch {
-    // error handled by interceptor
-  }
-}
 
 async function loadLatestVersion() {
   try {
@@ -184,8 +173,8 @@ async function loadAgents() {
       page: currentPage.value,
       page_size: pageSize.value,
     }
-    if (filterCluster.value) {
-      params.cluster_id = filterCluster.value
+    if (clusterStore.currentClusterId) {
+      params.cluster_id = clusterStore.currentClusterId
     }
     if (filterStatus.value) {
       params.status = filterStatus.value
@@ -272,8 +261,13 @@ function formatTime(iso: string) {
   return d.toLocaleDateString('zh-CN')
 }
 
+// 监听集群变化
+watch(() => clusterStore.currentClusterId, () => {
+  currentPage.value = 1
+  loadAgents()
+})
+
 onMounted(() => {
-  loadClusters()
   loadLatestVersion()
   loadAgents()
 })
