@@ -213,6 +213,10 @@ async function loadAgents() {
         selectedAgent.value = null
       }
     }
+    // 首次加载或集群切换后，自动选择第一个 Agent
+    if (!selectedAgent.value && agents.value.length > 0) {
+      selectAgent(agents.value[0])
+    }
   } catch {
     // error handled by interceptor
   } finally {
@@ -515,13 +519,18 @@ onMounted(() => {
 .events-header-bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
 }
 
 .events-title {
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary, #303133);
+  margin-right: auto;
+}
+
+.events-header-bar .el-select {
+  width: 140px;
+  flex-shrink: 0;
 }
 
 .events-list {
