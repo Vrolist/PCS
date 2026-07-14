@@ -11,4 +11,5 @@ urlpatterns = [
     path("change-password/", views.change_password_view, name="auth-change-password"),
     path("create-admin-session/", views.create_admin_session_view, name="auth-create-admin-session"),
     path("logs/", views.user_logs_view, name="auth-user-logs"),
+    path("cluster-logs/", views.cluster_logs_view, name="auth-cluster-logs"),
 ]

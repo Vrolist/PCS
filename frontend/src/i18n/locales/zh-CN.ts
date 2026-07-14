@@ -85,6 +85,7 @@ export default {
     healthReport: '定期健康报告',
     userInfo: '用户信息',
     operationLogs: '操作日志',
+    clusterOperationLogs: '集群操作记录',
     notificationSettings: '通知设置',
   },
 
@@ -647,6 +648,27 @@ export default {
     delete: '删除',
     changePassword: '修改密码',
     resetPassword: '重置密码',
+  },
+
+  // 集群操作记录
+  clusterLogs: {
+    title: '集群操作记录',
+    subtitle: '查看所有用户对集群的操作记录',
+    actionType: '操作类型',
+    noData: '暂无操作记录',
+    operationTime: '操作时间',
+    operator: '操作人',
+    clusterName: '集群名称',
+    resourceType: '资源类型',
+    resourceId: '资源 ID',
+    detail: '操作详情',
+    ipAddr: 'IP 地址',
+    all: '全部',
+    create: '创建',
+    update: '更新',
+    delete: '删除',
+    stop: '停用',
+    restore: '恢复',
   },
 
   // 通知设置

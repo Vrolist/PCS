@@ -249,6 +249,10 @@
         <div class="item-icon-wrap"><el-icon><Document /></el-icon></div>
         <template #title><span>{{ t('nav.operationLogs') }}</span></template>
       </el-menu-item>
+      <el-menu-item index="/dashboard/cluster-logs" class="sidebar-item">
+        <div class="item-icon-wrap"><el-icon><Document /></el-icon></div>
+        <template #title><span>{{ t('nav.clusterOperationLogs') }}</span></template>
+      </el-menu-item>
       <el-menu-item index="/dashboard/user-notifications" class="sidebar-item">
         <div class="item-icon-wrap"><el-icon><Bell /></el-icon></div>
         <template #title><span>{{ t('nav.notificationSettings') }}</span></template>
@@ -302,7 +306,7 @@ const sectionRoutes: Record<string, string[]> = {
   ops: ['/dashboard/alerts', '/dashboard/services'],
   smart: ['/dashboard/capacity-planning', '/dashboard/change-tracking', '/dashboard/resource-reclamation', '/dashboard/performance-correlation', '/dashboard/dependency-mapping'],
   report: ['/dashboard/compliance-report', '/dashboard/health-report', '/dashboard/dr-score'],
-  user: ['/dashboard/settings', '/dashboard/user-logs', '/dashboard/user-notifications'],
+  user: ['/dashboard/settings', '/dashboard/user-logs', '/dashboard/cluster-logs', '/dashboard/user-notifications'],
 }
 
 function getInitialSections(): Record<string, boolean> {

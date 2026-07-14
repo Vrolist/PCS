@@ -54,3 +54,7 @@ export interface UserLogResponse {
 export function getUserLogs(params: { page?: number; page_size?: number; action?: string }) {
   return request.get<any, UserLogResponse>('/auth/logs/', { params })
 }
+
+export function getClusterLogs(params: { page?: number; page_size?: number; action?: string }) {
+  return request.get<any, UserLogResponse>('/auth/cluster-logs/', { params })
+}

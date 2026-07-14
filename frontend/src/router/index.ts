@@ -206,6 +206,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '操作日志', titleKey: 'nav.operationLogs', icon: 'Document' },
       },
       {
+        path: 'cluster-logs',
+        name: 'ClusterLogs',
+        component: () => import('@/views/cluster-logs/index.vue'),
+        meta: { title: '集群操作记录', titleKey: 'nav.clusterOperationLogs', icon: 'Document' },
+      },
+      {
         path: 'user-notifications',
         name: 'UserNotifications',
         component: () => import('@/views/user-notifications/index.vue'),

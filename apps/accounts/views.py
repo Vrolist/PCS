@@ -169,3 +169,30 @@ def user_logs_view(request):
         "page_size": page_size,
         "results": serializer.data,
     })
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def cluster_logs_view(request):
+    """获取所有用户的集群操作日志（分页）"""
+    page_size = int(request.GET.get("page_size", 20))
+    page = int(request.GET.get("page", 1))
+    action = request.GET.get("action", "")
+
+    # 只查询集群相关的操作
+    queryset = UserLog.objects.filter(resource_type="cluster")
+    if action:
+        queryset = queryset.filter(action=action)
+
+    total = queryset.count()
+    start = (page - 1) * page_size
+    end = start + page_size
+    logs = queryset[start:end]
+
+    serializer = UserLogSerializer(logs, many=True)
+    return Response({
+        "count": total,
+        "page": page,
+        "page_size": page_size,
+        "results": serializer.data,
+    })

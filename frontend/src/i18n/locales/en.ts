@@ -85,6 +85,7 @@ export default {
     healthReport: 'Health Report',
     userInfo: 'User Info',
     operationLogs: 'Operation Logs',
+    clusterOperationLogs: 'Cluster Operation Logs',
     notificationSettings: 'Notification Settings',
   },
 
@@ -640,6 +641,27 @@ export default {
     delete: 'Delete',
     changePassword: 'Change Password',
     resetPassword: 'Reset Password',
+  },
+
+  // Cluster Operation Logs
+  clusterLogs: {
+    title: 'Cluster Operation Logs',
+    subtitle: 'View all users cluster operation records',
+    actionType: 'Action Type',
+    noData: 'No operation records',
+    operationTime: 'Operation Time',
+    operator: 'Operator',
+    clusterName: 'Cluster Name',
+    resourceType: 'Resource Type',
+    resourceId: 'Resource ID',
+    detail: 'Detail',
+    ipAddr: 'IP Address',
+    all: 'All',
+    create: 'Create',
+    update: 'Update',
+    delete: 'Delete',
+    stop: 'Stop',
+    restore: 'Restore',
   },
 
   // Notification Settings
