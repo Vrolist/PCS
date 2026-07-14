@@ -357,6 +357,7 @@ export default {
   // Agent Management
   agents: {
     subtitle: 'Cross-cluster Agent instance management and event monitoring',
+    agentList: 'Agent List',
     filterCluster: 'Filter by cluster',
     filterStatus: 'Filter by status',
     online: 'Online',
@@ -367,6 +368,10 @@ export default {
     platform: 'Platform',
     lastScan: 'Last Scan',
     agentEvents: 'Agent Events',
+    failedScans: 'Failed Scans',
+    startedAt: 'Started At',
+    selectAgent: 'Select an agent from the left list',
+    noMoreEvents: 'No more events',
   },
 
   // Node Management

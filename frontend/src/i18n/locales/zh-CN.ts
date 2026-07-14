@@ -363,6 +363,7 @@ export default {
   // Agent 管理
   agents: {
     subtitle: '跨集群 Agent 实例管理与事件监控',
+    agentList: 'Agent 列表',
     filterCluster: '按集群筛选',
     filterStatus: '按状态筛选',
     online: '在线',
@@ -373,6 +374,10 @@ export default {
     platform: '平台',
     lastScan: '最后扫描',
     agentEvents: 'Agent 事件',
+    failedScans: '失败次数',
+    startedAt: '启动时间',
+    selectAgent: '请从左侧选择一个 Agent',
+    noMoreEvents: '没有更多事件了',
   },
 
   // 节点管理
