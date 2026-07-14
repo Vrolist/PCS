@@ -19,7 +19,7 @@ User = get_user_model()
 
 def _create_test_data(user, cluster_name="test-cluster"):
     """创建测试用户、集群、节点、备份数据"""
-    cluster = Cluster.objects.create(user=user, name=cluster_name, agent_token=f"token-{cluster_name}")
+    cluster = Cluster.objects.create(name=cluster_name, agent_token=f"token-{cluster_name}")
     node = ClusterNode.objects.create(
         cluster=cluster, node_name="pve-1", status="online",
         scanned_at=timezone.now(),
@@ -323,7 +323,7 @@ class BackupStatsTest(TestCase):
     def test_empty_stats(self):
         """没有备份数据时统计应为全零"""
         # 创建一个新集群，没有备份数据
-        Cluster.objects.create(user=self.user, name="empty-cluster", agent_token="empty-token")
+        Cluster.objects.create(name="empty-cluster", agent_token="empty-token")
         resp = self.client.get(self.url)
         # 这里会聚合所有集群的数据
         self.assertEqual(resp.status_code, status.HTTP_200_OK)

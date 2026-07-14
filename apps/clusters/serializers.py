@@ -37,8 +37,7 @@ class ClusterCreateSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "description", "pve_endpoint", "pve_token", "agent_token"]
 
     def validate_name(self, value):
-        user = self.context["request"].user
-        if Cluster.objects.filter(user=user, name=value).exists():
+        if Cluster.objects.filter(name=value).exists():
             raise serializers.ValidationError("已存在同名集群")
         return value
 
@@ -53,10 +52,6 @@ class ClusterCreateSerializer(serializers.ModelSerializer):
         if not value:
             raise serializers.ValidationError("此字段为必填项")
         return value
-
-    def create(self, validated_data):
-        validated_data["user"] = self.context["request"].user
-        return super().create(validated_data)
 
 
 class ClusterDetailSerializer(serializers.ModelSerializer):

@@ -13,13 +13,14 @@ from .models import (ClusterNode, VM, LXC, VMConfig, LXCConfig, VMSnapshot, HARe
                      FirewallOptions, FirewallRule, FirewallIPSet, FirewallIPSetEntry, FirewallAlias)
 
 
-def _user_cluster_ids(user):
-    return Cluster.objects.filter(user=user).values_list("id", flat=True)
+def _all_cluster_ids():
+    """返回所有集群 ID 列表"""
+    return Cluster.objects.values_list("id", flat=True)
 
 
-def _latest_node_ids(user):
+def _latest_node_ids():
     """获取每个物理节点最新扫描的 ClusterNode ID 列表"""
-    cluster_ids = _user_cluster_ids(user)
+    cluster_ids = _all_cluster_ids()
     latest = (
         ClusterNode.objects
         .filter(cluster_id__in=cluster_ids)
@@ -49,7 +50,7 @@ class NodeListView(APIView):
 
     def get(self, request):
         cluster_filter = request.query_params.get("cluster_id")
-        node_ids = _latest_node_ids(request.user)
+        node_ids = _latest_node_ids()
         nodes = ClusterNode.objects.filter(pk__in=node_ids).select_related("cluster")
         if cluster_filter:
             nodes = nodes.filter(cluster_id=cluster_filter)
@@ -86,7 +87,7 @@ class SDNZoneListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        cluster_ids = _user_cluster_ids(request.user)
+        cluster_ids = _all_cluster_ids()
         cluster_filter = request.query_params.get("cluster_id")
         if cluster_filter:
             cluster_ids = cluster_ids.filter(id=cluster_filter)
@@ -107,7 +108,7 @@ class SDNVNetListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        cluster_ids = _user_cluster_ids(request.user)
+        cluster_ids = _all_cluster_ids()
         cluster_filter = request.query_params.get("cluster_id")
         if cluster_filter:
             cluster_ids = cluster_ids.filter(id=cluster_filter)
@@ -130,7 +131,7 @@ class SDNSubnetListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        cluster_ids = _user_cluster_ids(request.user)
+        cluster_ids = _all_cluster_ids()
         cluster_filter = request.query_params.get("cluster_id")
         if cluster_filter:
             cluster_ids = cluster_ids.filter(id=cluster_filter)
@@ -297,7 +298,7 @@ class StorageListView(APIView):
 
     def get(self, request):
         cluster_filter = request.query_params.get("cluster_id")
-        cluster_ids = _user_cluster_ids(request.user)
+        cluster_ids = _all_cluster_ids()
         nodes = ClusterNode.objects.filter(cluster_id__in=cluster_ids)
         if cluster_filter:
             nodes = nodes.filter(cluster_id=cluster_filter)
@@ -342,7 +343,7 @@ class NetworkInterfaceListView(APIView):
 
     def get(self, request):
         cluster_filter = request.query_params.get("cluster_id")
-        cluster_ids = _user_cluster_ids(request.user)
+        cluster_ids = _all_cluster_ids()
         nodes = ClusterNode.objects.filter(cluster_id__in=cluster_ids)
         if cluster_filter:
             nodes = nodes.filter(cluster_id=cluster_filter)
@@ -390,7 +391,7 @@ class CephStatusView(APIView):
 
     def get(self, request):
         cluster_filter = request.query_params.get("cluster_id")
-        cluster_ids = _user_cluster_ids(request.user)
+        cluster_ids = _all_cluster_ids()
         latest = (
             CephStatus.objects.filter(cluster_id__in=cluster_ids)
             .values("cluster_id")
@@ -434,14 +435,14 @@ class VMListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        cluster_ids = _user_cluster_ids(request.user)
+        cluster_ids = _all_cluster_ids()
         cluster_filter = request.query_params.get("cluster_id")
         node_filter = request.query_params.get("node_id")
         status_filter = request.query_params.get("status")
         search = request.query_params.get("search", "").strip()
 
         # 只取最新扫描的节点 ID
-        node_ids = _latest_node_ids(request.user)
+        node_ids = _latest_node_ids()
 
         # 在最新节点中，按 (node_name, vmid) 去重取最新
         latest = (
@@ -508,7 +509,7 @@ class LXCListView(APIView):
         status_filter = request.query_params.get("status")
         search = request.query_params.get("search", "").strip()
 
-        node_ids = _latest_node_ids(request.user)
+        node_ids = _latest_node_ids()
 
         latest = (
             LXC.objects
@@ -739,7 +740,7 @@ class HAListView(APIView):
 
     def get(self, request):
         cluster_filter = request.query_params.get("cluster_id")
-        cluster_ids = _user_cluster_ids(request.user)
+        cluster_ids = _all_cluster_ids()
 
         # 只取每个 sid 的最新记录
         base_qs = HAResource.objects.filter(cluster_id__in=cluster_ids)
@@ -782,13 +783,13 @@ class SnapshotListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        cluster_ids = _user_cluster_ids(request.user)
+        cluster_ids = _all_cluster_ids()
         cluster_filter = request.query_params.get("cluster_id")
         node_filter = request.query_params.get("node_id")
         vmid_filter = request.query_params.get("vmid")
         search = request.query_params.get("search", "").strip()
 
-        node_ids = _latest_node_ids(request.user)
+        node_ids = _latest_node_ids()
 
         # 在最新节点中，按 (vm, snapid) 去重取最新
         latest = (
@@ -850,7 +851,7 @@ class BackupStorageListView(APIView):
 
     def get(self, request):
         cluster_filter = request.query_params.get("cluster_id")
-        cluster_ids = _user_cluster_ids(request.user)
+        cluster_ids = _all_cluster_ids()
         qs = BackupStorage.objects.filter(cluster_id__in=cluster_ids).select_related("cluster", "node")
         if cluster_filter:
             qs = qs.filter(cluster_id=cluster_filter)
@@ -896,7 +897,7 @@ class BackupJobListView(APIView):
     def get(self, request):
         cluster_filter = request.query_params.get("cluster_id")
         status_filter = request.query_params.get("status")
-        cluster_ids = _user_cluster_ids(request.user)
+        cluster_ids = _all_cluster_ids()
         qs = BackupJob.objects.filter(cluster_id__in=cluster_ids).select_related("cluster")
         if cluster_filter:
             qs = qs.filter(cluster_id=cluster_filter)
@@ -952,7 +953,7 @@ class BackupHistoryListView(APIView):
         page = int(request.query_params.get("page", 1))
         page_size = int(request.query_params.get("page_size", 20))
 
-        cluster_ids = _user_cluster_ids(request.user)
+        cluster_ids = _all_cluster_ids()
         qs = BackupHistory.objects.filter(cluster_id__in=cluster_ids).select_related("cluster")
         if cluster_filter:
             qs = qs.filter(cluster_id=cluster_filter)
@@ -997,7 +998,7 @@ class BackupStatsView(APIView):
 
     def get(self, request):
         cluster_filter = request.query_params.get("cluster_id")
-        cluster_ids = _user_cluster_ids(request.user)
+        cluster_ids = _all_cluster_ids()
 
         storages_qs = BackupStorage.objects.filter(cluster_id__in=cluster_ids)
         jobs_qs = BackupJob.objects.filter(cluster_id__in=cluster_ids)
@@ -1059,7 +1060,7 @@ class ReplicationJobListView(APIView):
         status_filter = request.query_params.get("status")
         search = request.query_params.get("search", "").strip()
 
-        cluster_ids = _user_cluster_ids(request.user)
+        cluster_ids = _all_cluster_ids()
         qs = ReplicationJob.objects.filter(cluster_id__in=cluster_ids).select_related("cluster")
         if cluster_filter:
             qs = qs.filter(cluster_id=cluster_filter)
@@ -1128,7 +1129,7 @@ class FirewallSummaryView(APIView):
 
     def get(self, request):
         cluster_filter = request.query_params.get("cluster_id")
-        cluster_ids = _user_cluster_ids(request.user)
+        cluster_ids = _all_cluster_ids()
 
         opts = FirewallOptions.objects.filter(cluster_id__in=cluster_ids)
         rules = FirewallRule.objects.filter(cluster_id__in=cluster_ids)
@@ -1171,7 +1172,7 @@ class FirewallRulesView(APIView):
         group_filter = request.query_params.get("group")
         search = request.query_params.get("search", "").strip()
 
-        cluster_ids = _user_cluster_ids(request.user)
+        cluster_ids = _all_cluster_ids()
         qs = FirewallRule.objects.filter(cluster_id__in=cluster_ids).select_related("cluster")
 
         if cluster_filter:
@@ -1250,7 +1251,7 @@ class FirewallIPSetsView(APIView):
 
     def get(self, request):
         cluster_filter = request.query_params.get("cluster_id")
-        cluster_ids = _user_cluster_ids(request.user)
+        cluster_ids = _all_cluster_ids()
 
         qs = FirewallIPSet.objects.filter(cluster_id__in=cluster_ids).select_related("cluster")
         if cluster_filter:
@@ -1291,7 +1292,7 @@ class FirewallAliasesView(APIView):
 
     def get(self, request):
         cluster_filter = request.query_params.get("cluster_id")
-        cluster_ids = _user_cluster_ids(request.user)
+        cluster_ids = _all_cluster_ids()
 
         qs = FirewallAlias.objects.filter(cluster_id__in=cluster_ids).select_related("cluster")
         if cluster_filter:
@@ -1329,7 +1330,7 @@ class FirewallOptionsView(APIView):
 
     def get(self, request):
         cluster_filter = request.query_params.get("cluster_id")
-        cluster_ids = _user_cluster_ids(request.user)
+        cluster_ids = _all_cluster_ids()
 
         qs = FirewallOptions.objects.filter(cluster_id__in=cluster_ids).select_related("cluster")
         if cluster_filter:
@@ -1379,7 +1380,7 @@ class FirewallSecurityGroupsView(APIView):
 
     def get(self, request):
         cluster_filter = request.query_params.get("cluster_id")
-        cluster_ids = _user_cluster_ids(request.user)
+        cluster_ids = _all_cluster_ids()
 
         qs = FirewallRule.objects.filter(cluster_id__in=cluster_ids, scope="group")
         if cluster_filter:
@@ -1439,7 +1440,7 @@ class DependencyGraphView(APIView):
         cluster_filter = request.query_params.get("cluster_id")
         resource_type = request.query_params.get("resource_type")  # vm or container
         resource_id = request.query_params.get("resource_id")
-        cluster_ids = _user_cluster_ids(request.user)
+        cluster_ids = _all_cluster_ids()
         if cluster_filter:
             cluster_ids = [int(cluster_filter)]
 
@@ -1457,7 +1458,7 @@ class DependencyGraphView(APIView):
             })
 
         # 2. 物理节点
-        node_ids = _latest_node_ids(request.user)
+        node_ids = _latest_node_ids()
         if cluster_filter:
             node_ids = [
                 nid for nid in node_ids
@@ -2318,10 +2319,10 @@ class ResourceReclamationView(APIView):
 
     def get(self, request):
         cluster_filter = request.query_params.get("cluster_id")
-        cluster_ids = _user_cluster_ids(request.user)
+        cluster_ids = _all_cluster_ids()
         
         # 获取最新扫描的节点
-        node_ids = _latest_node_ids(request.user)
+        node_ids = _latest_node_ids()
         
         # 1. 僵尸VM检测（停止状态且运行时长为0）
         zombie_vms = self._detect_zombie_vms(node_ids, cluster_filter)

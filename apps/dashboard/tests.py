@@ -43,8 +43,8 @@ class DashboardStatsTest(TestCase):
         })
 
     def test_cluster_count(self):
-        Cluster.objects.create(user=self.user, name="集群A")
-        Cluster.objects.create(user=self.user, name="集群B")
+        Cluster.objects.create(name="集群A")
+        Cluster.objects.create(name="集群B")
         resp = self.client.get(self.url)
         self.assertEqual(resp.data["total_clusters"], 2)
 
@@ -54,15 +54,15 @@ class DashboardStatsTest(TestCase):
         self.assertEqual(resp.data["total_clusters"], 0)
 
     def test_total_nodes_from_cluster_model(self):
-        Cluster.objects.create(user=self.user, name="集群A", total_nodes=5, total_vms=10)
-        Cluster.objects.create(user=self.user, name="集群B", total_nodes=3, total_vms=8)
+        Cluster.objects.create(name="集群A", total_nodes=5, total_vms=10)
+        Cluster.objects.create(name="集群B", total_nodes=3, total_vms=8)
         resp = self.client.get(self.url)
         self.assertEqual(resp.data["total_nodes"], 8)
         self.assertEqual(resp.data["total_vms"], 18)
 
     def test_online_nodes(self):
         now = timezone.now()
-        cluster = Cluster.objects.create(user=self.user, name="集群A", total_nodes=3)
+        cluster = Cluster.objects.create(name="集群A", total_nodes=3)
         # 在线节点（去重）
         ClusterNode.objects.create(
             cluster=cluster, node_name="pve-1", status="online",
@@ -82,7 +82,7 @@ class DashboardStatsTest(TestCase):
     def test_online_nodes_dedup_by_name(self):
         """同一节点多次扫描，只计一次在线"""
         now = timezone.now()
-        cluster = Cluster.objects.create(user=self.user, name="集群A", total_nodes=1)
+        cluster = Cluster.objects.create(name="集群A", total_nodes=1)
         ClusterNode.objects.create(
             cluster=cluster, node_name="pve-1", status="online", scanned_at=now,
         )
@@ -94,7 +94,7 @@ class DashboardStatsTest(TestCase):
         self.assertEqual(resp.data["online_nodes"], 1)
 
     def test_active_alerts(self):
-        cluster = Cluster.objects.create(user=self.user, name="集群A")
+        cluster = Cluster.objects.create(name="集群A")
         # 未解决的告警
         DetectionResult.objects.create(
             cluster=cluster, category="resource", severity="critical",
@@ -126,7 +126,7 @@ class DashboardAlertsTest(TestCase):
         )
         self.client.force_authenticate(user=self.user)
         self.url = "/api/dashboard/alerts/"
-        self.cluster = Cluster.objects.create(user=self.user, name="生产集群")
+        self.cluster = Cluster.objects.create(name="生产集群")
         self.other_cluster = Cluster.objects.create(user=self.other_user, name="其他集群")
 
     def test_unauthenticated(self):
@@ -235,7 +235,7 @@ class DashboardTrendsTest(TestCase):
         )
         self.client.force_authenticate(user=self.user)
         self.url = "/api/dashboard/trends/"
-        self.cluster = Cluster.objects.create(user=self.user, name="集群A")
+        self.cluster = Cluster.objects.create(name="集群A")
 
     def test_unauthenticated(self):
         self.client.force_authenticate(user=None)
@@ -348,7 +348,7 @@ class DashboardNodesTest(TestCase):
         )
         self.client.force_authenticate(user=self.user)
         self.url = "/api/dashboard/nodes/"
-        self.cluster = Cluster.objects.create(user=self.user, name="生产集群")
+        self.cluster = Cluster.objects.create(name="生产集群")
 
     def test_unauthenticated(self):
         self.client.force_authenticate(user=None)

@@ -2,23 +2,19 @@ import uuid
 
 from django.db import models
 
-from apps.accounts.models import User
-
 
 def generate_agent_token():
     return uuid.uuid4().hex
 
 
 class Cluster(models.Model):
-    """用户的 PVE 集群"""
+    """PVE 集群（公共）"""
     class Status(models.TextChoices):
         PENDING = "pending", "待激活"
         ACTIVE = "active", "活跃"
         ERROR = "error", "错误"
         ARCHIVED = "archived", "已归档"
 
-    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="所属用户",
-                             related_name="clusters")
     name = models.CharField("集群名称", max_length=128)
     description = models.TextField("描述", blank=True)
 
@@ -53,7 +49,6 @@ class Cluster(models.Model):
     class Meta:
         verbose_name = "集群"
         verbose_name_plural = "集群"
-        unique_together = ("user", "name")
         ordering = ["-created_at"]
 
     def regenerate_token(self):
@@ -62,4 +57,4 @@ class Cluster(models.Model):
         self.save(update_fields=["agent_token"])
 
     def __str__(self):
-        return f"{self.name} ({self.user.username})"
+        return self.name

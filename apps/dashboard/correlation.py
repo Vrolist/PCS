@@ -29,7 +29,7 @@ _SNAPSHOT_EXTRA = [
 ]
 
 
-def _user_cluster_ids(user):
+def _all_cluster_ids():
     return list(Cluster.objects.filter(user=user).values_list("id", flat=True))
 
 
@@ -73,7 +73,7 @@ class CorrelationView(APIView):
     def get(self, request):
         days = int(request.query_params.get("days", 7))
         cluster_filter = request.query_params.get("cluster_id")
-        cluster_ids = _user_cluster_ids(request.user)
+        cluster_ids = _all_cluster_ids()
 
         if not cluster_ids:
             return Response({"node_trends": [], "current": [], "correlation_matrix": []})

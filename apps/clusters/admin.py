@@ -5,8 +5,8 @@ from .models import Cluster
 
 @admin.register(Cluster)
 class ClusterAdmin(admin.ModelAdmin):
-    list_display = ['name', 'user', 'status', 'pve_endpoint', 'total_nodes', 'total_vms',
+    list_display = ['name', 'status', 'pve_endpoint', 'total_nodes', 'total_vms',
                     'last_scanned_at', 'is_active', 'created_at']
     list_filter = ['status', 'is_active']
-    search_fields = ['name', 'user__username']
+    search_fields = ['name']
     readonly_fields = ['agent_token', 'cluster_id']

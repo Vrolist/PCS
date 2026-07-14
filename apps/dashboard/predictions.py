@@ -13,8 +13,8 @@ from apps.clusters.models import Cluster
 from apps.scanner.models import ClusterNode, ScanHistory, Storage
 
 
-def _user_cluster_ids(user):
-    return Cluster.objects.filter(user=user).values_list("id", flat=True)
+def _all_cluster_ids():
+    return Cluster.objects.values_list("id", flat=True)
 
 
 def _linear_regression(points):
@@ -379,7 +379,7 @@ class PredictionsView(APIView):
     def get(self, request):
         days = int(request.query_params.get("days", 30))
         cluster_filter = request.query_params.get("cluster_id")
-        cluster_ids = list(_user_cluster_ids(request.user))
+        cluster_ids = list(_all_cluster_ids())
 
         if cluster_filter:
             cluster_ids = [int(cluster_filter)]

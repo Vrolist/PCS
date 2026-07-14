@@ -10,9 +10,9 @@ from apps.clusters.models import Cluster
 from apps.scanner.models import ClusterNode, ScanHistory, DetectionResult
 
 
-def _user_cluster_ids(user):
-    """返回当前用户拥有的集群 ID 列表"""
-    return Cluster.objects.filter(user=user).values_list("id", flat=True)
+def _all_cluster_ids():
+    """返回所有集群 ID 列表"""
+    return Cluster.objects.values_list("id", flat=True)
 
 
 class StatsView(APIView):
@@ -20,7 +20,7 @@ class StatsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        cluster_ids = _user_cluster_ids(request.user)
+        cluster_ids = _all_cluster_ids()
 
         total_clusters = len(cluster_ids)
         cluster_agg = Cluster.objects.filter(id__in=cluster_ids).aggregate(
@@ -53,7 +53,7 @@ class AlertsView(APIView):
 
     def get(self, request):
         cluster_filter = request.query_params.get("cluster_id")
-        cluster_ids = _user_cluster_ids(request.user)
+        cluster_ids = _all_cluster_ids()
         limit = int(request.query_params.get("limit", 10))
 
         qs = DetectionResult.objects.filter(cluster_id__in=cluster_ids, is_resolved=False)
@@ -87,7 +87,7 @@ class TrendsView(APIView):
         days = int(request.query_params.get("days", 7))
         cluster_filter = request.query_params.get("cluster_id")
         since = timezone.now() - timezone.timedelta(days=days)
-        cluster_ids = _user_cluster_ids(request.user)
+        cluster_ids = _all_cluster_ids()
 
         qs = ScanHistory.objects.filter(cluster_id__in=cluster_ids, scanned_at__gte=since)
         if cluster_filter:
@@ -156,9 +156,9 @@ class NodesView(APIView):
 
     def get(self, request):
         cluster_filter = request.query_params.get("cluster_id")
-        cluster_ids = _user_cluster_ids(request.user)
+        cluster_ids = _all_cluster_ids()
 
-        # 获取用户每个集群下每个节点的最新扫描记录
+        # 获取每个集群下每个节点的最新扫描记录
         from django.db.models import Max
 
         base_qs = ClusterNode.objects.filter(cluster_id__in=cluster_ids)

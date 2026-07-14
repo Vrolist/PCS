@@ -16,7 +16,7 @@ from apps.scanner.models import (
 PCS_VERSION = "1.0.0"
 
 
-def _user_cluster_ids(user):
+def _all_cluster_ids():
     return list(Cluster.objects.filter(user=user).values_list("id", flat=True))
 
 
@@ -216,7 +216,7 @@ class DRScoreView(APIView):
 
     def get(self, request):
         cluster_filter = request.query_params.get("cluster_id")
-        cluster_ids = _user_cluster_ids(request.user)
+        cluster_ids = _all_cluster_ids()
 
         if cluster_filter:
             cluster_ids = [int(cluster_filter)]

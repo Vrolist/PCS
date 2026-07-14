@@ -34,7 +34,7 @@ class ClusterAPITest(TestCase):
         self.assertIn("agent_token", resp.data)
 
     def test_create_duplicate_name(self):
-        Cluster.objects.create(user=self.user, name="生产集群",
+        Cluster.objects.create(name="生产集群",
                                pve_endpoint="https://1.1.1.1:8006", pve_token="t")
         resp = self.client.post(self.url, {
             "name": "生产集群",
@@ -48,19 +48,19 @@ class ClusterAPITest(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_list_clusters(self):
-        Cluster.objects.create(user=self.user, name="集群A",
+        Cluster.objects.create(name="集群A",
                                pve_endpoint="https://1.1.1.1:8006", pve_token="t")
-        Cluster.objects.create(user=self.user, name="集群B",
+        Cluster.objects.create(name="集群B",
                                pve_endpoint="https://2.2.2.2:8006", pve_token="t")
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["count"], 2)
 
-    def test_list_other_user_clusters(self):
-        other = User.objects.create_user(username="other", password="pass123")
-        Cluster.objects.create(user=other, name="其他集群")
+    def test_list_clusters_count(self):
+        Cluster.objects.create(name="集群A",
+                               pve_endpoint="https://1.1.1.1:8006", pve_token="t")
         resp = self.client.get(self.url)
-        self.assertEqual(resp.data["count"], 0)
+        self.assertEqual(resp.data["count"], 1)
 
 
 class ClusterDetailAPITest(TestCase):
@@ -73,7 +73,7 @@ class ClusterDetailAPITest(TestCase):
         )
         self.client.force_authenticate(user=self.user)
         self.cluster = Cluster.objects.create(
-            user=self.user, name="测试集群", description="测试用",
+            name="测试集群", description="测试用",
             pve_endpoint="https://192.168.1.200:8006", pve_token="root@pam!monitor:abc123",
         )
         self.url = f"/api/clusters/{self.cluster.id}/"
@@ -114,8 +114,8 @@ class ClusterDetailAPITest(TestCase):
         resp = self.client.get(self.url)
         self.assertEqual(len(resp.data["agents"]), 2)
 
-    def test_other_user_cannot_access(self):
+    def test_other_user_can_access(self):
         other = User.objects.create_user(username="other", password="pass123")
         self.client.force_authenticate(user=other)
         resp = self.client.get(self.url)
-        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)

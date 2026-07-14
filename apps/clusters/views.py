@@ -12,11 +12,9 @@ from apps.accounts.views import log_user_action
 
 
 class ClusterListCreateView(generics.ListCreateAPIView):
-    """GET: 获取用户的所有集群 / POST: 创建集群"""
+    """GET: 获取所有集群 / POST: 创建集群"""
     permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        return Cluster.objects.filter(user=self.request.user)
+    queryset = Cluster.objects.all()
 
     def get_serializer_class(self):
         if self.request.method == "POST":
@@ -33,9 +31,7 @@ class ClusterDetailView(generics.RetrieveUpdateDestroyAPIView):
     """GET/PUT/PATCH/DELETE: 集群详情"""
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = ClusterDetailSerializer
-
-    def get_queryset(self):
-        return Cluster.objects.filter(user=self.request.user)
+    queryset = Cluster.objects.all()
 
     def perform_update(self, serializer):
         old = self.get_object()
