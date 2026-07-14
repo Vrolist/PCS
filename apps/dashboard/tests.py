@@ -290,19 +290,19 @@ class DashboardTrendsTest(TestCase):
         resp = self.client.get(self.url)
         self.assertEqual(resp.data, {"dates": [], "cpu_avg": [], "memory_avg": []})
 
-    def test_daily_average(self):
-        """同一天多条记录取平均值"""
+    def test_bucket_average(self):
+        """同时间桶多条记录取平均值（7天范围按小时桶聚合）"""
         now = timezone.now()
-        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        base = now.replace(hour=10, minute=0, second=0, microsecond=0)
         ScanHistory.objects.create(
             cluster=self.cluster,
             snapshot_data={"avg_cpu_usage": 0.20, "avg_memory_usage": 0.50},
-            scanned_at=today_start,
+            scanned_at=base,
         )
         ScanHistory.objects.create(
             cluster=self.cluster,
             snapshot_data={"avg_cpu_usage": 0.40, "avg_memory_usage": 0.70},
-            scanned_at=today_start + timezone.timedelta(hours=12),
+            scanned_at=base + timezone.timedelta(minutes=30),
         )
         resp = self.client.get(self.url)
         self.assertEqual(len(resp.data["dates"]), 1)

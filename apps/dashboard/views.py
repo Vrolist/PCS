@@ -113,7 +113,7 @@ class TrendsView(APIView):
             bucket_minutes = 360
 
         # 按时间桶聚合
-        # avg_cpu_usage 已是百分比值（35.0 表示 35%），avg_memory_usage 是 0~1 值
+        # avg_cpu_usage / avg_memory_usage 都是 0~1 值，统一转为百分比
         buckets = defaultdict(lambda: {"cpu_sum": 0.0, "mem_sum": 0.0, "count": 0})
         for h in histories:
             # 将时间对齐到桶
@@ -129,7 +129,7 @@ class TrendsView(APIView):
             cpu = snapshot.get("avg_cpu_usage")
             mem = snapshot.get("avg_memory_usage")
             if cpu is not None or mem is not None:
-                buckets[date_key]["cpu_sum"] += float(cpu or 0)
+                buckets[date_key]["cpu_sum"] += float(cpu or 0) * 100
                 buckets[date_key]["mem_sum"] += float(mem or 0) * 100
                 buckets[date_key]["count"] += 1
 

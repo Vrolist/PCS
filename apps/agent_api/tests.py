@@ -19,22 +19,21 @@ from apps.agent_api.models import AgentInstance, ScanTask
 
 
 def _create_user_cluster():
-    """创建测试用户和集群"""
-    user = User.objects.create_user(
-        username="agent_tester", email="agent@test.com", password="Test1234!"
-    )
+    """创建测试集群"""
     cluster = Cluster.objects.create(
-        user=user, name="test-cluster", agent_token="test-token-001"
+        name="test-cluster", agent_token="test-token-001"
     )
-    return user, cluster
+    return cluster
 
 
 def _scan_payload(cluster_id: str, agent_id: str) -> dict:
-    """构造一份最小化的扫描上传数据"""
+    """构造一份最小化的扫描上传数据，使用当前时间"""
+    from django.utils import timezone
+    now_str = timezone.now().strftime("%Y-%m-%dT%H:%M:%SZ")
     return {
         "agent_id": agent_id,
         "cluster_id": cluster_id,
-        "scanned_at": "2026-06-29T10:30:00Z",
+        "scanned_at": now_str,
         "version": "pve-manager/8.2.4",
         "nodes": [
             {
@@ -159,7 +158,7 @@ class AgentRegisterAPITest(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.url = "/api/agent/register/"
-        _, self.cluster = _create_user_cluster()
+        self.cluster = _create_user_cluster()
 
     def test_register_success(self):
         resp = self.client.post(self.url, {
@@ -256,7 +255,7 @@ class AgentHeartbeatAPITest(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.url = "/api/agent/heartbeat/"
-        _, self.cluster = _create_user_cluster()
+        self.cluster = _create_user_cluster()
         self.agent = AgentInstance.objects.create(
             cluster=self.cluster,
             agent_id="test-agent-id-001",
@@ -328,7 +327,7 @@ class ScanUploadAPITest(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.url = "/api/agent/scan/upload/"
-        _, self.cluster = _create_user_cluster()
+        self.cluster = _create_user_cluster()
         self.agent = AgentInstance.objects.create(
             cluster=self.cluster,
             agent_id="test-agent-id-001",
@@ -477,7 +476,7 @@ class ExpiredDataCleanupTest(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.url = "/api/agent/scan/upload/"
-        _, self.cluster = _create_user_cluster()
+        self.cluster = _create_user_cluster()
         self.agent = AgentInstance.objects.create(
             cluster=self.cluster,
             agent_id="test-agent-id-001",
@@ -629,11 +628,8 @@ class ExpiredDataCleanupTest(TestCase):
     def test_cleanup_only_affects_same_cluster(self):
         """清理只影响当前集群，不影响其他集群的数据"""
         # 另一个集群的旧数据
-        other_user = User.objects.create_user(
-            username="other_user", email="other@test.com", password="Test1234!"
-        )
         other_cluster = Cluster.objects.create(
-            user=other_user, name="other-cluster", agent_token="other-token"
+            name="other-cluster", agent_token="other-token"
         )
         old_ts = self.now - timedelta(days=10)
         ClusterNode.objects.create(
@@ -661,7 +657,7 @@ class AgentTasksAPITest(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.url = "/api/agent/tasks/"
-        _, self.cluster = _create_user_cluster()
+        self.cluster = _create_user_cluster()
         self.agent = AgentInstance.objects.create(
             cluster=self.cluster,
             agent_id="test-agent-id-001",
@@ -737,7 +733,7 @@ class AgentScanIntegrationTest(TestCase):
 
     def setUp(self):
         self.client = APIClient()
-        _, self.cluster = _create_user_cluster()
+        self.cluster = _create_user_cluster()
 
     def test_full_scan_flow(self):
         # 1. 注册
@@ -816,7 +812,7 @@ class AgentUnregisterAPITest(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.url = "/api/agent/unregister/"
-        _, self.cluster = _create_user_cluster()
+        self.cluster = _create_user_cluster()
         self.agent = AgentInstance.objects.create(
             cluster=self.cluster,
             agent_id="test-agent-id-001",
@@ -920,7 +916,7 @@ class AgentDeletedClusterTest(TestCase):
 
     def setUp(self):
         self.client = APIClient()
-        _, self.cluster = _create_user_cluster()
+        self.cluster = _create_user_cluster()
         self.agent = AgentInstance.objects.create(
             cluster=self.cluster,
             agent_id="test-deleted-agent",
