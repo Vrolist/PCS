@@ -67,7 +67,7 @@
     </div>
 
     <!-- 用户表格 -->
-    <el-card shadow="never" class="table-wrap">
+    <div class="table-wrap">
       <el-empty v-if="!loading && filteredUsers.length === 0" :description="t('adminUsers.noData')" />
 
       <el-table v-else :data="paginatedUsers" stripe v-loading="loading" style="width: 100%">
@@ -150,7 +150,7 @@
           small
         />
       </div>
-    </el-card>
+    </div>
 
     <!-- 编辑弹窗 -->
     <el-dialog v-model="editDialogVisible" title="编辑用户" width="480px" class="user-dialog">
@@ -501,11 +501,7 @@ onMounted(() => {
 /* ========== 表格 ========== */
 .table-wrap {
   border-radius: 12px;
-  border: 1px solid var(--border-color);
   background: var(--bg-primary);
-}
-.table-wrap :deep(.el-card__body) {
-  padding: 20px 0;
 }
 /* 状态圆点 */
 .status-dot {
