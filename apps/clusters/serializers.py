@@ -17,6 +17,7 @@ class ClusterListSerializer(serializers.ModelSerializer):
             "id", "name", "description", "status", "pve_version",
             "total_nodes", "total_vms", "total_lxc", "total_storage",
             "agent_count", "online_agents",
+            "sync_enabled", "last_synced_at",
             "is_active",
             "last_scanned_at", "created_at",
         ]
@@ -66,9 +67,11 @@ class ClusterDetailSerializer(serializers.ModelSerializer):
             "pve_endpoint", "pve_token",
             "pve_version", "cluster_id",
             "total_nodes", "total_vms", "total_lxc", "total_storage",
+            "sync_enabled", "sync_url", "sync_id", "sync_token",
             "is_active",
             "agents", "install_command",
-            "last_scanned_at", "created_at", "updated_at",
+            "last_scanned_at", "last_synced_at",
+            "created_at", "updated_at",
         ]
 
     def get_agents(self, obj):

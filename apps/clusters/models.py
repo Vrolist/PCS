@@ -40,8 +40,18 @@ class Cluster(models.Model):
     total_lxc = models.IntegerField("容器总数", default=0)
     total_storage = models.IntegerField("存储总数", default=0)
 
+    # 数据同步（推送到 PCSS 云平台）
+    sync_enabled = models.BooleanField("启用数据同步", default=False)
+    sync_url = models.URLField("同步目标地址", max_length=512, blank=True,
+                               help_text="PCSS 平台地址，如 https://pcss.example.com")
+    sync_id = models.CharField("同步ID", max_length=64, blank=True, db_index=True,
+                               help_text="PCSS 分配的集群同步标识")
+    sync_token = models.CharField("同步Token", max_length=128, blank=True,
+                                  help_text="PCSS 分配的同步认证令牌")
+
     # 时间
     last_scanned_at = models.DateTimeField("最后扫描时间", null=True, blank=True)
+    last_synced_at = models.DateTimeField("最后同步时间", null=True, blank=True)
     created_at = models.DateTimeField("创建时间", auto_now_add=True)
     updated_at = models.DateTimeField("更新时间", auto_now=True)
     is_active = models.BooleanField("启用", default=True)

@@ -348,6 +348,17 @@ class ScanUploadView(APIView):
             cluster.pve_version = d["version"]
             cluster.save(update_fields=["last_scanned_at", "pve_version"])
 
+            # 自动触发数据同步（异步，不阻塞扫描上传）
+            if cluster.sync_enabled and cluster.sync_url:
+                try:
+                    import threading
+                    from apps.clusters.sync import push_cluster_data
+                    threading.Thread(
+                        target=push_cluster_data, args=(cluster,), daemon=True
+                    ).start()
+                except Exception as e:
+                    logger.warning(f"触发数据同步失败: {e}")
+
             # 记录扫描成功事件
             total_vms = sum(len(n.get("vms", [])) for n in nodes_data)
             total_lxc = sum(len(n.get("containers", [])) for n in nodes_data)
