@@ -19,11 +19,10 @@ export function createAdminUser(data: {
   username: string
   email: string
   password: string
-  password2: string
   phone?: string
   company?: string
 }) {
-  return request.post<any, AdminUser>('/auth/admin/users/', data)
+  return request.post<any, AdminUser>('/auth/admin/users/', data, { _silentError: true } as any)
 }
 
 export function getAdminUser(id: number) {

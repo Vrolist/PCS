@@ -60,7 +60,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ["id", "username", "email", "phone", "company", "date_joined", "is_superuser"]
+        fields = ["id", "username", "email", "phone", "company", "date_joined", "is_superuser", "is_active"]
 
 
 class PasswordResetSerializer(serializers.Serializer):
@@ -103,25 +103,25 @@ class ChangePasswordSerializer(serializers.Serializer):
 
 class AdminUserCreateSerializer(serializers.ModelSerializer):
     """管理员创建用户"""
-    password = serializers.CharField(write_only=True, validators=[validate_password])
-    password2 = serializers.CharField(write_only=True, label="确认密码")
+    password = serializers.CharField(write_only=True, default="123456")
+    password2 = serializers.CharField(write_only=True, label="确认密码", required=False)
 
     class Meta:
         model = User
         fields = ["username", "email", "password", "password2", "phone", "company"]
+
+    def validate_username(self, value):
+        if User.objects.filter(username=value).exists():
+            raise serializers.ValidationError("该用户名已被使用")
+        return value
 
     def validate_email(self, value):
         if User.objects.filter(email=value).exists():
             raise serializers.ValidationError("该邮箱已被注册")
         return value
 
-    def validate(self, data):
-        if data["password"] != data["password2"]:
-            raise serializers.ValidationError("两次密码不一致")
-        return data
-
     def create(self, validated_data):
-        validated_data.pop("password2")
+        validated_data.pop("password2", None)
         password = validated_data.pop("password")
         user = User(**validated_data)
         user.set_password(password)

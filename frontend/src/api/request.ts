@@ -91,7 +91,9 @@ request.interceptors.response.use(
     }
 
     const msg = error.response?.data?.detail || error.message
-    ElMessage.error(msg)
+    if (!originalRequest._silentError) {
+      ElMessage.error(msg)
+    }
     return Promise.reject(error)
   },
 )

@@ -96,9 +96,10 @@
           <template #default="{ row }"><span class="mono">{{ formatTime(row.date_joined) }}</span></template>
         </el-table-column>
 
-        <el-table-column :label="t('adminUsers.status')" width="85" align="center">
+        <el-table-column :label="t('adminUsers.status')" width="90" align="center">
           <template #default="{ row }">
-            <div class="status-dot" :class="row.is_active ? 'dot-on' : 'dot-off'"></div>
+            <el-tag v-if="row.is_active" size="small" type="success">正常</el-tag>
+            <el-tag v-else size="small" type="danger">已禁用</el-tag>
           </template>
         </el-table-column>
 
@@ -193,9 +194,6 @@
         <el-form-item label="密码" prop="password">
           <el-input v-model="createForm.password" type="password" show-password placeholder="请输入密码" />
         </el-form-item>
-        <el-form-item label="确认密码" prop="password2">
-          <el-input v-model="createForm.password2" type="password" show-password placeholder="请再次输入密码" />
-        </el-form-item>
         <el-form-item label="手机">
           <el-input v-model="createForm.phone" placeholder="选填" />
         </el-form-item>
@@ -244,8 +242,7 @@ const createFormRef = ref<FormInstance>()
 const createForm = ref({
   username: '',
   email: '',
-  password: '',
-  password2: '',
+  password: '123456',
   phone: '',
   company: '',
 })
@@ -255,11 +252,7 @@ const createRules: FormRules = {
     { required: true, message: '请输入邮箱', trigger: 'blur' },
     { type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' },
   ],
-  password: [
-    { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 8, message: '密码长度不能少于8位', trigger: 'blur' },
-  ],
-  password2: [{ required: true, message: '请确认密码', trigger: 'blur' }],
+  password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
 }
 
 const activeCount = computed(() => users.value.filter(u => u.is_active).length)
@@ -362,15 +355,15 @@ async function toggleRegistration() {
 }
 
 function openCreateDialog() {
-  createForm.value = { username: '', email: '', password: '', password2: '', phone: '', company: '' }
+  createForm.value = { username: '', email: '', password: '123456', phone: '', company: '' }
   createDialogVisible.value = true
 }
 
 async function submitCreateUser() {
   if (!createFormRef.value) return
-  await createFormRef.value.validate()
-  if (createForm.value.password !== createForm.value.password2) {
-    ElMessage.error('两次输入的密码不一致')
+  try {
+    await createFormRef.value.validate()
+  } catch {
     return
   }
   createLoading.value = true
@@ -379,6 +372,22 @@ async function submitCreateUser() {
     ElMessage.success('用户创建成功')
     createDialogVisible.value = false
     loadUsers()
+  } catch (err: any) {
+    const data = err.response?.data
+    if (data) {
+      // 提取字段级错误信息（如 {"username": ["该用户名已被使用"]}）
+      const msgs: string[] = []
+      for (const [field, errors] of Object.entries(data)) {
+        if (Array.isArray(errors)) {
+          msgs.push(errors.join('；'))
+        } else if (typeof errors === 'string') {
+          msgs.push(errors)
+        }
+      }
+      if (msgs.length) {
+        ElMessage.error(msgs.join('；'))
+      }
+    }
   } finally {
     createLoading.value = false
   }
