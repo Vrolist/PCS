@@ -101,6 +101,34 @@ class ChangePasswordSerializer(serializers.Serializer):
         return data
 
 
+class AdminUserCreateSerializer(serializers.ModelSerializer):
+    """管理员创建用户"""
+    password = serializers.CharField(write_only=True, validators=[validate_password])
+    password2 = serializers.CharField(write_only=True, label="确认密码")
+
+    class Meta:
+        model = User
+        fields = ["username", "email", "password", "password2", "phone", "company"]
+
+    def validate_email(self, value):
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("该邮箱已被注册")
+        return value
+
+    def validate(self, data):
+        if data["password"] != data["password2"]:
+            raise serializers.ValidationError("两次密码不一致")
+        return data
+
+    def create(self, validated_data):
+        validated_data.pop("password2")
+        password = validated_data.pop("password")
+        user = User(**validated_data)
+        user.set_password(password)
+        user.save()
+        return user
+
+
 class AdminUserUpdateSerializer(serializers.ModelSerializer):
     """管理员修改用户信息"""
     class Meta:

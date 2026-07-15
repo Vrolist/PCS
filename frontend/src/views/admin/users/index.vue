@@ -6,6 +6,9 @@
         <h2 class="page-title">{{ t('adminUsers.title') }}</h2>
         <p class="page-desc">{{ t('adminUsers.subtitle') }}</p>
       </div>
+      <el-button type="primary" @click="openCreateDialog">
+        <el-icon><Plus /></el-icon>新增用户
+      </el-button>
     </div>
 
     <!-- 统计卡片 -->
@@ -121,6 +124,14 @@
                     <el-icon><component :is="row.is_active ? 'Lock' : 'Unlock'" /></el-icon>
                     {{ row.is_active ? '禁用账户' : '启用账户' }}
                   </el-dropdown-item>
+                  <el-dropdown-item
+                    v-if="!row.is_superuser"
+                    command="delete"
+                    :divided="true"
+                    class="danger-item"
+                  >
+                    <el-icon><Delete /></el-icon>删除用户
+                  </el-dropdown-item>
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
@@ -169,6 +180,34 @@
         <el-button type="primary" @click="submitChangePassword">确认</el-button>
       </template>
     </el-dialog>
+
+    <!-- 新增用户弹窗 -->
+    <el-dialog v-model="createDialogVisible" title="新增用户" width="520px" class="user-dialog">
+      <el-form :model="createForm" :rules="createRules" ref="createFormRef" label-width="80px">
+        <el-form-item label="用户名" prop="username">
+          <el-input v-model="createForm.username" placeholder="请输入用户名" />
+        </el-form-item>
+        <el-form-item label="邮箱" prop="email">
+          <el-input v-model="createForm.email" placeholder="请输入邮箱" />
+        </el-form-item>
+        <el-form-item label="密码" prop="password">
+          <el-input v-model="createForm.password" type="password" show-password placeholder="请输入密码" />
+        </el-form-item>
+        <el-form-item label="确认密码" prop="password2">
+          <el-input v-model="createForm.password2" type="password" show-password placeholder="请再次输入密码" />
+        </el-form-item>
+        <el-form-item label="手机">
+          <el-input v-model="createForm.phone" placeholder="选填" />
+        </el-form-item>
+        <el-form-item label="公司">
+          <el-input v-model="createForm.company" placeholder="选填" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="createDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitCreateUser" :loading="createLoading">创建</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -176,8 +215,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { User, CircleCheck, CircleClose, Search, Edit, Key, Lock, Unlock, MoreFilled } from '@element-plus/icons-vue'
-import { getAdminUsers, updateAdminUser, adminChangePassword, adminToggleUserActive, getRegistrationStatus, toggleRegistration as toggleRegApi } from '@/api/admin'
+import type { FormInstance, FormRules } from 'element-plus'
+import { User, CircleCheck, CircleClose, Search, Edit, Key, Lock, Unlock, MoreFilled, Plus, Delete } from '@element-plus/icons-vue'
+import { getAdminUsers, createAdminUser, updateAdminUser, deleteAdminUser, adminChangePassword, adminToggleUserActive, getRegistrationStatus, toggleRegistration as toggleRegApi } from '@/api/admin'
 import type { AdminUser } from '@/api/admin'
 
 const { t } = useI18n()
@@ -197,6 +237,30 @@ const editUserId = ref(0)
 const passwordDialogVisible = ref(false)
 const passwordForm = ref({ new_password: '', new_password2: '' })
 const passwordUserId = ref(0)
+
+const createDialogVisible = ref(false)
+const createLoading = ref(false)
+const createFormRef = ref<FormInstance>()
+const createForm = ref({
+  username: '',
+  email: '',
+  password: '',
+  password2: '',
+  phone: '',
+  company: '',
+})
+const createRules: FormRules = {
+  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+  email: [
+    { required: true, message: '请输入邮箱', trigger: 'blur' },
+    { type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' },
+  ],
+  password: [
+    { required: true, message: '请输入密码', trigger: 'blur' },
+    { min: 8, message: '密码长度不能少于8位', trigger: 'blur' },
+  ],
+  password2: [{ required: true, message: '请确认密码', trigger: 'blur' }],
+}
 
 const activeCount = computed(() => users.value.filter(u => u.is_active).length)
 const disabledCount = computed(() => users.value.filter(u => !u.is_active).length)
@@ -223,6 +287,7 @@ function handleAction(cmd: string, row: AdminUser) {
   if (cmd === 'edit') handleEdit(row)
   else if (cmd === 'password') handleChangePassword(row)
   else if (cmd === 'disable' || cmd === 'enable') handleToggleActive(row)
+  else if (cmd === 'delete') handleDeleteUser(row)
 }
 
 async function loadUsers() {
@@ -279,10 +344,44 @@ async function handleToggleActive(user: AdminUser) {
   await loadUsers()
 }
 
+async function handleDeleteUser(user: AdminUser) {
+  await ElMessageBox.confirm(`确定要删除用户「${user.username}」吗？此操作不可恢复。`, '删除确认', {
+    type: 'warning',
+    confirmButtonText: '确定删除',
+    cancelButtonText: '取消',
+  })
+  await deleteAdminUser(user.id)
+  ElMessage.success('用户已删除')
+  await loadUsers()
+}
+
 async function toggleRegistration() {
   const result = await toggleRegApi()
   registrationEnabled.value = result.enabled
   ElMessage.success(result.detail)
+}
+
+function openCreateDialog() {
+  createForm.value = { username: '', email: '', password: '', password2: '', phone: '', company: '' }
+  createDialogVisible.value = true
+}
+
+async function submitCreateUser() {
+  if (!createFormRef.value) return
+  await createFormRef.value.validate()
+  if (createForm.value.password !== createForm.value.password2) {
+    ElMessage.error('两次输入的密码不一致')
+    return
+  }
+  createLoading.value = true
+  try {
+    await createAdminUser(createForm.value)
+    ElMessage.success('用户创建成功')
+    createDialogVisible.value = false
+    loadUsers()
+  } finally {
+    createLoading.value = false
+  }
 }
 
 onMounted(() => {
@@ -466,6 +565,14 @@ onMounted(() => {
   border-bottom: 1px solid var(--border-color);
   margin-right: 0;
   padding-bottom: 16px;
+}
+
+/* 危险操作项 */
+.danger-item {
+  color: #f56c6c !important;
+}
+.danger-item:hover {
+  background: rgba(245, 108, 108, 0.1) !important;
 }
 
 /* 响应式 */

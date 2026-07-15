@@ -15,6 +15,17 @@ export function getAdminUsers() {
   return request.get<any, { results: AdminUser[] }>('/auth/admin/users/')
 }
 
+export function createAdminUser(data: {
+  username: string
+  email: string
+  password: string
+  password2: string
+  phone?: string
+  company?: string
+}) {
+  return request.post<any, AdminUser>('/auth/admin/users/', data)
+}
+
 export function getAdminUser(id: number) {
   return request.get<any, AdminUser>(`/auth/admin/users/${id}/`)
 }

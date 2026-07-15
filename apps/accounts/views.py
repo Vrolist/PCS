@@ -16,6 +16,7 @@ from .serializers import (
     PasswordResetConfirmSerializer,
     ChangePasswordSerializer,
     UserLogSerializer,
+    AdminUserCreateSerializer,
     AdminUserUpdateSerializer,
     AdminChangePasswordSerializer,
 )
@@ -210,11 +211,23 @@ class IsSuperUser(IsAuthenticated):
         return super().has_permission(request, view) and request.user.is_superuser
 
 
-class AdminUserListView(generics.ListAPIView):
-    """GET /api/auth/admin/users/ - 获取用户列表（仅超级管理员）"""
+class AdminUserListView(generics.ListCreateAPIView):
+    """GET /api/auth/admin/users/ - 获取用户列表（仅超级管理员）
+    POST /api/auth/admin/users/ - 创建用户（仅超级管理员）
+    """
     permission_classes = [IsSuperUser]
-    serializer_class = UserSerializer
+
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return AdminUserCreateSerializer
+        return UserSerializer
+
     queryset = User.objects.all().order_by('-date_joined')
+
+    def perform_create(self, serializer):
+        user = serializer.save()
+        log_user_action(self.request.user, "create", "user", user.id,
+                        f"管理员创建用户 {user.username}", self.request)
 
 
 class AdminUserDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -225,7 +238,13 @@ class AdminUserDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def perform_destroy(self, instance):
         if instance.is_superuser:
-            return Response({"detail": "不能删除超级管理员"}, status=status.HTTP_400_BAD_REQUEST)
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError("不能删除超级管理员")
+        if instance.id == self.request.user.id:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError("不能删除自己")
+        log_user_action(self.request.user, "delete", "user", instance.id,
+                        f"管理员删除用户 {instance.username}", self.request)
         instance.delete()
 
 
