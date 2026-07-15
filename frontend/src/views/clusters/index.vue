@@ -255,54 +255,6 @@
               <el-empty v-else :description="t('clusters.noAgent')" :image-size="60" />
             </div>
           </el-tab-pane>
-
-          <!-- Agent 事件 Tab -->
-          <el-tab-pane :label="t('clusters.agentEvents')" name="events">
-            <div class="detail-section">
-              <div class="events-filter">
-                <el-select v-model="eventFilter" :placeholder="t('clusters.eventTypeFilter')" clearable size="small" @change="loadEvents">
-                  <el-option value="register" :label="t('clusters.eventRegister')" />
-                  <el-option value="scan_upload" :label="t('clusters.eventScanUpload')" />
-                  <el-option value="scan_failed" :label="t('clusters.eventScanFailed')" />
-                  <el-option value="version_upgrade" :label="t('clusters.eventVersionUpgrade')" />
-                  <el-option value="status_change" :label="t('clusters.eventStatusChange')" />
-                  <el-option value="error" :label="t('clusters.eventError')" />
-                  <el-option value="unregister" :label="t('clusters.eventUnregister')" />
-                </el-select>
-              </div>
-              <el-table :data="events" stripe v-loading="eventsLoading">
-                <el-table-column :label="t('common.time')" width="140">
-                  <template #default="{ row }">
-                    {{ formatTime(row.created_at) }}
-                  </template>
-                </el-table-column>
-                <el-table-column prop="agent_hostname" :label="t('clusters.hostname')" width="100" />
-                <el-table-column :label="t('clusters.eventType')" width="110">
-                  <template #default="{ row }">
-                    <el-tag :type="eventTypeTagType(row.event_type)" size="small">
-                      {{ row.event_type_display }}
-                    </el-tag>
-                  </template>
-                </el-table-column>
-                <el-table-column :label="t('common.version')" width="130">
-                  <template #default="{ row }">
-                    <span v-if="row.old_version">{{ row.old_version }} → </span>
-                    <span>{{ row.version }}</span>
-                  </template>
-                </el-table-column>
-                <el-table-column prop="detail" :label="t('common.detail')" min-width="200" show-overflow-tooltip />
-              </el-table>
-              <div class="pagination-wrapper" v-if="eventsTotal > 0">
-                <el-pagination
-                  v-model:current-page="eventsPage"
-                  :page-size="20"
-                  :total="eventsTotal"
-                  layout="prev, pager, next"
-                  @current-change="loadEvents"
-                />
-              </div>
-            </div>
-          </el-tab-pane>
         </el-tabs>
       </template>
     </el-dialog>
@@ -317,8 +269,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 const { t } = useI18n()
 import type { FormInstance } from 'element-plus'
 import { Loading, View, Delete, CopyDocument, VideoPause, CircleCheck, CircleCheckFilled } from '@element-plus/icons-vue'
-import { getClusters, getCluster, createCluster, updateCluster, deleteCluster, getLatestAgentVersion, getAgentEvents } from '@/api/clusters'
-import type { Cluster, ClusterDetail, AgentEvent } from '@/api/clusters'
+import { getClusters, getCluster, createCluster, updateCluster, deleteCluster, getLatestAgentVersion } from '@/api/clusters'
+import type { Cluster, ClusterDetail } from '@/api/clusters'
 
 const loading = ref(true)
 const clusters = ref<Cluster[]>([])
@@ -328,14 +280,7 @@ const showDetail = ref(false)
 const detail = ref<ClusterDetail | null>(null)
 const createFormRef = ref<FormInstance>()
 const latestAgentVersion = ref('')
-
-// Agent 事件相关
 const detailTab = ref('info')
-const events = ref<AgentEvent[]>([])
-const eventsLoading = ref(false)
-const eventsPage = ref(1)
-const eventsTotal = ref(0)
-const eventFilter = ref('')
 
 function compareVersions(a: string, b: string): number {
   const pa = a.split('.').map(Number)
@@ -398,34 +343,8 @@ async function viewDetail(cluster: Cluster) {
     detail.value = await getCluster(cluster.id)
     showDetail.value = true
     detailTab.value = 'info'
-    events.value = []
-    eventsPage.value = 1
-    eventsTotal.value = 0
-    eventFilter.value = ''
   } catch {
     // error handled by interceptor
-  }
-}
-
-async function loadEvents() {
-  if (!detail.value) return
-  eventsLoading.value = true
-  try {
-    const params: any = {
-      cluster_id: detail.value.id,
-      page: eventsPage.value,
-      page_size: 20,
-    }
-    if (eventFilter.value) {
-      params.event_type = eventFilter.value
-    }
-    const res = await getAgentEvents(params)
-    events.value = res.results || []
-    eventsTotal.value = res.count || 0
-  } catch {
-    // error handled by interceptor
-  } finally {
-    eventsLoading.value = false
   }
 }
 
@@ -513,26 +432,6 @@ function agentStatusType(s: string) {
 function agentStatusLabel(s: string) {
   return { online: t('clusters.agentOnline'), offline: t('clusters.agentOffline'), error: t('clusters.error'), paused: t('clusters.agentPaused') }[s] || s
 }
-
-function eventTypeTagType(s: string) {
-  const map: Record<string, string> = {
-    register: 'success',
-    scan_upload: '',
-    scan_failed: 'danger',
-    version_upgrade: 'warning',
-    status_change: 'warning',
-    error: 'danger',
-    unregister: 'info',
-  }
-  return map[s] || ''
-}
-
-// 监听 Tab 切换，加载事件数据
-watch(detailTab, (val) => {
-  if (val === 'events' && events.value.length === 0) {
-    loadEvents()
-  }
-})
 
 onMounted(() => {
   loadClusters()
@@ -651,20 +550,7 @@ onMounted(() => {
 .install-hint { font-size: 12px; color: var(--text-secondary, #909399); margin-top: 8px; }
 .form-hint { font-size: 12px; color: var(--text-secondary, #909399); margin: -8px 0 0 120px; }
 
-/* 事件过滤器 */
-.events-filter {
-  margin-bottom: 16px;
-  display: flex;
-  gap: 12px;
-}
-
-/* 分页 */
-.pagination-wrapper {
-  margin-top: 16px;
-  display: flex;
-  justify-content: flex-end;
-}
-
+/* 版本标签 */
 :deep(.el-collapse-item__header) {
   height: 32px;
   line-height: 32px;
