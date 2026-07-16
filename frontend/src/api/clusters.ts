@@ -12,6 +12,8 @@ export interface Cluster {
   total_storage: number
   agent_count: number
   online_agents: number
+  sync_enabled: boolean
+  last_synced_at: string | null
   is_active: boolean
   last_scanned_at: string | null
   created_at: string
@@ -33,6 +35,9 @@ export interface AgentBrief {
 export interface ClusterDetail extends Cluster {
   agent_token: string
   cluster_id: string
+  sync_url: string
+  sync_id: string
+  sync_token: string
   agents: AgentBrief[]
   install_command: string
   updated_at: string
@@ -124,4 +129,9 @@ export interface AgentInstanceParams {
 
 export function getAgentInstances(params?: AgentInstanceParams) {
   return request.get<any, { count: number; results: AgentInstance[] }>('/agent/instances/', { params })
+}
+
+// 数据同步
+export function triggerSync(clusterId: number, forceFull = false) {
+  return request.post<any, { ok: boolean; message: string }>(`/clusters/${clusterId}/sync/`, { force_full: forceFull })
 }

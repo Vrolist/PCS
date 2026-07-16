@@ -50,6 +50,10 @@
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>
                     {{ cluster.last_scanned_at ? formatTime(cluster.last_scanned_at) : t('clusters.notScanned') }}
                   </span>
+                  <span v-if="cluster.sync_enabled" class="meta-chip meta-chip-sync">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+                    已同步
+                  </span>
                 </div>
               </div>
             </div>
@@ -255,6 +259,77 @@
               <el-empty v-else :description="t('clusters.noAgent')" :image-size="60" />
             </div>
           </el-tab-pane>
+
+          <!-- 数据同步 Tab -->
+          <el-tab-pane label="数据同步" name="sync">
+            <div class="detail-section">
+              <div class="sync-config">
+                <div class="sync-header">
+                  <div class="sync-status-row">
+                    <span class="sync-label">同步状态</span>
+                    <el-tag :type="detail.sync_enabled ? 'success' : 'info'" size="small" effect="light">
+                      {{ detail.sync_enabled ? '已启用' : '未启用' }}
+                    </el-tag>
+                    <span v-if="detail.last_synced_at" class="sync-time">
+                      最近同步: {{ formatTime(detail.last_synced_at) }}
+                    </span>
+                  </div>
+                  <el-switch
+                    v-model="syncForm.sync_enabled"
+                    active-text="启用"
+                    inactive-text="关闭"
+                    @change="handleSyncToggle"
+                  />
+                </div>
+
+                <el-divider />
+
+                <el-form label-width="120px" :disabled="!syncForm.sync_enabled">
+                  <el-form-item label="PCSS 平台地址">
+                    <el-input
+                      v-model="syncForm.sync_url"
+                      placeholder="如 https://pcss.example.com:8099"
+                      @change="handleSyncFieldChange"
+                    />
+                    <div class="form-tip">PCSS 云平台的访问地址，需包含协议和端口</div>
+                  </el-form-item>
+                  <el-form-item label="同步 ID">
+                    <el-input
+                      v-model="syncForm.sync_id"
+                      placeholder="PCSS 分配的集群同步标识"
+                      @change="handleSyncFieldChange"
+                    />
+                    <div class="form-tip">在 PCSS 创建集群时生成的同步 ID</div>
+                  </el-form-item>
+                  <el-form-item label="同步 Token">
+                    <el-input
+                      v-model="syncForm.sync_token"
+                      placeholder="PCSS 分配的同步认证令牌"
+                      show-password
+                      @change="handleSyncFieldChange"
+                    />
+                    <div class="form-tip">在 PCSS 创建集群时生成的同步 Token</div>
+                  </el-form-item>
+                </el-form>
+
+                <div class="sync-actions" v-if="syncForm.sync_enabled">
+                  <el-button type="primary" :loading="syncing" @click="handleManualSync(false)">
+                    <el-icon><Upload /></el-icon>
+                    立即同步
+                  </el-button>
+                  <el-button :loading="syncing" @click="handleManualSync(true)">
+                    <el-icon><RefreshRight /></el-icon>
+                    全量同步
+                  </el-button>
+                </div>
+
+                <div class="sync-tip" v-if="syncForm.sync_enabled">
+                  <el-icon><InfoFilled /></el-icon>
+                  <span>启用同步后，每次 Agent 扫描完成会自动将数据推送到 PCSS。全量同步会推送所有历史数据。</span>
+                </div>
+              </div>
+            </div>
+          </el-tab-pane>
         </el-tabs>
       </template>
     </el-dialog>
@@ -268,8 +343,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 
 const { t } = useI18n()
 import type { FormInstance } from 'element-plus'
-import { Loading, View, Delete, CopyDocument, VideoPause, CircleCheck, CircleCheckFilled } from '@element-plus/icons-vue'
-import { getClusters, getCluster, createCluster, updateCluster, deleteCluster, getLatestAgentVersion } from '@/api/clusters'
+import { Loading, View, Delete, CopyDocument, VideoPause, CircleCheck, CircleCheckFilled, Upload, RefreshRight, InfoFilled } from '@element-plus/icons-vue'
+import { getClusters, getCluster, createCluster, updateCluster, deleteCluster, getLatestAgentVersion, triggerSync } from '@/api/clusters'
 import type { Cluster, ClusterDetail } from '@/api/clusters'
 
 const loading = ref(true)
@@ -281,6 +356,10 @@ const detail = ref<ClusterDetail | null>(null)
 const createFormRef = ref<FormInstance>()
 const latestAgentVersion = ref('')
 const detailTab = ref('info')
+
+// 同步相关状态
+const syncing = ref(false)
+const syncForm = ref({ sync_enabled: false, sync_url: '', sync_id: '', sync_token: '' })
 
 function compareVersions(a: string, b: string): number {
   const pa = a.split('.').map(Number)
@@ -343,6 +422,13 @@ async function viewDetail(cluster: Cluster) {
     detail.value = await getCluster(cluster.id)
     showDetail.value = true
     detailTab.value = 'info'
+    // 填充同步表单
+    syncForm.value = {
+      sync_enabled: detail.value.sync_enabled,
+      sync_url: detail.value.sync_url || '',
+      sync_id: detail.value.sync_id || '',
+      sync_token: detail.value.sync_token || '',
+    }
   } catch {
     // error handled by interceptor
   }
@@ -407,6 +493,64 @@ function copyCommand(cmd: string) {
     ElMessage.error(t('common.copyFailed'))
   } finally {
     document.body.removeChild(ta)
+  }
+}
+
+async function handleSyncToggle(val: boolean) {
+  if (!detail.value) return
+  // 如果启用同步但没有填写 URL，提示用户
+  if (val && !syncForm.value.sync_url) {
+    ElMessage.warning('请先填写 PCSS 平台地址')
+    syncForm.value.sync_enabled = false
+    return
+  }
+  try {
+    await updateCluster(detail.value.id, {
+      sync_enabled: val,
+      sync_url: syncForm.value.sync_url,
+      sync_id: syncForm.value.sync_id,
+      sync_token: syncForm.value.sync_token,
+    } as any)
+    detail.value.sync_enabled = val
+    ElMessage.success(val ? '同步已启用' : '同步已关闭')
+    await loadClusters()
+  } catch {
+    syncForm.value.sync_enabled = !val
+  }
+}
+
+async function handleSyncFieldChange() {
+  if (!detail.value || !syncForm.value.sync_enabled) return
+  try {
+    await updateCluster(detail.value.id, {
+      sync_url: syncForm.value.sync_url,
+      sync_id: syncForm.value.sync_id,
+      sync_token: syncForm.value.sync_token,
+    } as any)
+    ElMessage.success('同步配置已保存')
+  } catch {
+    // error handled by interceptor
+  }
+}
+
+async function handleManualSync(forceFull: boolean) {
+  if (!detail.value) return
+  if (!syncForm.value.sync_url || !syncForm.value.sync_id || !syncForm.value.sync_token) {
+    ElMessage.warning('请先完整填写同步配置（URL、同步 ID、同步 Token）')
+    return
+  }
+  syncing.value = true
+  try {
+    const res = await triggerSync(detail.value.id, forceFull)
+    ElMessage.success(res.message || '同步成功')
+    // 刷新详情
+    detail.value = await getCluster(detail.value.id)
+    syncForm.value.sync_enabled = detail.value.sync_enabled
+    await loadClusters()
+  } catch {
+    // error handled by interceptor
+  } finally {
+    syncing.value = false
   }
 }
 
@@ -558,6 +702,32 @@ onMounted(() => {
 }
 :deep(.el-collapse-item__wrap) {
   margin-bottom: 0;
+}
+
+/* ── 同步配置 ── */
+.meta-chip-sync { color: #67c23a; background: #67c23a15; }
+.sync-config { max-width: 600px; }
+.sync-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 0;
+}
+.sync-status-row {
+  display: flex; align-items: center; gap: 10px;
+}
+.sync-label { font-size: 14px; font-weight: 600; color: var(--text-primary, #303133); }
+.sync-time { font-size: 12px; color: var(--text-secondary, #909399); }
+.sync-actions {
+  display: flex; gap: 12px; margin: 20px 0 16px;
+}
+.sync-tip {
+  display: flex; align-items: flex-start; gap: 8px;
+  font-size: 12px; color: var(--text-secondary, #909399);
+  background: var(--el-fill-color-light, #f5f7fa);
+  padding: 10px 14px; border-radius: 8px; line-height: 1.6;
+}
+.sync-tip .el-icon { margin-top: 2px; flex-shrink: 0; }
+.form-tip {
+  font-size: 12px; color: var(--text-secondary, #909399); margin-top: 4px; line-height: 1.4;
 }
 
 /* ── Footer ── */
