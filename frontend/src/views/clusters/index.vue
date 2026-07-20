@@ -23,115 +23,62 @@
       </el-empty>
     </el-card>
 
-    <!-- 集群列表 -->
-    <div v-else class="cluster-list">
-      <el-card v-for="cluster in clusters" :key="cluster.id" shadow="hover" class="cluster-card">
-        <div class="cluster-card-inner">
-          <!-- 顶部：名称 + 状态 + 操作 -->
-          <div class="cluster-header">
-            <div class="cluster-info">
-              <div class="cluster-icon">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4h6v6H4zm10 0h6v6h-6zM4 14h6v6H4zm10 0h6v6h-6z"/></svg>
-              </div>
-              <div class="cluster-info-body">
-                <div class="cluster-name-row">
-                  <h3 class="cluster-name">{{ cluster.name }}</h3>
-                  <el-tag :type="statusType(cluster.status)" size="small" effect="light">
-                    {{ statusLabel(cluster.status) }}
-                  </el-tag>
-                </div>
-                <p v-if="cluster.description" class="cluster-desc">{{ cluster.description }}</p>
-                <div class="cluster-meta">
-                  <span v-if="cluster.pve_version" class="meta-chip">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-                    {{ cluster.pve_version }}
-                  </span>
-                  <span class="meta-chip">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>
-                    {{ cluster.last_scanned_at ? formatTime(cluster.last_scanned_at) : t('clusters.notScanned') }}
-                  </span>
-                  <span v-if="cluster.sync_enabled" class="meta-chip meta-chip-sync">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
-                    已同步
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div class="cluster-actions">
-              <el-button size="default" plain @click="viewDetail(cluster)">
-                <el-icon><View /></el-icon>
-                {{ t('common.detail') }}
-              </el-button>
-              <template v-if="cluster.is_active">
-                <el-button size="default" plain type="warning" @click="handleToggleActive(cluster, false)">
-                  <el-icon><VideoPause /></el-icon>
-                  {{ t('clusters.stop') }}
-                </el-button>
-              </template>
-              <template v-else>
-                <el-button size="default" plain type="success" @click="handleToggleActive(cluster, true)">
-                  <el-icon><CircleCheck /></el-icon>
-                  {{ t('clusters.restore') }}
-                </el-button>
-                <el-button size="default" plain type="danger" @click="confirmDelete(cluster)">
-                  <el-icon><Delete /></el-icon>
-                  {{ t('clusters.delete') }}
-                </el-button>
-              </template>
-            </div>
+    <!-- 集群卡片网格 -->
+    <div v-else class="cluster-grid">
+      <div v-for="cluster in clusters" :key="cluster.id" class="cc" @click="viewDetail(cluster)">
+        <!-- 顶部：状态指示 + 名称 + 菜单 -->
+        <div class="cc-head">
+          <div class="cc-status-dot" :class="'cc-dot--' + cluster.status"></div>
+          <h3 class="cc-name">{{ cluster.name }}</h3>
+          <el-dropdown trigger="click" @command="(cmd: string) => handleCardCommand(cmd, cluster)" @click.stop>
+            <button class="cc-menu">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+            </button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="detail"><el-icon><View /></el-icon>{{ t('common.detail') }}</el-dropdown-item>
+                <template v-if="cluster.is_active">
+                  <el-dropdown-item command="stop" divided><el-icon><VideoPause /></el-icon>{{ t('clusters.stop') }}</el-dropdown-item>
+                </template>
+                <template v-else>
+                  <el-dropdown-item command="restore" divided><el-icon><CircleCheck /></el-icon>{{ t('clusters.restore') }}</el-dropdown-item>
+                  <el-dropdown-item command="delete"><el-icon><Delete /></el-icon>{{ t('clusters.delete') }}</el-dropdown-item>
+                </template>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </div>
+
+        <!-- 核心指标：一行 4 个 -->
+        <div class="cc-metrics">
+          <div class="cc-metric">
+            <span class="cc-metric-val">{{ cluster.total_nodes }}</span>
+            <span class="cc-metric-lbl">节点</span>
           </div>
-          <!-- 统计网格 -->
-          <div class="cluster-stats">
-            <div class="stat-item" :title="t('clusters.nodesCount')">
-              <div class="stat-icon stat-icon-node">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>
-              </div>
-              <div class="stat-body">
-                <span class="stat-value">{{ cluster.total_nodes }}</span>
-                <span class="stat-label">{{ t('common.nodes') }}</span>
-              </div>
-            </div>
-            <div class="stat-item" :title="t('clusters.vmsCount')">
-              <div class="stat-icon stat-icon-vm">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="12" rx="1"/><path d="M9 16v4"/><path d="M15 16v4"/><path d="M7 20h10"/></svg>
-              </div>
-              <div class="stat-body">
-                <span class="stat-value">{{ cluster.total_vms }}</span>
-                <span class="stat-label">{{ t('common.vms') }}</span>
-              </div>
-            </div>
-            <div class="stat-item" :title="t('clusters.containersCount')">
-              <div class="stat-icon stat-icon-lxc">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 9v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9"/><path d="M22 5H2v3h20V5z"/><path d="M8 14h8"/><path d="M8 18h5"/></svg>
-              </div>
-              <div class="stat-body">
-                <span class="stat-value">{{ cluster.total_lxc }}</span>
-                <span class="stat-label">{{ t('common.containers') }}</span>
-              </div>
-            </div>
-            <div class="stat-item" :title="t('clusters.storageCount')">
-              <div class="stat-icon stat-icon-storage">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v4c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 11v4c0 1.66 4.03 3 9 3s9-1.34 9-3v-4"/><path d="M3 17v4c0 1.66 4.03 3 9 3s9-1.34 9-3v-4"/></svg>
-              </div>
-              <div class="stat-body">
-                <span class="stat-value">{{ cluster.total_storage }}</span>
-                <span class="stat-label">{{ t('common.storage') }}</span>
-              </div>
-            </div>
-            <div class="stat-item" :title="t('clusters.agentsCount')">
-              <div class="stat-icon stat-icon-agent">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 20.6V19a3 3 0 0 1 3-3h4a3 3 0 0 1 3 3v1.6"/></svg>
-              </div>
-              <div class="stat-body">
-                <span class="stat-value" :class="{ 'text-success': cluster.online_agents > 0 }">
-                  {{ cluster.online_agents }}/{{ cluster.agent_count }}
-                </span>
-                <span class="stat-label">Agent</span>
-              </div>
-            </div>
+          <div class="cc-metric">
+            <span class="cc-metric-val">{{ cluster.total_vms + cluster.total_lxc }}</span>
+            <span class="cc-metric-lbl">实例</span>
+          </div>
+          <div class="cc-metric">
+            <span class="cc-metric-val">{{ cluster.total_storage }}</span>
+            <span class="cc-metric-lbl">存储</span>
+          </div>
+          <div class="cc-metric">
+            <span class="cc-metric-val" :class="{ 'cc-g': cluster.online_agents > 0 }">{{ cluster.online_agents }}<span class="cc-metric-of">/{{ cluster.agent_count }}</span></span>
+            <span class="cc-metric-lbl">Agent</span>
           </div>
         </div>
-      </el-card>
+
+        <!-- 底部 -->
+        <div class="cc-foot">
+          <span class="cc-foot-tag" v-if="cluster.pve_version">PVE {{ cluster.pve_version }}</span>
+          <span class="cc-foot-time">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+            {{ cluster.last_scanned_at ? formatTime(cluster.last_scanned_at) : t('clusters.notScanned') }}
+          </span>
+          <span v-if="cluster.sync_enabled" class="cc-foot-sync">同步</span>
+        </div>
+      </div>
     </div>
 
     <!-- 新建集群弹窗 -->
@@ -479,6 +426,13 @@ async function confirmDelete(cluster: Cluster) {
   }
 }
 
+function handleCardCommand(cmd: string, cluster: Cluster) {
+  if (cmd === 'detail') viewDetail(cluster)
+  else if (cmd === 'stop') handleToggleActive(cluster, false)
+  else if (cmd === 'restore') handleToggleActive(cluster, true)
+  else if (cmd === 'delete') confirmDelete(cluster)
+}
+
 function copyCommand(cmd: string) {
   const ta = document.createElement('textarea')
   ta.value = cmd
@@ -591,81 +545,100 @@ onMounted(() => {
 .page-title { font-size: 24px; font-weight: 700; color: var(--text-primary, #303133); margin: 0; }
 .page-subtitle { font-size: 14px; color: var(--text-secondary, #909399); margin: 4px 0 0; }
 
-.cluster-list { display: flex; flex-direction: column; gap: 16px; }
-.cluster-card {
+/* ── 卡片网格 ── */
+.cluster-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+/* ── 卡片 ── */
+.cc {
+  background: var(--el-bg-color, #fff);
+  border: 1px solid var(--border-light, #e4e7ed);
   border-radius: 12px;
+  cursor: pointer;
+  display: flex; flex-direction: column;
+  transition: all 0.25s ease;
   overflow: hidden;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  border: 1px solid var(--border-light, #ebeef5);
 }
-.cluster-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 12px 32px rgba(0,0,0,0.1);
+.cc:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px -8px rgba(0,0,0,0.12);
+  border-color: #c0c4cc;
 }
 
-.cluster-card-inner { padding: 8px 0; }
+/* ── 头部 ── */
+.cc-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 18px 18px 0;
+}
+.cc-status-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
+.cc-dot--active  { background: #67c23a; box-shadow: 0 0 0 3px #67c23a20; }
+.cc-dot--error   { background: #f56c6c; box-shadow: 0 0 0 3px #f56c6c20; }
+.cc-dot--pending { background: #e6a23c; box-shadow: 0 0 0 3px #e6a23c20; }
+.cc-dot--archived { background: #909399; }
 
-/* ── 顶部：图标 + 名称 + 操作 ── */
-.cluster-header {
-  display: flex; align-items: center; justify-content: space-between; gap: 16px;
-}
-.cluster-info { display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0; }
-.cluster-icon {
-  flex-shrink: 0; width: 44px; height: 44px; border-radius: 12px;
-  display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: #fff;
-}
-.cluster-icon svg { stroke: #fff; }
-.cluster-name-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.cluster-name {
-  font-size: 18px; font-weight: 600; margin: 0;
+.cc-name {
+  flex: 1; min-width: 0; margin: 0;
+  font-size: 15px; font-weight: 600;
   color: var(--text-primary, #303133);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.cluster-info-body { min-width: 0; }
-.cluster-desc {
-  color: var(--text-secondary, #909399); margin: 3px 0 6px; font-size: 13px;
-  line-height: 1.5; word-break: break-word;
+.cc-menu {
+  flex-shrink: 0; width: 28px; height: 28px; border-radius: 6px;
+  border: none; background: transparent; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-placeholder, #c0c4cc);
+  transition: all 0.15s;
 }
-.cluster-meta {
-  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
-}
-.meta-chip {
-  display: inline-flex; align-items: center; gap: 4px;
-  font-size: 11px; color: var(--text-secondary, #909399);
-  background: var(--el-fill-color-light, #f5f7fa);
-  padding: 2px 8px; border-radius: 5px;
-}
-.cluster-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.cc-menu:hover { background: var(--el-fill-color-light, #f5f7fa); color: var(--text-secondary, #909399); }
 
-/* ── 统计行 ── */
-.cluster-stats {
-  display: flex; gap: 0; padding: 16px 0 0; margin-top: 14px;
+/* ── 指标行 ── */
+.cc-metrics {
+  display: flex; gap: 0; padding: 18px 18px 0;
+}
+.cc-metric {
+  flex: 1; text-align: center;
+}
+.cc-metric + .cc-metric { border-left: 1px solid var(--border-light, #ebeef5); }
+.cc-metric-val {
+  display: block; font-size: 20px; font-weight: 700; line-height: 1;
+  color: var(--text-primary, #303133);
+  font-variant-numeric: tabular-nums;
+}
+.cc-metric-of { font-size: 13px; font-weight: 400; color: var(--text-secondary, #909399); }
+.cc-metric-lbl {
+  display: block; margin-top: 4px;
+  font-size: 11px; color: var(--text-secondary, #909399);
+}
+.cc-g { color: #67c23a; }
+
+/* ── 底部 ── */
+.cc-foot {
+  display: flex; align-items: center; gap: 8px;
+  padding: 14px 18px 16px; margin-top: 14px;
   border-top: 1px solid var(--border-light, #ebeef5);
 }
-.stat-item {
-  display: flex; align-items: center; gap: 10px;
-  padding: 0 28px 0 0; flex: 1; position: relative;
+.cc-foot-tag {
+  font-size: 10px; font-weight: 500;
+  color: var(--text-secondary, #909399);
+  background: var(--el-fill-color-light, #f5f7fa);
+  padding: 2px 8px; border-radius: 4px;
 }
-.stat-item + .stat-item { padding-left: 28px; }
-.stat-item + .stat-item::before {
-  content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
-  width: 1px; height: 30px; background: var(--border-light, #ebeef5);
+.cc-foot-time {
+  flex: 1;
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; color: var(--text-placeholder, #c0c4cc);
 }
-.stat-icon {
-  width: 36px; height: 36px; border-radius: 10px;
-  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+.cc-foot-time svg { opacity: 0.5; }
+.cc-foot-sync {
+  font-size: 10px; font-weight: 500;
+  color: #67c23a; background: #67c23a10;
+  padding: 2px 8px; border-radius: 4px;
 }
-.stat-icon-node { background: linear-gradient(135deg, #409eff22, #409eff44); color: #409eff; }
-.stat-icon-vm { background: linear-gradient(135deg, #67c23a22, #67c23a44); color: #67c23a; }
-.stat-icon-lxc { background: linear-gradient(135deg, #e6a23c22, #e6a23c44); color: #e6a23c; }
-.stat-icon-storage { background: linear-gradient(135deg, #90939922, #90939944); color: #909399; }
-.stat-icon-agent { background: linear-gradient(135deg, #409eff22, #409eff44); color: #409eff; }
-
-.stat-body { display: flex; flex-direction: column; gap: 2px; }
-.stat-value { font-size: 20px; font-weight: 700; color: var(--text-primary, #303133); line-height: 1.2; }
-.stat-label { font-size: 12px; color: var(--text-secondary, #909399); white-space: nowrap; }
-.text-success { color: #67c23a; }
 
 /* ── 详情弹窗 ── */
 .detail-section { margin-bottom: 24px; }
