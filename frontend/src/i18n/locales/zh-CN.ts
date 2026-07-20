@@ -986,6 +986,7 @@ export default {
       cluster: '集群',
       scanTime: '扫描时间',
       noData: '暂无 HA 资源数据',
+      resourceList: '资源列表',
     },
     sdn: { title: '软件定义网络', subtitle: '虚拟网络与子网管理',
     zones: '区域', vnets: '虚拟网络', subnets: '子网',
