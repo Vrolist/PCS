@@ -31,4 +31,6 @@ urlpatterns = [
     path("dependency/", views.DependencyGraphView.as_view(), name="scanner-dependency"),
     path("changes/", views.ChangeTrackingView.as_view(), name="scanner-changes"),
     path("resource-reclamation/", views.ResourceReclamationView.as_view(), name="scanner-resource-reclamation"),
+    path("cpu-compat/", views.CpuCompatView.as_view(), name="scanner-cpu-compat"),
+    path("cpu-flags/compare/", views.CpuFlagsCompareView.as_view(), name="scanner-cpu-flags-compare"),
 ]

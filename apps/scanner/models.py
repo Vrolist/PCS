@@ -19,9 +19,17 @@ class ClusterNode(models.Model):
 
     # CPU
     cpu_model = models.CharField("CPU型号", max_length=256, blank=True)
+    cpu_vendor = models.CharField("CPU厂商", max_length=64, blank=True,
+        help_text="GenuineIntel / AuthenticAMD")
+    cpu_family = models.IntegerField("CPU代号", null=True, blank=True)
     cpu_cores = models.IntegerField("CPU核心数", null=True, blank=True)
     cpu_sockets = models.IntegerField("CPU插槽数", null=True, blank=True)
     cpu_load = models.FloatField("CPU负载(0~1)", null=True, blank=True)
+    cpu_mhz = models.FloatField("CPU频率(MHz)", null=True, blank=True)
+    cpu_hvm = models.BooleanField("硬件虚拟化", default=False,
+        help_text="VT-x (Intel) 或 AMD-V")
+    cpu_flags = models.TextField("CPU特性标志", blank=True,
+        help_text="空格分隔的 CPU feature flags")
 
     # 内存
     memory_total_mb = models.BigIntegerField("内存总量(MB)", null=True, blank=True)

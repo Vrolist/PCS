@@ -438,9 +438,14 @@ class ScanUploadView(APIView):
                 pve_version=node_data.get("pve_version", ""),
                 kernel_version=node_data.get("kernel_version", ""),
                 cpu_model=node_data.get("cpu_model", ""),
+                cpu_vendor=node_data.get("cpu_vendor", ""),
+                cpu_family=node_data.get("cpu_family"),
                 cpu_cores=node_data.get("cpu_cores"),
                 cpu_sockets=node_data.get("cpu_sockets"),
                 cpu_load=node_data.get("cpu_load"),
+                cpu_mhz=node_data.get("cpu_mhz"),
+                cpu_hvm=node_data.get("cpu_hvm", False),
+                cpu_flags=node_data.get("cpu_flags", ""),
                 memory_total_mb=node_data.get("memory_total_mb"),
                 memory_used_mb=node_data.get("memory_used_mb"),
                 memory_free_mb=node_data.get("memory_free_mb"),
@@ -1250,9 +1255,9 @@ class AgentTasksView(APIView):
 # Agent 版本常量（平台侧维护）
 # ============================================================
 
-AGENT_LATEST_VERSION = "0.10.2"
+AGENT_LATEST_VERSION = "0.11.0"
 AGENT_DOWNLOAD_URL = "/api/agent/install.sh"  # 从平台下载
-AGENT_CHANGELOG = "v0.10.2: 采集 netmask 字段确保地址 CIDR 格式，后端修复 netmask 解析"
+AGENT_CHANGELOG = "v0.11.0: CPU 结构化字段采集（vendor/family/mhz/hvm/flags），支持混合架构检测"
 
 
 class AgentUnregisterView(APIView):

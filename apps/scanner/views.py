@@ -61,9 +61,13 @@ class NodeListView(APIView):
             "node_name": n.node_name,
             "status": n.status,
             "cpu_model": n.cpu_model,
+            "cpu_vendor": n.cpu_vendor,
+            "cpu_family": n.cpu_family,
             "cpu_cores": n.cpu_cores,
             "cpu_sockets": n.cpu_sockets,
             "cpu_load": n.cpu_load,
+            "cpu_mhz": n.cpu_mhz,
+            "cpu_hvm": n.cpu_hvm,
             "memory_total_mb": n.memory_total_mb,
             "memory_used_mb": n.memory_used_mb,
             "memory_usage_pct": n.memory_usage_pct,
@@ -169,9 +173,14 @@ class NodeDetailView(APIView):
                 "node_name": node.node_name,
                 "status": node.status,
                 "cpu_model": node.cpu_model,
+                "cpu_vendor": node.cpu_vendor,
+                "cpu_family": node.cpu_family,
                 "cpu_cores": node.cpu_cores,
                 "cpu_sockets": node.cpu_sockets,
                 "cpu_load": node.cpu_load,
+                "cpu_mhz": node.cpu_mhz,
+                "cpu_hvm": node.cpu_hvm,
+                "cpu_flags": node.cpu_flags,
                 "memory_total_mb": node.memory_total_mb,
                 "memory_used_mb": node.memory_used_mb,
                 "memory_free_mb": node.memory_free_mb,
@@ -2648,3 +2657,102 @@ class ResourceReclamationView(APIView):
         
         total_gb = storages.aggregate(total=Sum("total_gb"))["total"] or 0
         return round(total_gb, 2)
+
+
+class CpuCompatView(APIView):
+    """GET /api/scanner/cpu-compat/ — 集群内 CPU 兼容性检测"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        cluster_id = request.query_params.get("cluster_id")
+        node_ids = _latest_node_ids()
+        nodes = ClusterNode.objects.filter(pk__in=node_ids)
+        if cluster_id:
+            nodes = nodes.filter(cluster_id=cluster_id)
+
+        # 按集群分组
+        clusters = {}
+        for n in nodes.select_related("cluster"):
+            cid = n.cluster_id
+            if cid not in clusters:
+                clusters[cid] = {"cluster_name": n.cluster.name, "nodes": []}
+            clusters[cid]["nodes"].append(n)
+
+        results = []
+        for cid, info in clusters.items():
+            vendors = {}
+            for n in info["nodes"]:
+                v = n.cpu_vendor or "unknown"
+                if v not in vendors:
+                    vendors[v] = []
+                vendors[v].append(n.node_name)
+
+            compatible = len(vendors) <= 1
+            warning = ""
+            if not compatible:
+                parts = [f"{v}: {', '.join(names)}" for v, names in vendors.items()]
+                warning = f"混合 CPU 厂商可能导致在线迁移失败 ({'; '.join(parts)})"
+
+            # 检测 hvm 一致性
+            hvm_set = set(n.cpu_hvm for n in info["nodes"])
+            hvm_compatible = len(hvm_set) <= 1
+
+            results.append({
+                "cluster_id": cid,
+                "cluster_name": info["cluster_name"],
+                "compatible": compatible and hvm_compatible,
+                "vendors": vendors,
+                "hvm_consistent": hvm_compatible,
+                "node_count": len(info["nodes"]),
+                "warning": warning,
+            })
+
+        return Response(results)
+
+
+class CpuFlagsCompareView(APIView):
+    """GET /api/scanner/cpu-flags/compare/ — 集群内 CPU flags 对比"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        cluster_id = request.query_params.get("cluster_id")
+        node_ids = _latest_node_ids()
+        nodes = ClusterNode.objects.filter(pk__in=node_ids)
+        if cluster_id:
+            nodes = nodes.filter(cluster_id=cluster_id)
+
+        node_flags = []
+        for n in nodes:
+            flags_set = set(n.cpu_flags.split()) if n.cpu_flags else set()
+            node_flags.append({
+                "node_name": n.node_name,
+                "cluster_id": n.cluster_id,
+                "cluster_name": n.cluster.name,
+                "cpu_vendor": n.cpu_vendor,
+                "cpu_model": n.cpu_model,
+                "flags": sorted(flags_set),
+                "flags_count": len(flags_set),
+            })
+
+        # 计算交集和差集
+        all_flags_sets = [set(nf["flags"]) for nf in node_flags]
+        if all_flags_sets:
+            common = set.intersection(*all_flags_sets) if len(all_flags_sets) > 1 else all_flags_sets[0]
+            unique_per_node = {}
+            for nf in node_flags:
+                node_set = set(nf["flags"])
+                others = set()
+                for other_nf in node_flags:
+                    if other_nf["node_name"] != nf["node_name"]:
+                        others |= set(other_nf["flags"])
+                unique_per_node[nf["node_name"]] = sorted(node_set - others)
+        else:
+            common = set()
+            unique_per_node = {}
+
+        return Response({
+            "nodes": node_flags,
+            "common_flags": sorted(common),
+            "common_flags_count": len(common),
+            "unique_per_node": unique_per_node,
+        })

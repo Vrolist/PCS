@@ -116,7 +116,17 @@
                   <div class="dp-kv"><span class="dp-kv-label">{{ t('clusters.pveVersion') }}</span><span class="dp-kv-val mono">{{ detailData.node.pve_version || '-' }}</span></div>
                   <div class="dp-kv"><span class="dp-kv-label">{{ t('nodes.kernelVersion') }}</span><span class="dp-kv-val mono">{{ detailData.node.kernel_version || '-' }}</span></div>
                   <div class="dp-kv"><span class="dp-kv-label">{{ t('nodes.cpuModel') }}</span><span class="dp-kv-val">{{ detailData.node.cpu_model || '-' }}</span></div>
+                  <div class="dp-kv"><span class="dp-kv-label">{{ t('nodes.cpuVendor') }}</span><span class="dp-kv-val">
+                    <el-tag v-if="detailData.node.cpu_vendor" :type="detailData.node.cpu_vendor.includes('Intel') ? 'primary' : 'danger'" size="small" effect="plain">{{ detailData.node.cpu_vendor }}</el-tag>
+                    <span v-else>-</span>
+                  </span></div>
+                  <div class="dp-kv" v-if="detailData.node.cpu_family"><span class="dp-kv-label">{{ t('nodes.cpuFamily') }}</span><span class="dp-kv-val">{{ detailData.node.cpu_family }}</span></div>
                   <div class="dp-kv"><span class="dp-kv-label">{{ t('nodes.cpuCores') }}</span><span class="dp-kv-val">{{ detailData.node.cpu_cores }}{{ t('common.cores') }} × {{ detailData.node.cpu_sockets || 1 }}{{ t('nodes.cpuSockets') }}</span></div>
+                  <div class="dp-kv" v-if="detailData.node.cpu_mhz"><span class="dp-kv-label">{{ t('nodes.cpuMhz') }}</span><span class="dp-kv-val">{{ detailData.node.cpu_mhz }} MHz</span></div>
+                  <div class="dp-kv"><span class="dp-kv-label">{{ t('nodes.cpuHvm') }}</span><span class="dp-kv-val">
+                    <el-tag :type="detailData.node.cpu_hvm ? 'success' : 'info'" size="small" effect="plain">{{ detailData.node.cpu_hvm ? 'VT-x / AMD-V' : '-' }}</el-tag>
+                  </span></div>
+                  <div class="dp-kv" v-if="detailData.node.cpu_flags"><span class="dp-kv-label">{{ t('nodes.cpuFlags') }}</span><span class="dp-kv-val dp-flags">{{ detailData.node.cpu_flags }}</span></div>
                   <div class="dp-kv"><span class="dp-kv-label">{{ t('nodes.swap') }}</span><span class="dp-kv-val">{{ fmtMB(detailData.node.swap_used_mb) }} / {{ fmtMB(detailData.node.swap_total_mb) }}</span></div>
                   <div class="dp-kv"><span class="dp-kv-label">{{ t('nodes.memoryAvail') }}</span><span class="dp-kv-val">{{ fmtMB(detailData.node.memory_free_mb) }}</span></div>
                   <div class="dp-kv"><span class="dp-kv-label">{{ t('nodes.rootFsAvail') }}</span><span class="dp-kv-val">{{ detailData.node.rootfs_avail_gb || 0 }}GB</span></div>
@@ -459,6 +469,7 @@ function fmtUptime(s: number) {
 .dp-kv-val { font-size: 13px; color: var(--text-primary); word-break: break-all; }
 .mono { font-family: 'SF Mono', 'Menlo', monospace; font-size: 12px; }
 .text-warn { color: #e6a23c; font-weight: 600; }
+.dp-flags { font-size: 11px; line-height: 1.5; max-height: 80px; overflow-y: auto; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
 
 /* 设备列表 */
 .dp-devices { display: flex; flex-direction: column; gap: 8px; padding: 16px 22px; }

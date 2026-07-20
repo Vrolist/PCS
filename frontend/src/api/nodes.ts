@@ -7,9 +7,13 @@ export interface NodeInfo {
   node_name: string
   status: string
   cpu_model: string
+  cpu_vendor: string
+  cpu_family: number | null
   cpu_cores: number
   cpu_sockets: number
   cpu_load: number
+  cpu_mhz: number | null
+  cpu_hvm: boolean
   memory_total_mb: number
   memory_used_mb: number
   memory_usage_pct: number
@@ -32,6 +36,7 @@ export interface NodeDetailInfo extends NodeInfo {
   swap_used_mb: number
   diskstat: Array<Record<string, any>>
   mac_address: string
+  cpu_flags: string
 }
 
 export interface NodeStorage {
@@ -97,4 +102,39 @@ export function getNodes(params?: { cluster_id?: number }) {
 
 export function getNodeDetail(id: number) {
   return request.get<any, NodeDetail>(`/scanner/nodes/${id}/detail/`)
+}
+
+export interface CpuCompatResult {
+  cluster_id: number
+  cluster_name: string
+  compatible: boolean
+  vendors: Record<string, string[]>
+  hvm_consistent: boolean
+  node_count: number
+  warning: string
+}
+
+export function getCpuCompat(params?: { cluster_id?: number }) {
+  return request.get<any, CpuCompatResult[]>('/scanner/cpu-compat/', { params })
+}
+
+export interface CpuFlagsNode {
+  node_name: string
+  cluster_id: number
+  cluster_name: string
+  cpu_vendor: string
+  cpu_model: string
+  flags: string[]
+  flags_count: number
+}
+
+export interface CpuFlagsCompareResult {
+  nodes: CpuFlagsNode[]
+  common_flags: string[]
+  common_flags_count: number
+  unique_per_node: Record<string, string[]>
+}
+
+export function getCpuFlagsCompare(params?: { cluster_id?: number }) {
+  return request.get<any, CpuFlagsCompareResult>('/scanner/cpu-flags/compare/', { params })
 }

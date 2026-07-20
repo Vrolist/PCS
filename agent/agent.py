@@ -37,7 +37,7 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-VERSION = "0.10.2"
+VERSION = "0.11.0"
 
 # 路径常量
 INSTALL_DIR = Path("/opt/pcs-agent")
@@ -449,9 +449,14 @@ def _scan_node(pve, name, info):
         "pve_version": status.get("pveversion", ""),
         "kernel_version": status.get("kversion", ""),
         "cpu_model": cpuinfo.get("model", ""),
+        "cpu_vendor": cpuinfo.get("vendor", ""),
+        "cpu_family": cpuinfo.get("family"),
         "cpu_cores": cpuinfo.get("cpus"),
         "cpu_sockets": cpuinfo.get("sockets"),
         "cpu_load": _cpu_pct(status.get("cpu", 0)),
+        "cpu_mhz": cpuinfo.get("mhz"),
+        "cpu_hvm": cpuinfo.get("hvm", False),
+        "cpu_flags": cpuinfo.get("flags", ""),
         "memory_total_mb": mem_total,
         "memory_used_mb": mem_used,
         "memory_free_mb": _bytes_to_mb(mem.get("free", 0)),
