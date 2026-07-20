@@ -37,7 +37,7 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-VERSION = "0.11.1"
+VERSION = "0.11.2"
 
 # 路径常量
 INSTALL_DIR = Path("/opt/pcs-agent")
@@ -376,6 +376,28 @@ def _cpu_pct(v):
     return round(v * 100, 1)
 
 
+def _detect_cpu_vendor(model: str) -> str:
+    """从 CPU 型号字符串推断厂商"""
+    m = model.lower()
+    if "intel" in m or "xeon" in m or "core" in m or "celeron" in m or "pentium" in m:
+        return "GenuineIntel"
+    if "amd" in m or "ryzen" in m or "epyc" in m or "athlon" in m:
+        return "AuthenticAMD"
+    if "arm" in m or "aarch" in m:
+        return "ARM"
+    return ""
+
+
+def _detect_cpu_family(model: str) -> int | None:
+    """从 CPU 型号字符串推断 family（Intel family 6 / AMD family 23~25）"""
+    m = model.lower()
+    if "intel" in m or "xeon" in m or "core" in m or "celeron" in m or "pentium" in m:
+        return 6
+    if "amd" in m or "ryzen" in m or "epyc" in m or "athlon" in m:
+        return 25
+    return None
+
+
 def scan_full(pve):
     """执行一次完整扫描"""
     version = pve.get_version()
@@ -449,8 +471,8 @@ def _scan_node(pve, name, info):
         "pve_version": status.get("pveversion", ""),
         "kernel_version": status.get("kversion", ""),
         "cpu_model": cpuinfo.get("model", ""),
-        "cpu_vendor": cpuinfo.get("vendor", ""),
-        "cpu_family": cpuinfo.get("family"),
+        "cpu_vendor": cpuinfo.get("vendor", "") or _detect_cpu_vendor(cpuinfo.get("model", "")),
+        "cpu_family": cpuinfo.get("family") or _detect_cpu_family(cpuinfo.get("model", "")),
         "cpu_cores": cpuinfo.get("cpus"),
         "cpu_sockets": cpuinfo.get("sockets"),
         "cpu_load": _cpu_pct(status.get("cpu", 0)),

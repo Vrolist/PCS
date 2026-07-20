@@ -126,7 +126,6 @@
                   <div class="dp-kv"><span class="dp-kv-label">{{ t('nodes.cpuHvm') }}</span><span class="dp-kv-val">
                     <el-tag :type="detailData.node.cpu_hvm ? 'success' : 'info'" size="small" effect="plain">{{ detailData.node.cpu_hvm ? 'VT-x / AMD-V' : '-' }}</el-tag>
                   </span></div>
-                  <div class="dp-kv" v-if="detailData.node.cpu_flags"><span class="dp-kv-label">{{ t('nodes.cpuFlags') }}</span><span class="dp-kv-val dp-flags">{{ detailData.node.cpu_flags }}</span></div>
                   <div class="dp-kv"><span class="dp-kv-label">{{ t('nodes.swap') }}</span><span class="dp-kv-val">{{ fmtMB(detailData.node.swap_used_mb) }} / {{ fmtMB(detailData.node.swap_total_mb) }}</span></div>
                   <div class="dp-kv"><span class="dp-kv-label">{{ t('nodes.memoryAvail') }}</span><span class="dp-kv-val">{{ fmtMB(detailData.node.memory_free_mb) }}</span></div>
                   <div class="dp-kv"><span class="dp-kv-label">{{ t('nodes.rootFsAvail') }}</span><span class="dp-kv-val">{{ detailData.node.rootfs_avail_gb || 0 }}GB</span></div>
@@ -137,6 +136,13 @@
                     <span v-if="!detailData.node.is_ceph_node && !detailData.node.is_ha_node">-</span>
                   </span></div>
                   <div class="dp-kv"><span class="dp-kv-label">{{ t('common.scanTime') }}</span><span class="dp-kv-val mono">{{ fmtTime(detailData.node.scanned_at) }}</span></div>
+                </div>
+                <!-- CPU 特性独立行 -->
+                <div v-if="detailData.node.cpu_flags" class="dp-flags-section">
+                  <span class="dp-flags-label">{{ t('nodes.cpuFlags') }}</span>
+                  <div class="dp-flags-content">
+                    <span v-for="flag in detailData.node.cpu_flags.split(' ')" :key="flag" class="dp-flag-chip">{{ flag }}</span>
+                  </div>
                 </div>
               </div>
             </el-tab-pane>
@@ -469,7 +475,11 @@ function fmtUptime(s: number) {
 .dp-kv-val { font-size: 13px; color: var(--text-primary); word-break: break-all; }
 .mono { font-family: 'SF Mono', 'Menlo', monospace; font-size: 12px; }
 .text-warn { color: #e6a23c; font-weight: 600; }
-.dp-flags { font-size: 11px; line-height: 1.5; max-height: 80px; overflow-y: auto; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.dp-flags-section { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--el-border-color-lighter); }
+.dp-flags-label { font-size: 13px; font-weight: 600; color: var(--text-primary, #303133); display: block; margin-bottom: 10px; }
+.dp-flags-content { display: flex; flex-wrap: wrap; gap: 6px; max-height: 120px; overflow-y: auto; padding-right: 4px; }
+.dp-flag-chip { display: inline-block; padding: 2px 8px; font-size: 11px; font-family: var(--font-mono, 'SF Mono', Consolas, monospace); border-radius: 4px; background: var(--el-fill-color-light, #f0f2f5); color: var(--text-secondary, #606266); white-space: nowrap; border: 1px solid var(--el-border-color-extra-light, #e4e7ed); }
+:root.dark .dp-flag-chip { background: var(--el-fill-color-dark, #2a2a2d); border-color: var(--el-border-color, #4c4d4f); }
 
 /* 设备列表 */
 .dp-devices { display: flex; flex-direction: column; gap: 8px; padding: 16px 22px; }

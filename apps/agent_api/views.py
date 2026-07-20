@@ -1255,9 +1255,9 @@ class AgentTasksView(APIView):
 # Agent 版本常量（平台侧维护）
 # ============================================================
 
-AGENT_LATEST_VERSION = "0.11.1"
+AGENT_LATEST_VERSION = "0.11.2"
 AGENT_DOWNLOAD_URL = "/api/agent/install.sh"  # 从平台下载
-AGENT_CHANGELOG = "v0.11.1: 修复 cpu_hvm 空字符串导致扫描上传 500 错误"
+AGENT_CHANGELOG = "v0.11.2: 修复 CPU 厂商/代号字段为空，从型号名自动推断"
 
 
 class AgentUnregisterView(APIView):
