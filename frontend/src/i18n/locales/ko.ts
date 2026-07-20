@@ -357,6 +357,7 @@ export default {
     cpuMhz: 'CPU 주파수',
     cpuHvm: '가상화',
     cpuFlags: 'CPU 플래그',
+    flagsCount: '개 플래그',
     cpuFlagsCount: '플래그 수',
     cpuCompat: 'CPU 호환성',
     cpuFlagsCompare: 'CPU 플래그 비교',

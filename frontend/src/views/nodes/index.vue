@@ -137,10 +137,14 @@
                   </span></div>
                   <div class="dp-kv"><span class="dp-kv-label">{{ t('common.scanTime') }}</span><span class="dp-kv-val mono">{{ fmtTime(detailData.node.scanned_at) }}</span></div>
                 </div>
-                <!-- CPU 特性独立行 -->
+                <!-- CPU 特性独立行（默认折叠） -->
                 <div v-if="detailData.node.cpu_flags" class="dp-flags-section">
-                  <span class="dp-flags-label">{{ t('nodes.cpuFlags') }}</span>
-                  <div class="dp-flags-content">
+                  <div class="dp-flags-toggle" @click="cpuFlagsExpanded = !cpuFlagsExpanded">
+                    <span class="dp-flags-label">{{ t('nodes.cpuFlags') }}</span>
+                    <span class="dp-flags-count">{{ detailData.node.cpu_flags.split(' ').length }}{{ t('nodes.flagsCount') }}</span>
+                    <span class="dp-flags-arrow">{{ cpuFlagsExpanded ? '▼' : '▶' }}</span>
+                  </div>
+                  <div v-show="cpuFlagsExpanded" class="dp-flags-content">
                     <span v-for="flag in detailData.node.cpu_flags.split(' ')" :key="flag" class="dp-flag-chip">{{ flag }}</span>
                   </div>
                 </div>
@@ -221,6 +225,7 @@ const selectedId = ref<number | null>(null)
 const detailData = ref<NodeDetail | null>(null)
 const detailLoading = ref(false)
 const activeTab = ref('basic')
+const cpuFlagsExpanded = ref(false)
 
 /* ---- 计算属性 ---- */
 
@@ -476,8 +481,12 @@ function fmtUptime(s: number) {
 .mono { font-family: 'SF Mono', 'Menlo', monospace; font-size: 12px; }
 .text-warn { color: #e6a23c; font-weight: 600; }
 .dp-flags-section { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--el-border-color-lighter); }
-.dp-flags-label { font-size: 13px; font-weight: 600; color: var(--text-primary, #303133); display: block; margin-bottom: 10px; }
-.dp-flags-content { display: flex; flex-wrap: wrap; gap: 6px; max-height: 120px; overflow-y: auto; padding-right: 4px; }
+.dp-flags-toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; padding: 6px 0; }
+.dp-flags-toggle:hover { opacity: 0.8; }
+.dp-flags-label { font-size: 13px; font-weight: 600; color: var(--text-primary, #303133); }
+.dp-flags-count { font-size: 12px; color: var(--text-secondary, #909399); }
+.dp-flags-arrow { font-size: 10px; color: var(--text-secondary, #909399); margin-left: 2px; }
+.dp-flags-content { display: flex; flex-wrap: wrap; gap: 6px; max-height: 120px; overflow-y: auto; padding: 10px 0 0; }
 .dp-flag-chip { display: inline-block; padding: 2px 8px; font-size: 11px; font-family: var(--font-mono, 'SF Mono', Consolas, monospace); border-radius: 4px; background: var(--el-fill-color-light, #f0f2f5); color: var(--text-secondary, #606266); white-space: nowrap; border: 1px solid var(--el-border-color-extra-light, #e4e7ed); }
 :root.dark .dp-flag-chip { background: var(--el-fill-color-dark, #2a2a2d); border-color: var(--el-border-color, #4c4d4f); }
 

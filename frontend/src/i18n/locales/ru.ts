@@ -362,6 +362,7 @@ export default {
     cpuMhz: 'Частота CPU',
     cpuHvm: 'Виртуализация',
     cpuFlags: 'Флаги CPU',
+    flagsCount: 'флагов',
     cpuFlagsCount: 'Количество флагов',
     cpuCompat: 'Совместимость CPU',
     cpuFlagsCompare: 'Сравнение флагов CPU',

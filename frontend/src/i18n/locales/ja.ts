@@ -357,6 +357,7 @@ export default {
     cpuMhz: 'CPU 周波数',
     cpuHvm: '仮想化',
     cpuFlags: 'CPU フラグ',
+    flagsCount: '個のフラグ',
     cpuFlagsCount: 'フラグ数',
     cpuCompat: 'CPU 互換性',
     cpuFlagsCompare: 'CPU フラグ比較',

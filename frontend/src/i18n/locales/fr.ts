@@ -362,6 +362,7 @@ export default {
     cpuMhz: 'Fréquence CPU',
     cpuHvm: 'Virtualisation',
     cpuFlags: 'Flags CPU',
+    flagsCount: 'flags',
     cpuFlagsCount: 'Nombre de flags',
     cpuCompat: 'Compatibilité CPU',
     cpuFlagsCompare: 'Comparaison des flags CPU',

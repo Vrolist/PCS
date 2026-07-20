@@ -399,6 +399,7 @@ export default {
     cpuMhz: 'CPU 频率',
     cpuHvm: '虚拟化',
     cpuFlags: 'CPU 特性',
+    flagsCount: '个特性',
     cpuFlagsCount: '特性数量',
     cpuCompat: 'CPU 兼容性',
     cpuFlagsCompare: 'CPU 特性对比',
