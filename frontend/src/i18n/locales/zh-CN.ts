@@ -44,6 +44,7 @@ export default {
     scanTime: '扫描时间',
     search: '搜索',
     time: '时间',
+    all: '全部',
   },
 
   // 导航
@@ -987,6 +988,14 @@ export default {
       scanTime: '扫描时间',
       noData: '暂无 HA 资源数据',
       resourceList: '资源列表',
+      haCoverage: 'HA 覆盖率',
+      unprotected: '无保护',
+      unprotectedAlert: '个运行中资源未配置 HA 保护',
+      unprotectedDesc: '建议为关键业务配置高可用，避免节点故障导致服务中断',
+      viewUnprotected: '查看资源',
+      haGroups: 'HA 组概览',
+      protected: '有保护',
+      allProtected: '所有运行中资源均已配置 HA 保护',
     },
     sdn: { title: '软件定义网络', subtitle: '虚拟网络与子网管理',
     zones: '区域', vnets: '虚拟网络', subnets: '子网',

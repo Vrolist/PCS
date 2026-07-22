@@ -19,3 +19,19 @@ export interface HAResource {
 export function getHAResources(params?: { cluster_id?: number }) {
   return request.get<any, HAResource[]>('/scanner/ha/', { params })
 }
+
+export interface HACoverage {
+  total_resources: number
+  total_vms: number
+  total_lxc: number
+  ha_protected: number
+  ha_vms: number
+  ha_lxc: number
+  coverage_pct: number
+  unprotected_count: number
+  crm_abnormal: number
+}
+
+export function getHACoverage(params?: { cluster_id?: number }) {
+  return request.get<any, HACoverage>('/scanner/ha/coverage/', { params })
+}

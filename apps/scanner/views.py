@@ -787,6 +787,63 @@ class HAListView(APIView):
         return Response(data)
 
 
+class HACoverageView(APIView):
+    """GET /api/scanner/ha/coverage/ — HA 覆盖率统计"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        cluster_filter = request.query_params.get("cluster_id")
+        cluster_ids = _all_cluster_ids()
+
+        # HA 资源（最新扫描）
+        ha_qs = HAResource.objects.filter(cluster_id__in=cluster_ids)
+        if cluster_filter:
+            ha_qs = ha_qs.filter(cluster_id=cluster_filter)
+        ha_sids = (
+            ha_qs.values("sid")
+            .annotate(last_scan=Max("scanned_at"))
+            .values_list("sid", flat=True)
+        )
+        ha_resources = HAResource.objects.filter(
+            sid__in=ha_sids, scanned_at__in=[
+                ha_qs.filter(sid=s).order_by("-scanned_at").values_list("scanned_at", flat=True)[:1]
+                for s in ha_sids
+            ]
+        ) if list(ha_sids) else HAResource.objects.none()
+
+        # 统计
+        ha_vm = ha_resources.filter(resource_type="vm").count()
+        ha_ct = ha_resources.filter(resource_type="ct").count()
+        ha_total = ha_vm + ha_ct
+
+        # VM/LXC 总数（去重，取每个 node+vmid 最新）
+        vm_qs = VM.objects.filter(node__cluster_id__in=cluster_ids)
+        lxc_qs = LXC.objects.filter(node__cluster_id__in=cluster_ids)
+        if cluster_filter:
+            vm_qs = vm_qs.filter(node__cluster_id=cluster_filter)
+            lxc_qs = lxc_qs.filter(node__cluster_id=cluster_filter)
+        total_vm = vm_qs.values("vmid").distinct().count()
+        total_lxc = lxc_qs.values("vmid").distinct().count()
+        total_resources = total_vm + total_lxc
+
+        # CRM 异常
+        crm_abnormal = ha_resources.exclude(crm_state="started").exclude(crm_state__isnull=True).count()
+
+        coverage_pct = round(ha_total / total_resources * 100, 1) if total_resources > 0 else 0
+
+        return Response({
+            "total_resources": total_resources,
+            "total_vms": total_vm,
+            "total_lxc": total_lxc,
+            "ha_protected": ha_total,
+            "ha_vms": ha_vm,
+            "ha_lxc": ha_ct,
+            "coverage_pct": coverage_pct,
+            "unprotected_count": total_resources - ha_total,
+            "crm_abnormal": crm_abnormal,
+        })
+
+
 class SnapshotListView(APIView):
     """GET /api/scanner/snapshots/ — VM 快照列表（每个快照只展示最新一条）"""
     permission_classes = [IsAuthenticated]
