@@ -37,7 +37,7 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-VERSION = "0.12.0"
+VERSION = "0.12.2"
 
 # 路径常量
 INSTALL_DIR = Path("/opt/pcs-agent")
@@ -191,6 +191,27 @@ class PVEClient:
         with _http_opener.open(req) as resp:
             return json.loads(resp.read())["data"]
 
+    def get_with_detail(self, path):
+        """调用 PVE API，失败时返回 (None, error_detail_string)"""
+        url = f"{self.endpoint}/api2/json{path}"
+        req = urllib.request.Request(url)
+        if self._is_token:
+            req.add_header("Authorization", f"PVEAPIToken={self.password}")
+        else:
+            req.add_header("Cookie", f"PVEAuthCookie={self.ticket}")
+        try:
+            with _http_opener.open(req, timeout=30) as resp:
+                return json.loads(resp.read())["data"], None
+        except urllib.error.HTTPError as e:
+            body = ""
+            try:
+                body = e.read().decode("utf-8", errors="replace")[:200]
+            except Exception:
+                pass
+            return None, f"HTTP {e.code}: {body}"
+        except Exception as e:
+            return None, str(e)
+
     def get_version(self):
         return self.get("/version").get("version", "")
 
@@ -255,26 +276,28 @@ class PVEClient:
             return []
 
     # ---- 集群任务/日志 API ----
-    def get_cluster_tasks(self, since=None, limit=50):
-        """获取集群级任务列表（迁移/HA/备份/存储操作等）"""
+    def get_cluster_tasks(self, limit=50):
+        """获取集群级任务列表（GET /cluster/tasks，无需 limit 参数）"""
         try:
-            params = f"?limit={limit}"
-            if since:
-                params += f"&since={since}"
-            return self.get(f"/cluster/tasks{params}")
+            data, err = self.get_with_detail("/cluster/tasks")
+            if err:
+                logger.warning(f"获取集群任务失败: {err}")
+                return []
+            return data if isinstance(data, list) else []
         except Exception as e:
-            logger.warning(f"获取集群任务失败: {e}")
+            logger.warning(f"获取集群任务异常: {e}")
             return []
 
-    def get_cluster_log(self, since=None, limit=50):
-        """获取集群级系统日志（corosync/HA/节点事件等）"""
+    def get_cluster_log(self, max_entries=100):
+        """获取集群级系统日志（GET /cluster/log，参数名为 max）"""
         try:
-            params = f"?limit={limit}"
-            if since:
-                params += f"&since={since}"
-            return self.get(f"/cluster/log{params}")
+            data, err = self.get_with_detail(f"/cluster/log?max={max_entries}")
+            if err:
+                logger.warning(f"获取集群日志失败: {err}")
+                return []
+            return data if isinstance(data, list) else []
         except Exception as e:
-            logger.warning(f"获取集群日志失败: {e}")
+            logger.warning(f"获取集群日志异常: {e}")
             return []
 
     def get_backup_jobs(self, node):
@@ -452,8 +475,8 @@ def scan_full(pve):
     except Exception as e:
         logger.error(f"扫描备份数据失败: {e}")
 
-    cluster_tasks = _scan_cluster_tasks(pve)
-    cluster_log = _scan_cluster_log(pve)
+    cluster_tasks = _scan_cluster_tasks(pve, nodes_data)
+    cluster_log = _scan_cluster_log(pve, nodes_data)
 
     return {
         "scanned_at": datetime.now(timezone.utc).isoformat(),
@@ -1127,13 +1150,14 @@ def _scan_backups(pve, node):
     }
 
 
-def _scan_cluster_tasks(pve):
-    """扫描集群级任务（迁移/HA/备份/存储操作等）"""
+def _scan_cluster_tasks(pve, nodes_data=None):
+    """扫描集群级任务（GET /cluster/tasks）"""
     raw_tasks = pve.get_cluster_tasks(limit=50)
     parsed = []
     for t in raw_tasks:
-        # 解析 UPID: "UPID:node:PID:TYPE:VMID:..."
         upid = t.get("upid", "")
+        if not upid:
+            continue
         start_ts = t.get("starttime", 0)
         end_ts = t.get("endtime", 0)
         start_time = None
@@ -1150,7 +1174,6 @@ def _scan_cluster_tasks(pve):
                 duration = int(end_ts - start_ts)
             except Exception:
                 pass
-
         parsed.append({
             "upid": upid,
             "type": t.get("type", ""),
@@ -1166,16 +1189,16 @@ def _scan_cluster_tasks(pve):
     return parsed
 
 
-def _scan_cluster_log(pve):
-    """扫描集群级系统日志（corosync/HA/节点事件等）"""
-    raw_logs = pve.get_cluster_log(limit=100)
+def _scan_cluster_log(pve, nodes_data=None):
+    """扫描集群级系统日志（GET /cluster/log）"""
+    raw_logs = pve.get_cluster_log(max_entries=100)
     parsed = []
     for entry in raw_logs:
         parsed.append({
             "id": entry.get("n", 0),
             "tag": entry.get("tag", ""),
             "pri": entry.get("pri", ""),
-            "message": entry.get("log", ""),
+            "message": entry.get("log", entry.get("syslog", "")),
             "time": entry.get("t", 0),
             "raw": entry,
         })
