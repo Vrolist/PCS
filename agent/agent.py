@@ -37,7 +37,7 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-VERSION = "0.11.2"
+VERSION = "0.12.0"
 
 # 路径常量
 INSTALL_DIR = Path("/opt/pcs-agent")

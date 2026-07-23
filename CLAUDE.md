@@ -273,7 +273,7 @@ Agent 自动更新 (v0.5.0+):
     → install.sh?token=X&platform=Y → 返回 bash 安装脚本（首次安装用）
     → install.sh?agent=1 → 返回 agent.py 源码（自动更新用）
 
-当前最新版本: v0.6.0 — 支持 SDN 虚拟网络数据采集
+当前最新版本: v0.12.0 — 新增集群任务和集群日志采集
 
 Agent 版本提示:
   Web 前端 Agent 表格显示 version 列

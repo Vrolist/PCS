@@ -1328,9 +1328,9 @@ class AgentTasksView(APIView):
 # Agent 版本常量（平台侧维护）
 # ============================================================
 
-AGENT_LATEST_VERSION = "0.11.2"
+AGENT_LATEST_VERSION = "0.12.0"
 AGENT_DOWNLOAD_URL = "/api/agent/install.sh"  # 从平台下载
-AGENT_CHANGELOG = "v0.11.2: 修复 CPU 厂商/代号字段为空，从型号名自动推断"
+AGENT_CHANGELOG = "v0.12.0: 新增集群任务(cluster tasks)和集群日志(cluster log)采集与上报"
 
 
 class AgentUnregisterView(APIView):
