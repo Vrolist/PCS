@@ -915,6 +915,7 @@ class ClusterTask(models.Model):
         verbose_name = "集群任务"
         verbose_name_plural = "集群任务"
         ordering = ["-start_time"]
+        unique_together = [("cluster", "upid")]
         indexes = [
             models.Index(fields=["cluster", "-start_time"]),
             models.Index(fields=["cluster", "task_type"]),
@@ -944,6 +945,7 @@ class ClusterLog(models.Model):
         verbose_name = "集群日志"
         verbose_name_plural = "集群日志"
         ordering = ["-log_time"]
+        unique_together = [("cluster", "entry_id", "log_time")]
         indexes = [
             models.Index(fields=["cluster", "-log_time"]),
             models.Index(fields=["cluster", "log_level"]),

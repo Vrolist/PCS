@@ -1176,7 +1176,7 @@ class ScanUploadView(APIView):
                     )
 
     def _save_cluster_tasks(self, cluster, scan_task, tasks_data, scanned_at):
-        """保存集群任务数据"""
+        """保存集群任务数据（原地更新，按 upid 去重）"""
         for t in tasks_data:
             upid = t.get("upid", "")
             if not upid:
@@ -1196,25 +1196,26 @@ class ScanUploadView(APIView):
             elif isinstance(end_time, str):
                 from django.utils.dateparse import parse_datetime
                 end_time = parse_datetime(end_time)
-            ClusterTask.objects.create(
-                cluster=cluster,
-                scan=scan_task,
-                upid=upid,
-                task_type=t.get("type", ""),
-                status=t.get("status", ""),
-                exit_status=t.get("exitstatus", t.get("exit_status", "")),
-                node_name=t.get("node", ""),
-                user=t.get("user", ""),
-                vmid=t.get("vmid"),
-                start_time=start_time,
-                end_time=end_time,
-                duration_seconds=t.get("duration_seconds"),
-                raw_data=t,
-                scanned_at=scanned_at,
+            ClusterTask.objects.update_or_create(
+                cluster=cluster, upid=upid,
+                defaults={
+                    "scan": scan_task,
+                    "task_type": t.get("type", ""),
+                    "status": t.get("status", ""),
+                    "exit_status": t.get("exitstatus", t.get("exit_status", "")),
+                    "node_name": t.get("node", ""),
+                    "user": t.get("user", ""),
+                    "vmid": t.get("vmid"),
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "duration_seconds": t.get("duration_seconds"),
+                    "raw_data": t,
+                    "scanned_at": scanned_at,
+                },
             )
 
     def _save_cluster_log(self, cluster, scan_task, log_data, scanned_at):
-        """保存集群日志数据"""
+        """保存集群日志数据（原地更新，按 cluster+entry_id+log_time 去重）"""
         for entry in log_data:
             # PVE API 字段: n(id), t(timestamp), syslog(message), tag, pri(level)
             entry_id = entry.get("n", entry.get("id", 0))
@@ -1226,16 +1227,16 @@ class ScanUploadView(APIView):
                     log_time = _dt.fromtimestamp(log_time_ts, tz=_tz.utc)
                 except Exception:
                     pass
-            ClusterLog.objects.create(
-                cluster=cluster,
-                scan=scan_task,
-                entry_id=entry_id,
-                log_level=entry.get("pri", ""),
-                tag=entry.get("tag", ""),
-                message=entry.get("syslog", entry.get("message", "")),
-                log_time=log_time,
-                raw_data=entry,
-                scanned_at=scanned_at,
+            ClusterLog.objects.update_or_create(
+                cluster=cluster, entry_id=entry_id, log_time=log_time,
+                defaults={
+                    "scan": scan_task,
+                    "log_level": entry.get("pri", ""),
+                    "tag": entry.get("tag", ""),
+                    "message": entry.get("syslog", entry.get("message", "")),
+                    "raw_data": entry,
+                    "scanned_at": scanned_at,
+                },
             )
 
     def _save_scan_history(self, cluster, scan_task, nodes_data, scanned_at):
