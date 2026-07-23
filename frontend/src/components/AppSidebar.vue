@@ -161,6 +161,14 @@
         <div class="item-icon-wrap"><el-icon><Camera /></el-icon></div>
         <template #title><span>{{ t('nav.snapshotManagement') }}</span></template>
       </el-menu-item>
+      <el-menu-item index="/dashboard/cluster-tasks" class="sidebar-item">
+        <div class="item-icon-wrap"><el-icon><Tickets /></el-icon></div>
+        <template #title><span>{{ t('nav.clusterTasks') }}</span></template>
+      </el-menu-item>
+      <el-menu-item index="/dashboard/cluster-log" class="sidebar-item">
+        <div class="item-icon-wrap"><el-icon><Document /></el-icon></div>
+        <template #title><span>{{ t('nav.clusterLog') }}</span></template>
+      </el-menu-item>
     </template>
 
     <!-- 运维检测 -->
@@ -290,7 +298,7 @@ import { useAppStore } from '@/stores/app'
 import { useThemeStore } from '@/stores/theme'
 import { useClusterStore } from '@/stores/cluster'
 import { useAuthStore } from '@/stores/auth'
-import { Monitor, Connection, Cpu, Box, Bell, Service, User, Document, Coin, Share, Lock, FolderOpened, CopyDocument, Camera, ArrowRight, ArrowDown, Check, DataAnalysis, Switch, Delete, Trophy, Histogram, Files } from '@element-plus/icons-vue'
+import { Monitor, Connection, Cpu, Box, Bell, Service, User, Document, Coin, Share, Lock, FolderOpened, CopyDocument, Camera, ArrowRight, ArrowDown, Check, DataAnalysis, Switch, Delete, Trophy, Histogram, Files, Tickets } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const { t } = useI18n()

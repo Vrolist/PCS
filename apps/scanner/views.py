@@ -10,7 +10,8 @@ from apps.clusters.models import Cluster
 from .models import (ClusterNode, VM, LXC, VMConfig, LXCConfig, VMSnapshot, HAResource,
                      Storage, NetworkInterface, CephStatus, ScanHistory, SDNZone, SDNVNet, SDNSubnet,
                      BackupStorage, BackupJob, BackupHistory, ReplicationJob,
-                     FirewallOptions, FirewallRule, FirewallIPSet, FirewallIPSetEntry, FirewallAlias)
+                     FirewallOptions, FirewallRule, FirewallIPSet, FirewallIPSetEntry, FirewallAlias,
+                     ClusterTask, ClusterLog)
 
 
 def _all_cluster_ids():
@@ -2813,3 +2814,91 @@ class CpuFlagsCompareView(APIView):
             "common_flags_count": len(common),
             "unique_per_node": unique_per_node,
         })
+
+
+class ClusterTaskListView(APIView):
+    """GET /api/scanner/cluster-tasks/ — PVE 集群任务列表"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        cluster_filter = request.query_params.get("cluster_id")
+        task_type_filter = request.query_params.get("task_type")
+        status_filter = request.query_params.get("status")
+        search = request.query_params.get("search", "").strip()
+        page = int(request.query_params.get("page", 1))
+        page_size = int(request.query_params.get("page_size", 20))
+
+        cluster_ids = _all_cluster_ids()
+        qs = ClusterTask.objects.filter(cluster_id__in=cluster_ids).select_related("cluster")
+        if cluster_filter:
+            qs = qs.filter(cluster_id=cluster_filter)
+        if task_type_filter:
+            qs = qs.filter(task_type=task_type_filter)
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        if search:
+            qs = qs.filter(
+                Q(upid__icontains=search) | Q(node_name__icontains=search) |
+                Q(user__icontains=search) | Q(task_type__icontains=search)
+            )
+
+        total = qs.count()
+        qs = qs.order_by("-start_time")[(page - 1) * page_size: page * page_size]
+
+        data = [{
+            "id": t.id,
+            "cluster_id": t.cluster_id,
+            "cluster_name": t.cluster.name,
+            "upid": t.upid,
+            "task_type": t.task_type,
+            "status": t.status,
+            "exit_status": t.exit_status,
+            "node_name": t.node_name,
+            "user": t.user,
+            "vmid": t.vmid,
+            "start_time": t.start_time,
+            "end_time": t.end_time,
+            "duration_seconds": t.duration_seconds,
+            "scanned_at": t.scanned_at,
+        } for t in qs]
+        return Response({"count": total, "results": data})
+
+
+class ClusterLogListView(APIView):
+    """GET /api/scanner/cluster-log/ — PVE 集群日志列表"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        cluster_filter = request.query_params.get("cluster_id")
+        level_filter = request.query_params.get("level")
+        tag_filter = request.query_params.get("tag")
+        search = request.query_params.get("search", "").strip()
+        page = int(request.query_params.get("page", 1))
+        page_size = int(request.query_params.get("page_size", 50))
+
+        cluster_ids = _all_cluster_ids()
+        qs = ClusterLog.objects.filter(cluster_id__in=cluster_ids).select_related("cluster")
+        if cluster_filter:
+            qs = qs.filter(cluster_id=cluster_filter)
+        if level_filter:
+            qs = qs.filter(log_level=level_filter)
+        if tag_filter:
+            qs = qs.filter(tag=tag_filter)
+        if search:
+            qs = qs.filter(Q(message__icontains=search) | Q(tag__icontains=search))
+
+        total = qs.count()
+        qs = qs.order_by("-log_time")[(page - 1) * page_size: page * page_size]
+
+        data = [{
+            "id": l.id,
+            "cluster_id": l.cluster_id,
+            "cluster_name": l.cluster.name,
+            "entry_id": l.entry_id,
+            "log_level": l.log_level,
+            "tag": l.tag,
+            "message": l.message,
+            "log_time": l.log_time,
+            "scanned_at": l.scanned_at,
+        } for l in qs]
+        return Response({"count": total, "results": data})

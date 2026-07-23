@@ -1748,6 +1748,62 @@ def do_upload(token, levels=None, num_scans=7):
     print()
 
 
+def _gen_cluster_tasks(level, nodes, scan_time):
+    """生成 PVE 集群任务模拟数据"""
+    tasks = []
+    task_types = [
+        ("qmigrate", "OK", "vm", "root@pam"),
+        ("vzdump", "OK", "vzdump", "root@pam"),
+        ("hamigrate", "OK", "ha", "ha-manager"),
+        ("qmigrate", "running", "vm", "root@pam"),
+    ]
+    # Level 越高任务越多
+    count = {1: 0, 2: 2, 3: 4, 4: 6, 5: 10}.get(level, 0)
+    for i in range(count):
+        ttype, status, task_cat, user = random.choice(task_types)
+        node = random.choice(nodes)["name"]
+        vmid = random.randint(100, 999) if task_cat in ("vm", "vzdump") else None
+        ts = scan_time - timedelta(minutes=random.randint(1, 120))
+        start_ts = int(ts.timestamp())
+        end_ts = start_ts + random.randint(5, 300)
+        upid = f"UPID:{node}:{random.randint(10000,99999)}:{ttype}:{vmid or 0}:{user}:"
+        tasks.append({
+            "upid": upid, "type": ttype, "status": status,
+            "node": node, "user": user, "vmid": vmid,
+            "starttime": start_ts, "endtime": end_ts,
+            "exitstatus": "OK" if status == "OK" else "unknown",
+        })
+    return tasks
+
+
+def _gen_cluster_log(level, nodes, scan_time):
+    """生成 PVE 集群日志模拟数据"""
+    logs = []
+    log_templates = [
+        ("cluster", "info", "corosync[{pid}]: [TOTEM ] {node} joined"),
+        ("cluster", "info", "corosync[{pid}]: [TOTEM ] {node} left"),
+        ("ha", "info", "pve-ha-lrm[{pid}]: status change active -> stopped"),
+        ("ha", "warning", "pve-ha-lrm[{pid}]: fence {node} with watchdog"),
+        ("cluster", "info", "pmxcfs[{pid}]: {node} state changed to online"),
+        ("ha", "info", "ha-manager[{pid}]: move vm:{vmid} from {node} to {other_node}"),
+        ("cluster", "warning", "corosync[{pid}]: [TOTEM ] heartbeat timeout on {node}"),
+    ]
+    # Level 越高日志越多
+    count = {1: 2, 2: 5, 3: 8, 4: 12, 5: 20}.get(level, 0)
+    for i in range(count):
+        tag, pri, tmpl = random.choice(log_templates)
+        node = random.choice(nodes)["name"]
+        other_node = random.choice([n["name"] for n in nodes if n["name"] != node] or [node])
+        msg = tmpl.format(pid=random.randint(1000, 9999), node=node, other_node=other_node, vmid=random.randint(100, 999))
+        ts = scan_time - timedelta(minutes=random.randint(1, 180))
+        logs.append({
+            "n": i + 1, "t": int(ts.timestamp()),
+            "syslog": f"[{ts.strftime('%b %d %H:%M:%S')}] {msg}",
+            "tag": tag, "pri": pri,
+        })
+    return logs
+
+
 def _build_scan_payload(cluster_id, agent_ids, data, scan_time, scan_idx, total_scans, level=1):
     """构建扫描上传 payload，带真实波动模式
 
@@ -1849,6 +1905,8 @@ def _build_scan_payload(cluster_id, agent_ids, data, scan_time, scan_idx, total_
         "replication": _gen_replication_data(level, nodes_out),
         "firewall": _gen_firewall_data(level, nodes_out),
         "backups": _gen_backup_data(level, nodes_out, scan_time),
+        "cluster_tasks": _gen_cluster_tasks(level, nodes_out, scan_time),
+        "cluster_log": _gen_cluster_log(level, nodes_out, scan_time),
     }
     return payload
 

@@ -74,6 +74,8 @@ export default {
     backupManagement: '备份管理',
     dataReplication: '数据复制',
     snapshotManagement: '快照管理',
+    clusterTasks: '集群任务',
+    clusterLog: '集群日志',
     opsDetection: '运维检测',
     alertCenter: '告警中心',
     opsService: '运维服务',
@@ -960,6 +962,37 @@ export default {
     current: '当前',
     saveMemory: '保存内存',
     saveState: '保存状态',
+  },
+
+  // 集群任务
+  clusterTasks: {
+    title: '集群任务',
+    subtitle: 'PVE 集群级任务列表（迁移/HA/备份/存储操作等）',
+    startTime: '开始时间',
+    taskType: '任务类型',
+    node: '执行节点',
+    user: '触发用户',
+    vmid: 'VM/CT ID',
+    status: '状态',
+    duration: '耗时',
+    upid: '任务 UPID',
+    running: '运行中',
+    searchPlaceholder: '搜索 UPID/节点/用户...',
+    noData: '暂无集群任务数据',
+    other: '其他',
+  },
+
+  // 集群日志
+  clusterPveLog: {
+    title: '集群日志',
+    subtitle: 'PVE 集群级系统日志（corosync/HA/节点事件等）',
+    time: '时间',
+    logLevel: '日志级别',
+    tag: '日志标签',
+    message: '日志内容',
+    cluster: '集群',
+    searchPlaceholder: '搜索日志内容...',
+    noData: '暂无集群日志数据',
   },
 
   // 进阶信息占位页

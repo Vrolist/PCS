@@ -254,6 +254,29 @@ class PVEClient:
         except Exception:
             return []
 
+    # ---- 集群任务/日志 API ----
+    def get_cluster_tasks(self, since=None, limit=50):
+        """获取集群级任务列表（迁移/HA/备份/存储操作等）"""
+        try:
+            params = f"?limit={limit}"
+            if since:
+                params += f"&since={since}"
+            return self.get(f"/cluster/tasks{params}")
+        except Exception as e:
+            logger.warning(f"获取集群任务失败: {e}")
+            return []
+
+    def get_cluster_log(self, since=None, limit=50):
+        """获取集群级系统日志（corosync/HA/节点事件等）"""
+        try:
+            params = f"?limit={limit}"
+            if since:
+                params += f"&since={since}"
+            return self.get(f"/cluster/log{params}")
+        except Exception as e:
+            logger.warning(f"获取集群日志失败: {e}")
+            return []
+
     def get_backup_jobs(self, node):
         """获取节点备份任务配置"""
         try:
@@ -429,6 +452,9 @@ def scan_full(pve):
     except Exception as e:
         logger.error(f"扫描备份数据失败: {e}")
 
+    cluster_tasks = _scan_cluster_tasks(pve)
+    cluster_log = _scan_cluster_log(pve)
+
     return {
         "scanned_at": datetime.now(timezone.utc).isoformat(),
         "version": version,
@@ -439,6 +465,8 @@ def scan_full(pve):
         "replication": replication,
         "backups": backups,
         "firewall": firewall,
+        "cluster_tasks": cluster_tasks,
+        "cluster_log": cluster_log,
     }
 
 
@@ -1097,6 +1125,61 @@ def _scan_backups(pve, node):
         "backup_jobs": parsed_jobs,
         "backup_history": parsed_history,
     }
+
+
+def _scan_cluster_tasks(pve):
+    """扫描集群级任务（迁移/HA/备份/存储操作等）"""
+    raw_tasks = pve.get_cluster_tasks(limit=50)
+    parsed = []
+    for t in raw_tasks:
+        # 解析 UPID: "UPID:node:PID:TYPE:VMID:..."
+        upid = t.get("upid", "")
+        start_ts = t.get("starttime", 0)
+        end_ts = t.get("endtime", 0)
+        start_time = None
+        end_time = None
+        duration = None
+        if start_ts:
+            try:
+                start_time = datetime.fromtimestamp(start_ts, tz=timezone.utc).isoformat()
+            except Exception:
+                pass
+        if end_ts and start_ts:
+            try:
+                end_time = datetime.fromtimestamp(end_ts, tz=timezone.utc).isoformat()
+                duration = int(end_ts - start_ts)
+            except Exception:
+                pass
+
+        parsed.append({
+            "upid": upid,
+            "type": t.get("type", ""),
+            "status": t.get("status", ""),
+            "exit_status": t.get("exitstatus", ""),
+            "node": t.get("node", ""),
+            "user": t.get("user", ""),
+            "starttime": start_time,
+            "endtime": end_time,
+            "duration_seconds": duration,
+            "raw": t,
+        })
+    return parsed
+
+
+def _scan_cluster_log(pve):
+    """扫描集群级系统日志（corosync/HA/节点事件等）"""
+    raw_logs = pve.get_cluster_log(limit=100)
+    parsed = []
+    for entry in raw_logs:
+        parsed.append({
+            "id": entry.get("n", 0),
+            "tag": entry.get("tag", ""),
+            "pri": entry.get("pri", ""),
+            "message": entry.get("log", ""),
+            "time": entry.get("t", 0),
+            "raw": entry,
+        })
+    return parsed
 
 
 # ============================================================

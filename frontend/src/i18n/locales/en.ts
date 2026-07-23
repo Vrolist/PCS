@@ -72,6 +72,8 @@ export default {
     backupManagement: 'Backup Management',
     dataReplication: 'Data Replication',
     snapshotManagement: 'Snapshot Management',
+    clusterTasks: 'Cluster Tasks',
+    clusterLog: 'Cluster Log',
     opsDetection: 'Ops Detection',
     alertCenter: 'Alert Center',
     opsService: 'Ops Services',
@@ -948,6 +950,37 @@ export default {
     current: 'Current',
     saveMemory: 'Save Memory',
     saveState: 'Save State',
+  },
+
+  // Cluster Tasks
+  clusterTasks: {
+    title: 'Cluster Tasks',
+    subtitle: 'PVE cluster-level tasks (migration/HA/backup/storage operations)',
+    startTime: 'Start Time',
+    taskType: 'Task Type',
+    node: 'Node',
+    user: 'User',
+    vmid: 'VM/CT ID',
+    status: 'Status',
+    duration: 'Duration',
+    upid: 'Task UPID',
+    running: 'Running',
+    searchPlaceholder: 'Search UPID/node/user...',
+    noData: 'No cluster task data',
+    other: 'Other',
+  },
+
+  // Cluster Log
+  clusterPveLog: {
+    title: 'Cluster Log',
+    subtitle: 'PVE cluster-level system logs (corosync/HA/node events)',
+    time: 'Time',
+    logLevel: 'Log Level',
+    tag: 'Tag',
+    message: 'Message',
+    cluster: 'Cluster',
+    searchPlaceholder: 'Search log content...',
+    noData: 'No cluster log data',
   },
 
   // Advanced Info Placeholder Pages

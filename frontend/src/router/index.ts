@@ -136,6 +136,18 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/snapshots/index.vue'),
         meta: { title: '快照管理', titleKey: 'nav.snapshotManagement', icon: 'Camera' },
       },
+      {
+        path: 'cluster-tasks',
+        name: 'ClusterTasks',
+        component: () => import('@/views/cluster-tasks/index.vue'),
+        meta: { title: '集群任务', titleKey: 'nav.clusterTasks', icon: 'Tickets' },
+      },
+      {
+        path: 'cluster-log',
+        name: 'ClusterLog',
+        component: () => import('@/views/cluster-log/index.vue'),
+        meta: { title: '集群日志', titleKey: 'nav.clusterLog', icon: 'Document' },
+      },
       // 智能分析
       {
         path: 'capacity-planning',

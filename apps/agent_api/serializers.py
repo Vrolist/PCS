@@ -48,6 +48,8 @@ class ScanUploadSerializer(serializers.Serializer):
     backups = serializers.DictField(required=False, default=dict, help_text="备份数据")
     replication = serializers.ListField(required=False, default=list, help_text="复制任务列表")
     firewall = serializers.DictField(required=False, default=dict, help_text="防火墙配置数据")
+    cluster_tasks = serializers.ListField(required=False, default=list, help_text="集群任务列表")
+    cluster_log = serializers.ListField(required=False, default=list, help_text="集群日志列表")
 
 
 class AgentTaskSerializer(serializers.ModelSerializer):

@@ -889,3 +889,65 @@ class FirewallAlias(models.Model):
 
     def __str__(self):
         return f"{self.name} = {self.cidr}"
+
+
+class ClusterTask(models.Model):
+    """PVE 集群任务 — 来自 GET /cluster/tasks（迁移/HA/备份/存储操作等）"""
+    cluster = models.ForeignKey(Cluster, on_delete=models.CASCADE,
+                                verbose_name="所属集群", related_name="cluster_tasks")
+    scan = models.ForeignKey(ScanTask, on_delete=models.SET_NULL, null=True, blank=True)
+
+    upid = models.CharField("任务 UPID", max_length=128, help_text="PVE 唯一任务标识")
+    task_type = models.CharField("任务类型", max_length=64, blank=True,
+                                 help_text="qmigrate / vzdump / hamigrate / ha-fencing / ...")
+    status = models.CharField("状态", max_length=32, blank=True, help_text="OK / running / ...")
+    exit_status = models.CharField("退出状态", max_length=32, blank=True)
+    node_name = models.CharField("执行节点", max_length=128, blank=True)
+    user = models.CharField("触发用户", max_length=128, blank=True)
+    vmid = models.IntegerField("VM/CT ID", null=True, blank=True)
+    start_time = models.DateTimeField("开始时间", null=True, blank=True)
+    end_time = models.DateTimeField("结束时间", null=True, blank=True)
+    duration_seconds = models.FloatField("耗时(秒)", null=True, blank=True)
+    raw_data = models.JSONField("原始数据", default=dict, blank=True)
+    scanned_at = models.DateTimeField("扫描时间", db_index=True)
+
+    class Meta:
+        verbose_name = "集群任务"
+        verbose_name_plural = "集群任务"
+        ordering = ["-start_time"]
+        indexes = [
+            models.Index(fields=["cluster", "-start_time"]),
+            models.Index(fields=["cluster", "task_type"]),
+        ]
+
+    def __str__(self):
+        return f"{self.upid} ({self.task_type})"
+
+
+class ClusterLog(models.Model):
+    """PVE 集群日志 — 来自 GET /cluster/log（corosync/HA/节点事件等）"""
+    cluster = models.ForeignKey(Cluster, on_delete=models.CASCADE,
+                                verbose_name="所属集群", related_name="cluster_logs")
+    scan = models.ForeignKey(ScanTask, on_delete=models.SET_NULL, null=True, blank=True)
+
+    entry_id = models.IntegerField("日志序号", help_text="PVE 日志序号 (n 字段)")
+    log_level = models.CharField("日志级别", max_length=16, blank=True,
+                                 help_text="info / warning / err")
+    tag = models.CharField("日志标签", max_length=64, blank=True,
+                           help_text="cluster / corosync / ha / ...")
+    message = models.TextField("日志内容", blank=True)
+    log_time = models.DateTimeField("日志时间", null=True, blank=True)
+    raw_data = models.JSONField("原始数据", default=dict, blank=True)
+    scanned_at = models.DateTimeField("扫描时间", db_index=True)
+
+    class Meta:
+        verbose_name = "集群日志"
+        verbose_name_plural = "集群日志"
+        ordering = ["-log_time"]
+        indexes = [
+            models.Index(fields=["cluster", "-log_time"]),
+            models.Index(fields=["cluster", "log_level"]),
+        ]
+
+    def __str__(self):
+        return f"[{self.log_level}] {self.tag}: {self.message[:50]}"
