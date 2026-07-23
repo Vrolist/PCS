@@ -37,7 +37,7 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-VERSION = "0.12.2"
+VERSION = "0.12.3"
 
 # 路径常量
 INSTALL_DIR = Path("/opt/pcs-agent")
@@ -289,13 +289,19 @@ class PVEClient:
             return []
 
     def get_cluster_log(self, max_entries=100):
-        """获取集群级系统日志（GET /cluster/log，参数名为 max）"""
+        """获取集群级系统日志（GET /cluster/log）"""
         try:
-            data, err = self.get_with_detail(f"/cluster/log?max={max_entries}")
+            # 不带参数调用
+            data, err = self.get_with_detail("/cluster/log")
             if err:
                 logger.warning(f"获取集群日志失败: {err}")
                 return []
-            return data if isinstance(data, list) else []
+            if isinstance(data, list):
+                logger.info(f"集群日志获取成功: {len(data)} 条")
+                return data[-max_entries:] if len(data) > max_entries else data
+            else:
+                logger.warning(f"集群日志返回非列表: type={type(data).__name__}, val={str(data)[:200]}")
+                return []
         except Exception as e:
             logger.warning(f"获取集群日志异常: {e}")
             return []
@@ -1194,11 +1200,12 @@ def _scan_cluster_log(pve, nodes_data=None):
     raw_logs = pve.get_cluster_log(max_entries=100)
     parsed = []
     for entry in raw_logs:
+        # PVE /cluster/log 字段: n, t(timestamp), pri, tag, pid, node, msg
         parsed.append({
             "id": entry.get("n", 0),
             "tag": entry.get("tag", ""),
             "pri": entry.get("pri", ""),
-            "message": entry.get("log", entry.get("syslog", "")),
+            "message": entry.get("msg", entry.get("log", "")),
             "time": entry.get("t", 0),
             "raw": entry,
         })

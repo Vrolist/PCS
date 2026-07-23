@@ -1329,9 +1329,9 @@ class AgentTasksView(APIView):
 # Agent 版本常量（平台侧维护）
 # ============================================================
 
-AGENT_LATEST_VERSION = "0.12.2"
+AGENT_LATEST_VERSION = "0.12.3"
 AGENT_DOWNLOAD_URL = "/api/agent/install.sh"  # 从平台下载
-AGENT_CHANGELOG = "v0.12.2: 修复集群任务/日志采集，修正PVE API参数名(limit→max)"
+AGENT_CHANGELOG = "v0.12.3: 修复集群日志采集(字段名msg+去掉max参数)"
 
 
 class AgentUnregisterView(APIView):
