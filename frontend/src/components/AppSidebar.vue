@@ -24,9 +24,9 @@
       </transition>
     </div>
 
-    <!-- 集群 -->
+    <!-- 控制管理 -->
     <div class="menu-section">
-      <span v-if="!appStore.sidebarCollapsed" class="menu-label">{{ t('nav.clusters') }}</span>
+      <span v-if="!appStore.sidebarCollapsed" class="menu-label">{{ t('nav.controlManagement') }}</span>
     </div>
 
     <el-menu-item index="/dashboard" class="sidebar-item">
@@ -41,6 +41,13 @@
         <el-icon><Connection /></el-icon>
       </div>
       <template #title><span>{{ t('nav.clusters') }}</span></template>
+    </el-menu-item>
+
+    <el-menu-item index="/dashboard/llm-settings" class="sidebar-item">
+      <div class="item-icon-wrap">
+        <el-icon><ChatDotRound /></el-icon>
+      </div>
+      <template #title><span>{{ t('nav.llmSettings') }}</span></template>
     </el-menu-item>
 
     <!-- 选择集群 -->
@@ -298,7 +305,7 @@ import { useAppStore } from '@/stores/app'
 import { useThemeStore } from '@/stores/theme'
 import { useClusterStore } from '@/stores/cluster'
 import { useAuthStore } from '@/stores/auth'
-import { Monitor, Connection, Cpu, Box, Bell, Service, User, Document, Coin, Share, Lock, FolderOpened, CopyDocument, Camera, ArrowRight, ArrowDown, Check, DataAnalysis, Switch, Delete, Trophy, Histogram, Files, Tickets } from '@element-plus/icons-vue'
+import { Monitor, Connection, Cpu, Box, Bell, Service, User, Document, Coin, Share, Lock, FolderOpened, CopyDocument, Camera, ArrowRight, ArrowDown, Check, DataAnalysis, Switch, Delete, Trophy, Histogram, Files, Tickets, ChatDotRound } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const { t } = useI18n()

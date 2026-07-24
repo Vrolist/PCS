@@ -18,6 +18,7 @@
         <router-view />
       </main>
     </div>
+    <ChatBubble />
   </div>
 </template>
 
@@ -25,6 +26,7 @@
 import { onMounted, onUnmounted } from 'vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import AppHeader from '@/components/AppHeader.vue'
+import ChatBubble from '@/components/ChatBubble.vue'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 

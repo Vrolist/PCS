@@ -235,6 +235,13 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/user-notifications/index.vue'),
         meta: { title: '通知设置', titleKey: 'nav.notificationSettings', icon: 'Bell' },
       },
+      // AI 助手
+      {
+        path: 'llm-settings',
+        name: 'LLMSettings',
+        component: () => import('@/views/llm-settings/index.vue'),
+        meta: { title: 'AI 助手配置', titleKey: 'nav.llmSettings', icon: 'ChatDotRound' },
+      },
       // 管理员专用
       {
         path: 'admin/users',

@@ -1,0 +1,684 @@
+<template>
+  <!-- 悬浮气泡 -->
+  <div class="chat-bubble" :class="{ active: chatStore.visible }" @click="chatStore.toggleChat">
+    <transition name="bubble-icon" mode="out-in">
+      <el-icon v-if="!chatStore.visible" :size="24"><ChatDotRound /></el-icon>
+      <el-icon v-else :size="24"><Close /></el-icon>
+    </transition>
+  </div>
+
+  <!-- 对话框 -->
+  <teleport to="body">
+    <transition name="chat-slide">
+      <div v-if="chatStore.visible" class="chat-panel">
+        <div class="chat-container">
+          <!-- 头部 -->
+          <div class="chat-header">
+            <div class="chat-header-left">
+              <div class="chat-avatar-wrap">
+                <el-icon :size="18"><Monitor /></el-icon>
+              </div>
+              <div>
+                <h3 class="chat-title">AI 助手</h3>
+                <span class="chat-subtitle">PVE 集群运维分析</span>
+              </div>
+            </div>
+            <div class="chat-header-actions">
+              <button class="chat-action-btn" @click="chatStore.clearMessages" title="清空对话">
+                <el-icon :size="14"><Delete /></el-icon>
+              </button>
+              <button class="chat-action-btn" @click="goSettings" title="设置">
+                <el-icon :size="14"><Setting /></el-icon>
+              </button>
+              <button class="chat-action-btn" @click="chatStore.visible = false" title="关闭">
+                <el-icon :size="14"><Close /></el-icon>
+              </button>
+            </div>
+          </div>
+
+          <!-- API 未配置提示 -->
+          <div v-if="!hasApiKey" class="chat-no-config">
+            <el-icon :size="20"><WarningFilled /></el-icon>
+            <span>尚未配置 API Key，请先前往设置</span>
+            <el-button size="small" type="primary" link @click="goSettings">去设置</el-button>
+          </div>
+
+          <!-- 消息列表 -->
+          <div class="chat-messages" ref="messagesRef">
+            <!-- 空状态 -->
+            <div v-if="chatStore.messages.length === 0" class="chat-empty">
+              <div class="chat-empty-icon">
+                <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                  <rect width="48" height="48" rx="12" fill="url(#grad1)" />
+                  <path d="M16 18h16M16 24h12M16 30h8" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+                  <defs><linearGradient id="grad1" x1="0" y1="0" x2="48" y2="48"><stop stop-color="#409eff"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient></defs>
+                </svg>
+              </div>
+              <h4 class="chat-empty-title">AI 集群运维助手</h4>
+              <p class="chat-empty-desc">我可以帮你分析集群状态、排查问题、给出优化建议</p>
+              <div class="chat-quick-actions">
+                <button class="quick-btn" @click="sendQuick('帮我分析一下当前集群的整体健康状况')">
+                  <el-icon><DataAnalysis /></el-icon>
+                  健康分析
+                </button>
+                <button class="quick-btn" @click="sendQuick('哪些资源的使用率过高？需要关注？')">
+                  <el-icon><Warning /></el-icon>
+                  资源预警
+                </button>
+                <button class="quick-btn" @click="sendQuick('请给出集群性能优化建议')">
+                  <el-icon><MagicStick /></el-icon>
+                  优化建议
+                </button>
+                <button class="quick-btn" @click="sendQuick('当前集群有哪些潜在风险？')">
+                  <el-icon><CircleCheck /></el-icon>
+                  风险排查
+                </button>
+              </div>
+            </div>
+
+            <!-- 消息 -->
+            <template v-for="msg in chatStore.messages" :key="msg.id">
+              <div :class="['chat-msg', msg.role]">
+                <div v-if="msg.role === 'assistant'" class="msg-avatar">
+                  <el-icon :size="16"><Monitor /></el-icon>
+                </div>
+                <div class="msg-body">
+                  <div class="msg-content" v-html="renderMarkdown(msg.content)" />
+                  <div v-if="msg.role === 'assistant' && msg.content && !chatStore.loading" class="msg-actions">
+                    <button class="msg-action-btn" @click="copyMessage(msg.content)" title="复制">
+                      <el-icon :size="12"><CopyDocument /></el-icon>
+                    </button>
+                  </div>
+                </div>
+                <div v-if="msg.role === 'user'" class="msg-avatar user-avatar">
+                  <el-icon :size="16"><User /></el-icon>
+                </div>
+              </div>
+            </template>
+
+            <!-- 加载中 -->
+            <div v-if="chatStore.loading && !streamingContent" class="chat-msg assistant">
+              <div class="msg-avatar">
+                <el-icon :size="16"><Monitor /></el-icon>
+              </div>
+              <div class="msg-body">
+                <div class="typing-indicator">
+                  <span></span><span></span><span></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 输入区 -->
+          <div class="chat-input-area">
+            <div class="chat-input-wrap">
+              <textarea
+                ref="inputRef"
+                v-model="inputText"
+                class="chat-textarea"
+                :placeholder="hasApiKey ? '输入消息，Shift+Enter 换行...' : '请先配置 API Key'"
+                :disabled="!hasApiKey"
+                rows="1"
+                @keydown.enter.exact.prevent="handleSend"
+                @input="autoResize"
+              />
+              <div class="chat-input-actions">
+                <button
+                  v-if="chatStore.loading"
+                  class="input-btn stop-btn"
+                  @click="chatStore.stopGeneration"
+                  title="停止生成"
+                >
+                  <el-icon :size="16"><VideoPause /></el-icon>
+                </button>
+                <button
+                  v-else
+                  class="input-btn send-btn"
+                  :class="{ active: inputText.trim() }"
+                  :disabled="!inputText.trim() || !hasApiKey"
+                  @click="handleSend"
+                  title="发送"
+                >
+                  <el-icon :size="16"><Promotion /></el-icon>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </transition>
+  </teleport>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, nextTick, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import { useChatStore } from '@/stores/chat'
+import { useClusterStore } from '@/stores/cluster'
+import {
+  ChatDotRound, Close, Delete, Setting, Monitor, User, Promotion,
+  DataAnalysis, Warning, MagicStick, CopyDocument, WarningFilled,
+  VideoPause, CircleCheck,
+} from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+
+const router = useRouter()
+const chatStore = useChatStore()
+const clusterStore = useClusterStore()
+
+const inputText = ref('')
+const inputRef = ref<HTMLTextAreaElement>()
+const messagesRef = ref<HTMLDivElement>()
+
+const hasApiKey = computed(() => !!chatStore.config.apiKey)
+
+// 流式内容用于判断是否显示打字指示器
+const streamingContent = computed(() => {
+  const msgs = chatStore.messages
+  if (msgs.length === 0) return false
+  const last = msgs[msgs.length - 1]
+  return last.role === 'assistant' && last.content.length > 0
+})
+
+// 监听消息变化自动滚动到底部
+watch(
+  () => chatStore.messages.length,
+  () => nextTick(scrollToBottom),
+)
+watch(
+  () => {
+    const msgs = chatStore.messages
+    return msgs.length > 0 ? msgs[msgs.length - 1].content : ''
+  },
+  () => nextTick(scrollToBottom),
+)
+
+function scrollToBottom() {
+  if (messagesRef.value) {
+    messagesRef.value.scrollTop = messagesRef.value.scrollHeight
+  }
+}
+
+function autoResize() {
+  const el = inputRef.value
+  if (!el) return
+  el.style.height = 'auto'
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px'
+}
+
+async function handleSend() {
+  const text = inputText.value.trim()
+  if (!text || !hasApiKey.value) return
+  inputText.value = ''
+  nextTick(() => autoResize())
+  await chatStore.sendMessage(text, clusterStore.currentClusterId || undefined)
+}
+
+function sendQuick(text: string) {
+  if (!hasApiKey.value) {
+    goSettings()
+    return
+  }
+  inputText.value = ''
+  chatStore.sendMessage(text, clusterStore.currentClusterId || undefined)
+}
+
+function goSettings() {
+  chatStore.visible = false
+  router.push('/dashboard/llm-settings')
+}
+
+function copyMessage(content: string) {
+  navigator.clipboard.writeText(content).then(
+    () => ElMessage.success('已复制'),
+    () => ElMessage.error('复制失败'),
+  )
+}
+
+/** 简易 Markdown → HTML（粗体、行内代码、列表、代码块、标题） */
+function renderMarkdown(text: string): string {
+  if (!text) return ''
+  let html = text
+    // 代码块
+    .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre class="md-code-block"><code>$2</code></pre>')
+    // 行内代码
+    .replace(/`([^`]+)`/g, '<code class="md-inline-code">$1</code>')
+    // 粗体
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    // 斜体
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    // 标题
+    .replace(/^### (.+)$/gm, '<h4 class="md-h">$1</h4>')
+    .replace(/^## (.+)$/gm, '<h3 class="md-h">$1</h3>')
+    // 无序列表
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    // 有序列表
+    .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
+    // 换行
+    .replace(/\n/g, '<br/>')
+
+  // 包裹连续 <li>
+  html = html.replace(/(<li>.*?<\/li>(<br\/>)?)+/g, (match) => {
+    return '<ul class="md-list">' + match.replace(/<br\/>/g, '') + '</ul>'
+  })
+
+  return html
+}
+</script>
+
+<style scoped>
+/* ===== 悬浮气泡 ===== */
+.chat-bubble {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  z-index: 9999;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #409eff, #8b5cf6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(64, 158, 255, 0.4);
+  transition: transform 0.2s, box-shadow 0.2s;
+  user-select: none;
+}
+.chat-bubble:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 24px rgba(64, 158, 255, 0.5);
+}
+.chat-bubble.active {
+  background: linear-gradient(135deg, #8b5cf6, #409eff);
+}
+.bubble-icon-enter-active,
+.bubble-icon-leave-active {
+  transition: transform 0.15s;
+}
+.bubble-icon-enter-from,
+.bubble-icon-leave-to {
+  transform: scale(0.5);
+  opacity: 0;
+}
+
+/* ===== 对话面板 ===== */
+.chat-panel {
+  position: fixed;
+  bottom: 92px;
+  right: 28px;
+  z-index: 9998;
+  width: 420px;
+  height: 600px;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.2), 0 0 0 1px var(--border-color);
+  background: var(--bg-secondary);
+}
+.chat-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* 滑入动画 */
+.chat-slide-enter-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.chat-slide-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.chat-slide-enter-from {
+  opacity: 0;
+  transform: translateY(12px) scale(0.96);
+}
+.chat-slide-leave-to {
+  opacity: 0;
+  transform: translateY(8px) scale(0.97);
+}
+
+/* ===== 头部 ===== */
+.chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+.chat-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.chat-avatar-wrap {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #409eff, #8b5cf6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+}
+.chat-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-heading);
+  margin: 0;
+  line-height: 1.2;
+}
+.chat-subtitle {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.chat-header-actions {
+  display: flex;
+  gap: 4px;
+}
+.chat-action-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  transition: all 0.15s;
+}
+.chat-action-btn:hover {
+  background: rgba(64, 158, 255, 0.1);
+  color: var(--primary-color);
+}
+
+/* ===== 未配置提示 ===== */
+.chat-no-config {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(230, 162, 60, 0.1);
+  color: var(--warning-color, #e6a23c);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+/* ===== 消息列表 ===== */
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.chat-messages::-webkit-scrollbar {
+  width: 4px;
+}
+
+/* ===== 空状态 ===== */
+.chat-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: 24px 16px;
+  text-align: center;
+}
+.chat-empty-icon {
+  margin-bottom: 16px;
+}
+.chat-empty-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-heading);
+  margin: 0 0 6px;
+}
+.chat-empty-desc {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0 0 20px;
+}
+.chat-quick-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  width: 100%;
+}
+.quick-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.quick-btn:hover {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+  background: rgba(64, 158, 255, 0.06);
+}
+
+/* ===== 消息气泡 ===== */
+.chat-msg {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  max-width: 100%;
+}
+.chat-msg.user {
+  flex-direction: row-reverse;
+}
+.msg-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #409eff, #8b5cf6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  flex-shrink: 0;
+}
+.msg-avatar.user-avatar {
+  background: var(--primary-color);
+}
+.msg-body {
+  max-width: calc(100% - 40px);
+  min-width: 0;
+}
+.msg-content {
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  word-break: break-word;
+}
+.chat-msg.user .msg-content {
+  background: var(--primary-color);
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+.chat-msg.assistant .msg-content {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-bottom-left-radius: 4px;
+}
+.msg-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.msg-body:hover .msg-actions {
+  opacity: 1;
+}
+.msg-action-btn {
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: all 0.15s;
+}
+.msg-action-btn:hover {
+  background: rgba(64, 158, 255, 0.1);
+  color: var(--primary-color);
+}
+
+/* ===== Markdown 样式 ===== */
+.msg-content :deep(.md-code-block) {
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 6px 0;
+  overflow-x: auto;
+  font-size: 12px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+.msg-content :deep(.md-inline-code) {
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-size: 12px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+.msg-content :deep(.md-list) {
+  margin: 4px 0;
+  padding-left: 16px;
+  list-style: disc;
+}
+.msg-content :deep(.md-h) {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 8px 0 4px;
+  color: var(--text-heading);
+}
+
+/* 暗色代码块 */
+:global(.dark) .msg-content :deep(.md-code-block),
+:global(.dark) .msg-content :deep(.md-inline-code) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* ===== 打字指示器 ===== */
+.typing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  border-bottom-left-radius: 4px;
+}
+.typing-indicator span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  animation: typingBounce 1.2s ease-in-out infinite;
+}
+.typing-indicator span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.typing-indicator span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes typingBounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+/* ===== 输入区 ===== */
+.chat-input-area {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+}
+.chat-input-wrap {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  transition: border-color 0.2s;
+}
+.chat-input-wrap:focus-within {
+  border-color: var(--primary-color);
+}
+.chat-textarea {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.5;
+  resize: none;
+  font-family: inherit;
+  min-height: 20px;
+  max-height: 120px;
+}
+.chat-textarea::placeholder {
+  color: var(--text-muted);
+}
+.chat-textarea:disabled {
+  opacity: 0.5;
+}
+.chat-input-actions {
+  display: flex;
+  align-items: center;
+}
+.input-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.send-btn {
+  background: var(--primary-color);
+  color: #fff;
+}
+.send-btn.active:hover {
+  background: #337ecc;
+}
+.send-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.stop-btn {
+  background: var(--danger-color, #f56c6c);
+  color: #fff;
+}
+.stop-btn:hover {
+  background: #e04b4b;
+}
+
+/* ===== 暗色适配 ===== */
+:global(.dark) .chat-panel {
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+</style>
