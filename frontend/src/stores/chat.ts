@@ -9,7 +9,7 @@ export interface ChatMessage {
 }
 
 export interface LLMConfig {
-  provider: 'openai' | 'deepseek' | 'custom'
+  provider: 'openai' | 'deepseek' | 'kimi' | 'glm' | 'custom'
   apiKey: string
   model: string
   baseUrl: string

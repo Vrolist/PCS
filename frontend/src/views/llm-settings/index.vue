@@ -200,18 +200,37 @@ const form = reactive<LLMConfig>({
 
 const providers = [
   { label: 'DeepSeek', value: 'deepseek' },
+  { label: 'Kimi', value: 'kimi' },
+  { label: 'GLM', value: 'glm' },
   { label: 'OpenAI', value: 'openai' },
   { label: '自定义', value: 'custom' },
 ]
 
 const modelMap: Record<string, string[]> = {
-  deepseek: ['deepseek-chat', 'deepseek-reasoner'],
+  deepseek: [
+    'deepseek-chat',
+    'deepseek-reasoner',
+  ],
+  kimi: [
+    'kimi-k2-0905-preview',
+    'moonshot-v1-32k',
+    'moonshot-v1-128k',
+    'kimi-thinking-preview',
+  ],
+  glm: [
+    'glm-4.7',
+    'glm-4-plus',
+    'glm-4-long',
+    'glm-4-flash',
+  ],
   openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'],
   custom: ['custom-model'],
 }
 
 const baseUrlMap: Record<string, string> = {
   deepseek: 'https://api.deepseek.com',
+  kimi: 'https://api.moonshot.cn',
+  glm: 'https://open.bigmodel.cn',
   openai: 'https://api.openai.com',
   custom: '',
 }
@@ -222,7 +241,7 @@ const presets = [
   {
     key: 'deepseek',
     name: 'DeepSeek',
-    desc: '国产大模型，性价比高，中文能力强',
+    desc: '国产顶级推理模型，性价比极高',
     color: 'linear-gradient(135deg, #409eff, #36d399)',
     icon: 'DS',
     provider: 'deepseek' as const,
@@ -230,9 +249,29 @@ const presets = [
     model: 'deepseek-chat',
   },
   {
+    key: 'kimi',
+    name: 'Kimi (月之暗面)',
+    desc: '128K 超长上下文，Agent 能力突出',
+    color: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+    icon: 'Ki',
+    provider: 'kimi' as const,
+    baseUrl: 'https://api.moonshot.cn',
+    model: 'kimi-k2-0905-preview',
+  },
+  {
+    key: 'glm',
+    name: 'GLM (智谱)',
+    desc: 'GLM-4.7 旗舰模型，编程与推理能力强',
+    color: 'linear-gradient(135deg, #f59e0b, #ef4444)',
+    icon: 'GL',
+    provider: 'glm' as const,
+    baseUrl: 'https://open.bigmodel.cn',
+    model: 'glm-4.7',
+  },
+  {
     key: 'openai',
-    name: 'OpenAI GPT-4o',
-    desc: '全球领先的多模态大模型',
+    name: 'OpenAI',
+    desc: 'GPT-4o 全球领先的多模态大模型',
     color: 'linear-gradient(135deg, #10a37f, #1a7f5a)',
     icon: 'AI',
     provider: 'openai' as const,
