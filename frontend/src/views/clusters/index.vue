@@ -30,8 +30,8 @@
         <div class="cc-head">
           <div class="cc-status-dot" :class="'cc-dot--' + cluster.status"></div>
           <h3 class="cc-name">{{ cluster.name }}</h3>
-          <el-dropdown trigger="click" @command="(cmd: string) => handleCardCommand(cmd, cluster)" @click.stop>
-            <button class="cc-menu">
+          <el-dropdown trigger="click" :teleported="true" @command="(cmd: string) => handleCardCommand(cmd, cluster)" @click.stop>
+            <button class="cc-menu" @click.stop>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
             </button>
             <template #dropdown>
