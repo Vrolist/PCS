@@ -25,11 +25,12 @@
 
     <!-- 集群卡片网格 -->
     <div v-else class="cluster-grid">
-      <div v-for="cluster in clusters" :key="cluster.id" class="cc" @click="viewDetail(cluster)">
+      <div v-for="cluster in clusters" :key="cluster.id" class="cc" :class="{ 'cc--inactive': !cluster.is_active }" @click="viewDetail(cluster)">
         <!-- 顶部：状态指示 + 名称 + 菜单 -->
         <div class="cc-head">
-          <div class="cc-status-dot" :class="'cc-dot--' + cluster.status"></div>
+          <div class="cc-status-dot" :class="cluster.is_active ? 'cc-dot--' + cluster.status : 'cc-dot--inactive'"></div>
           <h3 class="cc-name">{{ cluster.name }}</h3>
+          <el-tag v-if="!cluster.is_active" type="info" size="small" effect="plain" class="cc-inactive-tag">已停用</el-tag>
           <el-dropdown trigger="click" :teleported="true" @command="(cmd: string) => handleCardCommand(cmd, cluster)" @click.stop>
             <button class="cc-menu" @click.stop>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
@@ -567,6 +568,14 @@ onMounted(() => {
   box-shadow: 0 8px 24px -8px rgba(0,0,0,0.12);
   border-color: #c0c4cc;
 }
+.cc--inactive {
+  opacity: 0.7;
+  border-color: var(--border-lighter, #ebeef5);
+}
+.cc--inactive:hover {
+  opacity: 0.9;
+  border-color: #c0c4cc;
+}
 
 /* ── 头部 ── */
 .cc-head {
@@ -580,6 +589,7 @@ onMounted(() => {
 .cc-dot--error   { background: #f56c6c; box-shadow: 0 0 0 3px #f56c6c20; }
 .cc-dot--pending { background: #e6a23c; box-shadow: 0 0 0 3px #e6a23c20; }
 .cc-dot--archived { background: #909399; }
+.cc-dot--inactive { background: #909399; box-shadow: 0 0 0 3px #90939920; }
 
 .cc-name {
   flex: 1; min-width: 0; margin: 0;
@@ -595,6 +605,7 @@ onMounted(() => {
   transition: all 0.15s;
 }
 .cc-menu:hover { background: var(--el-fill-color-light, #f5f7fa); color: var(--text-secondary, #909399); }
+.cc-inactive-tag { margin-left: auto; }
 
 /* ── 指标行 ── */
 .cc-metrics {
