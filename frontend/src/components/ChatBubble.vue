@@ -23,6 +23,25 @@
                 <span class="chat-subtitle">PVE 集群运维分析</span>
               </div>
             </div>
+            <div class="chat-header-center">
+              <el-select
+                v-if="chatStore.configs.length > 0"
+                v-model="chatStore.activeConfigId"
+                size="small"
+                class="model-selector"
+                @change="onModelChange"
+              >
+                <el-option
+                  v-for="cfg in chatStore.configs"
+                  :key="cfg.id"
+                  :label="cfg.name"
+                  :value="cfg.id"
+                >
+                  <span>{{ cfg.name }}</span>
+                  <span class="model-selector-detail">{{ cfg.model }}</span>
+                </el-option>
+              </el-select>
+            </div>
             <div class="chat-header-actions">
               <button class="chat-action-btn" @click="chatStore.clearMessages" title="清空对话">
                 <el-icon :size="14"><Delete /></el-icon>
@@ -170,7 +189,7 @@ const inputText = ref('')
 const inputRef = ref<HTMLTextAreaElement>()
 const messagesRef = ref<HTMLDivElement>()
 
-const hasApiKey = computed(() => !!chatStore.config.apiKey)
+const hasApiKey = computed(() => chatStore.hasApiKey)
 
 // 流式内容用于判断是否显示打字指示器
 const streamingContent = computed(() => {
@@ -226,6 +245,10 @@ function sendQuick(text: string) {
 function goSettings() {
   chatStore.visible = false
   router.push('/dashboard/llm-settings')
+}
+
+function onModelChange(id: string) {
+  chatStore.setActiveConfig(id)
 }
 
 function copyMessage(content: string) {
@@ -377,6 +400,32 @@ function renderMarkdown(text: string): string {
 .chat-header-actions {
   display: flex;
   gap: 4px;
+}
+.chat-header-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  padding: 0 8px;
+  min-width: 0;
+}
+.model-selector {
+  width: 140px;
+}
+.model-selector :deep(.el-select__wrapper) {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0 4px;
+  font-size: 12px;
+}
+.model-selector :deep(.el-select__placeholder) {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.model-selector-detail {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-left: 4px;
 }
 .chat-action-btn {
   width: 28px;

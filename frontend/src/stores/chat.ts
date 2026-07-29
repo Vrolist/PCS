@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed, watch } from 'vue'
 
 export interface ChatMessage {
   id: string
@@ -9,39 +9,155 @@ export interface ChatMessage {
 }
 
 export interface LLMConfig {
+  id: string
+  name: string
   provider: 'openai' | 'deepseek' | 'kimi' | 'glm' | 'custom'
   apiKey: string
   model: string
   baseUrl: string
-  temperature: number
-  maxTokens: number
 }
 
-function loadConfig(): LLMConfig {
+function genId(): string {
+  return Math.random().toString(36).slice(2, 10)
+}
+
+const STORAGE_KEY = 'pcs_llm_configs'
+const ACTIVE_KEY = 'pcs_llm_active_id'
+
+function loadConfigs(): LLMConfig[] {
   try {
-    const saved = localStorage.getItem('pcs_llm_config')
-    if (saved) return JSON.parse(saved)
+    // 兼容旧版单配置格式
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) return parsed
+      // 旧版单对象 → 迁移
+      if (parsed.provider) {
+        const migrated: LLMConfig = {
+          id: genId(),
+          name: parsed.provider === 'custom' ? '自定义' : parsed.provider.charAt(0).toUpperCase() + parsed.provider.slice(1),
+          provider: parsed.provider,
+          apiKey: parsed.apiKey || '',
+          model: parsed.model || 'deepseek-v4-pro',
+          baseUrl: parsed.baseUrl || 'https://api.deepseek.com',
+        }
+        saveConfigs([migrated])
+        return [migrated]
+      }
+    }
   } catch { /* ignore */ }
-  return {
-    provider: 'deepseek',
-    apiKey: '',
-    model: 'deepseek-chat',
-    baseUrl: 'https://api.deepseek.com',
-    temperature: 0.7,
-    maxTokens: 2048,
+  return [defaultConfig()]
+}
+
+function saveConfigs(configs: LLMConfig[]) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(configs))
+}
+
+function loadActiveId(): string {
+  try {
+    return localStorage.getItem(ACTIVE_KEY) || ''
+  } catch {
+    return ''
   }
 }
 
-function saveConfigLocal(config: LLMConfig) {
-  localStorage.setItem('pcs_llm_config', JSON.stringify(config))
+function saveActiveId(id: string) {
+  localStorage.setItem(ACTIVE_KEY, id)
+}
+
+function defaultConfig(): LLMConfig {
+  return {
+    id: genId(),
+    name: 'DeepSeek',
+    provider: 'deepseek',
+    apiKey: '',
+    model: 'deepseek-v4-pro',
+    baseUrl: 'https://api.deepseek.com',
+  }
+}
+
+const BASE_URL_MAP: Record<string, string> = {
+  deepseek: 'https://api.deepseek.com',
+  kimi: 'https://api.moonshot.cn',
+  glm: 'https://open.bigmodel.cn',
+  openai: 'https://api.openai.com',
+  custom: '',
+}
+
+export function createDefaultConfig(provider: LLMConfig['provider'] = 'deepseek'): LLMConfig {
+  return {
+    id: genId(),
+    name: provider === 'custom' ? '自定义' : provider.charAt(0).toUpperCase() + provider.slice(1),
+    provider,
+    apiKey: '',
+    model: provider === 'deepseek' ? 'deepseek-v4-pro'
+      : provider === 'kimi' ? 'kimi-k3'
+      : provider === 'glm' ? 'glm-5.2'
+      : provider === 'openai' ? 'gpt-5.6-sol'
+      : 'custom-model',
+    baseUrl: BASE_URL_MAP[provider] || '',
+  }
 }
 
 export const useChatStore = defineStore('chat', () => {
   const visible = ref(false)
   const messages = ref<ChatMessage[]>([])
   const loading = ref(false)
-  const config = ref<LLMConfig>(loadConfig())
+  const configs = ref<LLMConfig[]>(loadConfigs())
+  const activeConfigId = ref(loadActiveId())
   const currentController = ref<AbortController | null>(null)
+
+  // 如果没有有效的 activeConfigId，默认选中第一个
+  if (!configs.value.find(c => c.id === activeConfigId.value) && configs.value.length > 0) {
+    activeConfigId.value = configs.value[0].id
+    saveActiveId(activeConfigId.value)
+  }
+
+  // 自动保存配置变更到 localStorage
+  watch(configs, () => {
+    saveConfigs(configs.value)
+  }, { deep: true })
+
+  const activeConfig = computed(() => {
+    return configs.value.find(c => c.id === activeConfigId.value) || configs.value[0] || null
+  })
+
+  const hasApiKey = computed(() => !!activeConfig.value?.apiKey)
+
+  function setActiveConfig(id: string) {
+    if (configs.value.find(c => c.id === id)) {
+      activeConfigId.value = id
+      saveActiveId(id)
+    }
+  }
+
+  function addConfig(config?: Partial<LLMConfig>) {
+    const cfg = config
+      ? { ...defaultConfig(), ...config, id: genId() }
+      : defaultConfig()
+    configs.value.push(cfg)
+    saveConfigs(configs.value)
+    return cfg
+  }
+
+  function updateConfig(id: string, data: Partial<LLMConfig>) {
+    const idx = configs.value.findIndex(c => c.id === id)
+    if (idx === -1) return
+    configs.value[idx] = { ...configs.value[idx], ...data }
+    saveConfigs(configs.value)
+  }
+
+  function removeConfig(id: string) {
+    const idx = configs.value.findIndex(c => c.id === id)
+    if (idx === -1) return
+    configs.value.splice(idx, 1)
+    if (activeConfigId.value === id) {
+      activeConfigId.value = configs.value[0]?.id || ''
+      if (activeConfigId.value) saveActiveId(activeConfigId.value)
+      else localStorage.removeItem(ACTIVE_KEY)
+    }
+    saveConfigs(configs.value)
+  }
 
   function openChat() {
     visible.value = true
@@ -51,17 +167,14 @@ export const useChatStore = defineStore('chat', () => {
     visible.value = !visible.value
   }
 
-  function updateConfig(newConfig: LLMConfig) {
-    config.value = newConfig
-    saveConfigLocal(newConfig)
-  }
-
   function clearMessages() {
     messages.value = []
   }
 
   async function sendMessage(content: string, clusterId?: number) {
     if (!content.trim() || loading.value) return
+    const cfg = activeConfig.value
+    if (!cfg || !cfg.apiKey) return
 
     // 用户消息
     const userMsg: ChatMessage = {
@@ -95,21 +208,19 @@ export const useChatStore = defineStore('chat', () => {
     currentController.value = controller
 
     try {
-      const response = await fetch(`${config.value.baseUrl}/v1/chat/completions`, {
+      const response = await fetch(`${cfg.baseUrl}/v1/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${config.value.apiKey}`,
+          'Authorization': `Bearer ${cfg.apiKey}`,
         },
         body: JSON.stringify({
-          model: config.value.model,
+          model: cfg.model,
           messages: [
             { role: 'system', content: systemPrompt },
             ...history,
             { role: 'user', content: content.trim() },
           ],
-          temperature: config.value.temperature,
-          max_tokens: config.value.maxTokens,
           stream: true,
         }),
         signal: controller.signal,
@@ -192,10 +303,16 @@ export const useChatStore = defineStore('chat', () => {
     visible,
     messages,
     loading,
-    config,
+    configs,
+    activeConfigId,
+    activeConfig,
+    hasApiKey,
+    setActiveConfig,
+    addConfig,
+    updateConfig,
+    removeConfig,
     openChat,
     toggleChat,
-    updateConfig,
     clearMessages,
     sendMessage,
     stopGeneration,
