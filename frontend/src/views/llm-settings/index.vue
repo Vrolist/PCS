@@ -188,6 +188,68 @@
             </template>
           </div>
         </el-card>
+
+        <!-- 角色约束管理 -->
+        <el-card shadow="hover" class="config-card" style="margin-top: 20px;">
+          <template #header>
+            <div class="card-header card-header-between">
+              <div class="card-header-left">
+                <el-icon :size="18"><Document /></el-icon>
+                <span>角色约束</span>
+              </div>
+              <div class="card-header-actions">
+                <span class="prompt-hint">约束仅在发送消息时生效，修改后需保存</span>
+                <el-button size="small" type="primary" :icon="Plus" @click="handleAddPrompt">添加约束</el-button>
+              </div>
+            </div>
+          </template>
+
+          <div v-if="chatStore.prompts.length === 0" class="empty-configs">
+            <el-icon :size="24" color="var(--text-muted)"><InfoFilled /></el-icon>
+            <span>暂无约束</span>
+          </div>
+
+          <div v-for="p in chatStore.prompts" :key="p.id" class="config-item" :class="{ active: p.id === chatStore.activePromptId, folded: isPromptFolded(p.id) }">
+            <!-- 折叠态 -->
+            <div v-if="isPromptFolded(p.id)" class="folded-view" @click="expandPrompt(p.id)">
+              <div class="folded-left">
+                <div class="folded-info">
+                  <div class="folded-name">
+                    <span>{{ p.name }}</span>
+                    <el-tag v-if="p.is_default" size="small" type="info" class="folded-model">默认</el-tag>
+                  </div>
+                </div>
+              </div>
+              <div class="folded-actions" @click.stop>
+                <el-button size="small" text type="primary" @click="expandPrompt(p.id)">编辑</el-button>
+                <el-button size="small" text type="primary" @click="handleSavePrompt(p)">保存</el-button>
+                <el-button size="small" text type="danger" :disabled="chatStore.prompts.length <= 1" @click="handleDeletePrompt(p.id)">删除</el-button>
+              </div>
+            </div>
+
+            <!-- 展开态 -->
+            <template v-else>
+              <div class="config-item-header">
+                <div class="config-item-name">
+                  <el-input v-model="p.name" size="small" class="name-input" placeholder="约束名称" />
+                  <el-tag v-if="p.is_default" size="small" type="info" class="active-tag">默认</el-tag>
+                </div>
+                <div class="config-item-actions">
+                  <el-button size="small" text type="primary" @click="handleSavePrompt(p)">保存</el-button>
+                  <el-button size="small" text type="danger" :disabled="chatStore.prompts.length <= 1" @click="handleDeletePrompt(p.id)">删除</el-button>
+                </div>
+              </div>
+              <div class="config-item-body">
+                <el-input
+                  v-model="p.content"
+                  type="textarea"
+                  :rows="10"
+                  placeholder="输入角色约束内容..."
+                />
+              </div>
+            </template>
+          </div>
+        </el-card>
       </div>
     </div>
   </div>
@@ -209,7 +271,10 @@ const testingId = ref<number | null>(null)
 const showKeyMap = reactive<Record<number, boolean>>({})
 const foldedIds = reactive<Set<number>>(new Set())
 
-// 页面加载时从后端拉取配置
+// 约束折叠：一次只能展开一个
+const activePromptEditId = ref<number | null>(null)
+
+// 页面加载时从后端拉取配置和约束
 onMounted(async () => {
   await chatStore.loadConfigsFromAPI()
   // 已有 key 的配置默认折叠
@@ -218,6 +283,8 @@ onMounted(async () => {
       foldedIds.add(cfg.id)
     }
   })
+  // 加载角色约束
+  await chatStore.loadPrompts()
 })
 
 function isFolded(id: number) {
@@ -230,6 +297,20 @@ function expandConfig(id: number) {
 
 function foldConfig(id: number) {
   foldedIds.add(id)
+}
+
+// 约束折叠
+function isPromptFolded(id: number) {
+  return activePromptEditId.value !== id
+}
+
+function expandPrompt(id: number) {
+  // 切换展开/折叠
+  if (activePromptEditId.value === id) {
+    activePromptEditId.value = null
+  } else {
+    activePromptEditId.value = id
+  }
 }
 
 const providerStyles: Record<string, { bg: string; icon: string }> = {
@@ -334,6 +415,40 @@ async function addNewConfig() {
   } catch (err: any) {
     ElMessage.error(err.message)
   }
+}
+
+// ---- 角色约束操作 ----
+
+async function handleAddPrompt() {
+  try {
+    const p = await chatStore.addPrompt({ name: '新约束' })
+    activePromptEditId.value = p.id  // 展开新添加的约束
+    ElMessage.success('已添加新约束')
+  } catch (err: any) {
+    ElMessage.error(err.message || '添加失败')
+  }
+}
+
+async function handleSavePrompt(p: { id: number; name: string; content: string }) {
+  try {
+    await chatStore.updatePrompt(p.id, { name: p.name, content: p.content })
+    activePromptEditId.value = null  // 保存后折叠
+    ElMessage.success('已保存')
+  } catch (err: any) {
+    ElMessage.error(err.message || '保存失败')
+  }
+}
+
+async function handleDeletePrompt(id: number) {
+  if (chatStore.prompts.length <= 1) {
+    ElMessage.warning('至少保留一个约束')
+    return
+  }
+  try {
+    await ElMessageBox.confirm('确定删除此约束？', '提示', { type: 'warning' })
+    await chatStore.removePrompt(id)
+    ElMessage.success('已删除')
+  } catch { /* canceled */ }
 }
 
 async function onProviderChange(cfg: LLMConfig, val: string) {
@@ -480,6 +595,15 @@ async function handleTest(cfg: LLMConfig) {
   padding: 32px 16px;
   font-size: 13px;
   color: var(--text-muted);
+}
+.prompt-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-right: 8px;
+}
+.card-header-actions {
+  display: flex;
+  align-items: center;
 }
 .config-item {
   border: 1px solid var(--border-color);

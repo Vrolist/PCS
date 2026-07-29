@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
-from .models import User, PasswordResetCode, UserLog, SystemConfig, UserLLMConfig, ChatConversation, ChatMessage
+from .models import User, PasswordResetCode, UserLog, SystemConfig, UserLLMConfig, ChatConversation, ChatMessage, UserSystemPrompt
 
 
 @admin.register(User)
@@ -61,3 +61,10 @@ class ChatMessageAdmin(admin.ModelAdmin):
     def short_content(self, obj):
         return obj.content[:60]
     short_content.short_description = '内容摘要'
+
+
+@admin.register(UserSystemPrompt)
+class UserSystemPromptAdmin(admin.ModelAdmin):
+    list_display = ['user', 'name', 'is_default', 'created_at']
+    list_filter = ['is_default']
+    search_fields = ['user__username', 'name']

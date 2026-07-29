@@ -2,7 +2,7 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
-from .models import User, PasswordResetCode, UserLog, UserLLMConfig, ChatConversation, ChatMessage
+from .models import User, PasswordResetCode, UserLog, UserLLMConfig, ChatConversation, ChatMessage, UserSystemPrompt
 
 
 class LoginSerializer(serializers.Serializer):
@@ -223,3 +223,9 @@ class ChatConversationListSerializer(serializers.ModelSerializer):
         if last:
             return {'role': last.role, 'content': last.content[:80]}
         return None
+
+
+class UserSystemPromptSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserSystemPrompt
+        fields = ['id', 'name', 'content', 'is_default', 'created_at', 'updated_at']

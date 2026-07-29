@@ -30,4 +30,8 @@ urlpatterns = [
     path("chat/conversations/", views.chat_conversation_list_view, name="auth-chat-conversations"),
     path("chat/conversations/<int:pk>/", views.chat_conversation_detail_view, name="auth-chat-conversation-detail"),
     path("chat/conversations/<int:pk>/messages/", views.chat_message_create_view, name="auth-chat-messages"),
+    
+    # 角色约束
+    path("system-prompts/", views.system_prompt_list_view, name="auth-system-prompts"),
+    path("system-prompts/<int:pk>/", views.system_prompt_detail_view, name="auth-system-prompt-detail"),
 ]

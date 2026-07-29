@@ -50,6 +50,9 @@
             <button class="chat-action-btn" @click="handleNewConversation" title="新对话">
               <el-icon :size="14"><Plus /></el-icon>
             </button>
+            <button class="chat-action-btn" @click="chatStore.visible = false" title="关闭">
+              <el-icon :size="14"><Close /></el-icon>
+            </button>
           </div>
         </div>
 
@@ -112,14 +115,22 @@
 
         <!-- 输入区 -->
         <div class="chat-input-area">
-          <div v-if="chatStore.configs.length > 0" class="chat-model-row">
-            <span class="model-label">模型</span>
-            <el-select v-model="chatStore.activeConfigId" size="small" class="model-selector-input" popper-class="model-selector-popper" @change="onModelChange">
-              <el-option v-for="cfg in chatStore.configs" :key="cfg.id" :label="cfg.name" :value="cfg.id">
-                <span>{{ cfg.name }}</span>
-                <span class="model-selector-detail">{{ cfg.model }}</span>
-              </el-option>
-            </el-select>
+          <div v-if="chatStore.prompts.length > 0 || chatStore.configs.length > 0" class="chat-selectors-row">
+            <div v-if="chatStore.prompts.length > 0" class="chat-selector-item">
+              <span class="model-label">约束</span>
+              <el-select v-model="chatStore.activePromptId" size="small" class="model-selector-input" popper-class="model-selector-popper">
+                <el-option v-for="p in chatStore.prompts" :key="p.id" :label="p.name" :value="p.id" />
+              </el-select>
+            </div>
+            <div v-if="chatStore.configs.length > 0" class="chat-selector-item">
+              <span class="model-label">模型</span>
+              <el-select v-model="chatStore.activeConfigId" size="small" class="model-selector-input" popper-class="model-selector-popper" @change="onModelChange">
+                <el-option v-for="cfg in chatStore.configs" :key="cfg.id" :label="cfg.name" :value="cfg.id">
+                  <span>{{ cfg.name }}</span>
+                  <span class="model-selector-detail">{{ cfg.model }}</span>
+                </el-option>
+              </el-select>
+            </div>
           </div>
           <div class="chat-input-wrap">
             <textarea ref="inputRef" v-model="inputText" class="chat-textarea" :placeholder="hasApiKey ? '输入消息，Shift+Enter 换行...' : '请先配置 API Key'" :disabled="!hasApiKey" @keydown.enter.exact.prevent="handleSend" @input="autoResize" />
@@ -188,6 +199,7 @@
               </el-popover>
               <button class="chat-action-btn" @click="chatStore.toggleLayoutMode" title="切换为侧边栏模式"><el-icon :size="14"><FullScreen /></el-icon></button>
               <button class="chat-action-btn" @click="handleNewConversation" title="新对话"><el-icon :size="14"><Plus /></el-icon></button>
+              <button class="chat-action-btn" @click="chatStore.visible = false" title="关闭"><el-icon :size="14"><Close /></el-icon></button>
             </div>
           </div>
           <!-- API 未配置提示 -->
@@ -247,14 +259,22 @@
           </div>
           <!-- 输入区 -->
           <div class="chat-input-area">
-            <div v-if="chatStore.configs.length > 0" class="chat-model-row">
-              <span class="model-label">模型</span>
-              <el-select v-model="chatStore.activeConfigId" size="small" class="model-selector-input" popper-class="model-selector-popper" @change="onModelChange">
-                <el-option v-for="cfg in chatStore.configs" :key="cfg.id" :label="cfg.name" :value="cfg.id">
-                  <span>{{ cfg.name }}</span>
-                  <span class="model-selector-detail">{{ cfg.model }}</span>
-                </el-option>
-              </el-select>
+            <div v-if="chatStore.prompts.length > 0 || chatStore.configs.length > 0" class="chat-selectors-row">
+              <div v-if="chatStore.prompts.length > 0" class="chat-selector-item">
+                <span class="model-label">约束</span>
+                <el-select v-model="chatStore.activePromptId" size="small" class="model-selector-input" popper-class="model-selector-popper">
+                  <el-option v-for="p in chatStore.prompts" :key="p.id" :label="p.name" :value="p.id" />
+                </el-select>
+              </div>
+              <div v-if="chatStore.configs.length > 0" class="chat-selector-item">
+                <span class="model-label">模型</span>
+                <el-select v-model="chatStore.activeConfigId" size="small" class="model-selector-input" popper-class="model-selector-popper" @change="onModelChange">
+                  <el-option v-for="cfg in chatStore.configs" :key="cfg.id" :label="cfg.name" :value="cfg.id">
+                    <span>{{ cfg.name }}</span>
+                    <span class="model-selector-detail">{{ cfg.model }}</span>
+                  </el-option>
+                </el-select>
+              </div>
             </div>
             <div class="chat-input-wrap">
               <textarea ref="inputRef" v-model="inputText" class="chat-textarea" :placeholder="hasApiKey ? '输入消息，Shift+Enter 换行...' : '请先配置 API Key'" :disabled="!hasApiKey" @keydown.enter.exact.prevent="handleSend" @input="autoResize" />
@@ -296,6 +316,7 @@ const hasApiKey = computed(() => chatStore.hasApiKey)
 onMounted(() => {
   chatStore.loadConfigsFromAPI()
   chatStore.loadConversations()
+  chatStore.loadPrompts()
 })
 
 // 流式内容用于判断是否显示打字指示器
@@ -569,18 +590,16 @@ function renderMarkdown(text: string): string {
 }
 
 /* 模型选择器行 */
-.chat-model-row {
+.chat-selectors-row {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  gap: 8px;
   padding: 0 0 6px 0;
 }
-
-/* 输入区模型选择器 */
-.chat-model-row {
+.chat-selector-item {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 8px;
 }
 .model-label {
   font-size: 11px;
@@ -588,7 +607,7 @@ function renderMarkdown(text: string): string {
   white-space: nowrap;
 }
 .model-selector-input {
-  width: 140px;
+  width: 130px;
   flex-shrink: 0;
 }
 .model-selector-input :deep(.el-select__wrapper) {

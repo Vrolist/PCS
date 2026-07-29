@@ -7,7 +7,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import User, PasswordResetCode, UserLog, SystemConfig, UserLLMConfig, ChatConversation, ChatMessage
+from .models import User, PasswordResetCode, UserLog, SystemConfig, UserLLMConfig, ChatConversation, ChatMessage, UserSystemPrompt, DEFAULT_SYSTEM_PROMPT
 from .serializers import (
     LoginSerializer,
     RegisterSerializer,
@@ -23,6 +23,7 @@ from .serializers import (
     ChatConversationSerializer,
     ChatConversationListSerializer,
     ChatMessageSerializer,
+    UserSystemPromptSerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -429,3 +430,50 @@ def chat_message_create_view(request, pk):
         conv.save(update_fields=['title'])
 
     return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+# ---- 角色约束 CRUD ----
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def system_prompt_list_view(request):
+    """GET/POST /api/auth/system-prompts/"""
+    if request.method == "GET":
+        # 如果没有约束，自动创建默认约束
+        qs = UserSystemPrompt.objects.filter(user=request.user)
+        if not qs.exists():
+            UserSystemPrompt.objects.create(
+                user=request.user,
+                name="PVE 运维助手",
+                content=DEFAULT_SYSTEM_PROMPT,
+                is_default=True,
+            )
+            qs = UserSystemPrompt.objects.filter(user=request.user)
+        serializer = UserSystemPromptSerializer(qs, many=True)
+        return Response(serializer.data)
+
+    # POST
+    serializer = UserSystemPromptSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    serializer.save(user=request.user)
+    return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def system_prompt_detail_view(request, pk):
+    """PATCH/DELETE /api/auth/system-prompts/:id/"""
+    try:
+        prompt = UserSystemPrompt.objects.get(pk=pk, user=request.user)
+    except UserSystemPrompt.DoesNotExist:
+        return Response({"detail": "约束不存在"}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == "DELETE":
+        prompt.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    # PATCH
+    serializer = UserSystemPromptSerializer(prompt, data=request.data, partial=True)
+    serializer.is_valid(raise_exception=True)
+    serializer.save()
+    return Response(serializer.data)

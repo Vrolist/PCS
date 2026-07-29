@@ -8,6 +8,12 @@ import {
   deleteConversation as apiDeleteConversation,
   createMessage,
 } from '@/api/chat'
+import {
+  fetchSystemPrompts,
+  createSystemPrompt,
+  updateSystemPrompt,
+  deleteSystemPrompt as apiDeletePrompt,
+} from '@/api/system-prompt'
 
 export interface ChatMessage {
   id: string
@@ -33,6 +39,13 @@ export interface ConversationItem {
   message_count: number
   created_at: string
   updated_at: string
+}
+
+export interface SystemPromptItem {
+  id: number
+  name: string
+  content: string
+  is_default: boolean
 }
 
 const LAYOUT_KEY = 'pcs_chat_layout'
@@ -87,6 +100,60 @@ export const useChatStore = defineStore('chat', () => {
   // 对话管理
   const conversations = ref<ConversationItem[]>([])
   const currentConversationId = ref<number | null>(null)
+
+  // 角色约束管理
+  const prompts = ref<SystemPromptItem[]>([])
+  const activePromptId = ref<number | null>(null)
+  const promptsLoaded = ref(false)
+
+  /** 加载角色约束列表 */
+  async function loadPrompts() {
+    if (promptsLoaded.value) return
+    try {
+      const data: SystemPromptItem[] = await fetchSystemPrompts()
+      prompts.value = data
+      if (!activePromptId.value && data.length > 0) {
+        activePromptId.value = data[0].id
+      }
+      promptsLoaded.value = true
+    } catch (err) {
+      console.error('加载角色约束失败:', err)
+    }
+  }
+
+  async function addPrompt(data: { name: string; content?: string }) {
+    const dto = await createSystemPrompt(data)
+    const item: SystemPromptItem = {
+      id: dto.id,
+      name: dto.name,
+      content: dto.content,
+      is_default: dto.is_default,
+    }
+    prompts.value.push(item)
+    return item
+  }
+
+  async function updatePrompt(id: number, data: { name?: string; content?: string }) {
+    const dto = await updateSystemPrompt(id, data)
+    const idx = prompts.value.findIndex(p => p.id === id)
+    if (idx !== -1) {
+      prompts.value[idx] = { ...prompts.value[idx], ...dto }
+    }
+  }
+
+  async function removePrompt(id: number) {
+    await apiDeletePrompt(id)
+    prompts.value = prompts.value.filter(p => p.id !== id)
+    if (activePromptId.value === id) {
+      activePromptId.value = prompts.value[0]?.id || null
+    }
+  }
+
+  function setActivePrompt(id: number) {
+    if (prompts.value.find(p => p.id === id)) {
+      activePromptId.value = id
+    }
+  }
 
   // 异步从后端加载配置
   async function loadConfigsFromAPI() {
@@ -336,7 +403,9 @@ export const useChatStore = defineStore('chat', () => {
       content: m.content,
     }))
 
-    const systemPrompt = buildSystemPrompt(clusterId)
+    // 使用选中的角色约束作为 system prompt
+    const activePrompt = prompts.value.find(p => p.id === activePromptId.value)
+    const systemPrompt = activePrompt ? activePrompt.content : buildSystemPrompt(clusterId)
     const controller = new AbortController()
     currentController.value = controller
 
@@ -451,13 +520,21 @@ export const useChatStore = defineStore('chat', () => {
     configLoaded,
     conversations,
     currentConversationId,
+    prompts,
+    activePromptId,
+    promptsLoaded,
     activeConfig,
     hasApiKey,
     loadConfigsFromAPI,
     loadConversations,
+    loadPrompts,
     switchConversation,
     createNewConversation,
     removeConversation,
+    addPrompt,
+    updatePrompt,
+    removePrompt,
+    setActivePrompt,
     setActiveConfig,
     addConfig,
     updateConfig,
