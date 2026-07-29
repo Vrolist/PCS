@@ -127,12 +127,19 @@ class UserLLMConfig(models.Model):
         ('kimi', 'Kimi'),
         ('glm', 'GLM'),
         ('openai', 'OpenAI'),
+        ('mimo', 'MiMo（小米）'),
         ('custom', '自定义'),
+    ]
+
+    BILLING_MODE_CHOICES = [
+        ('payg', '余额计费'),
+        ('plan', 'Token Plan（套餐）'),
     ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='llm_configs')
     name = models.CharField('配置名称', max_length=64, default='')
     provider = models.CharField('服务提供商', max_length=16, choices=PROVIDER_CHOICES, default='deepseek')
+    billing_mode = models.CharField('计费方式', max_length=8, choices=BILLING_MODE_CHOICES, blank=True, default='')
     api_key_encrypted = models.TextField('API Key（加密）', blank=True, default='')
     model = models.CharField('模型', max_length=128, default='')
     base_url = models.CharField('API 地址', max_length=256, blank=True, default='')

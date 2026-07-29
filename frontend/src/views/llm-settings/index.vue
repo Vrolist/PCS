@@ -105,7 +105,7 @@
               <div class="folded-actions">
                 <el-button size="small" text type="primary" @click="expandConfig(cfg.id)">编辑</el-button>
                 <el-button size="small" text :loading="testingId === cfg.id" @click="handleTest(cfg)">测试</el-button>
-                <el-button size="small" text type="danger" :disabled="chatStore.configs.length <= 1" @click="handleRemove(cfg.id)">删除</el-button>
+                <el-button size="small" text type="danger" :disabled="!isTempId(cfg.id) && chatStore.configs.length <= 1" @click="handleRemove(cfg.id)">删除</el-button>
                 <el-button v-if="cfg.id !== chatStore.activeConfigId" size="small" text type="primary" @click="chatStore.setActiveConfig(cfg.id)">设为当前</el-button>
               </div>
             </div>
@@ -145,7 +145,7 @@
                     size="small"
                     text
                     type="danger"
-                    :disabled="chatStore.configs.length <= 1"
+                    :disabled="!isTempId(cfg.id) && chatStore.configs.length <= 1"
                     @click="handleRemove(cfg.id)"
                   >删除</el-button>
                 </div>
@@ -180,7 +180,19 @@
                     </el-select>
                   </el-form-item>
 
-                  <el-form-item v-if="cfg.provider === 'custom'" label="API 地址">
+                  <el-form-item v-if="cfg.provider === 'mimo'" label="计费方式">
+                    <el-select v-model="cfg.billingMode" @change="(val: string) => onBillingModeChange(cfg, val)">
+                      <el-option label="余额计费" value="payg" />
+                      <el-option label="Token Plan（套餐）" value="plan" />
+                    </el-select>
+                  </el-form-item>
+
+                  <el-form-item v-if="cfg.provider === 'mimo' && cfg.billingMode === 'plan'" label="API 地址">
+                    <el-input v-model="cfg.baseUrl" placeholder="请在订阅管理页面获取专属 Base URL" />
+                    <div class="form-item-hint">Token Plan 需使用订阅管理页面的专属 Base URL，请前往 platform.xiaomimimo.com 获取</div>
+                  </el-form-item>
+
+                  <el-form-item v-if="cfg.provider === 'custom' || (cfg.provider === 'mimo' && cfg.billingMode !== 'plan')" label="API 地址">
                     <el-input v-model="cfg.baseUrl" placeholder="https://api.example.com" />
                   </el-form-item>
                 </el-form>
@@ -256,7 +268,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import type { LLMConfig } from '@/stores/chat'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -273,6 +285,13 @@ const foldedIds = reactive<Set<number>>(new Set())
 
 // 约束折叠：一次只能展开一个
 const activePromptEditId = ref<number | null>(null)
+
+// 临时配置管理：未保存到后端的配置用负 id 标识
+let tempIdCounter = 0
+function isTempId(id: number) {
+  return id < 0
+}
+const hasPending = computed(() => chatStore.configs.some(c => isTempId(c.id)))
 
 // 页面加载时从后端拉取配置和约束
 onMounted(async () => {
@@ -340,6 +359,7 @@ const providers = [
   { label: 'Kimi', value: 'kimi' },
   { label: 'GLM', value: 'glm' },
   { label: 'OpenAI', value: 'openai' },
+  { label: 'MiMo（小米）', value: 'mimo' },
   { label: '自定义', value: 'custom' },
 ]
 
@@ -348,6 +368,7 @@ const modelMap: Record<string, string[]> = {
   kimi: ['kimi-k3', 'kimi-k2.7-code', 'kimi-k2.7-code-highspeed', 'kimi-k2.6'],
   glm: ['glm-5.2', 'glm-5.2-fast-preview'],
   openai: ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5'],
+  mimo: ['mimo-v2.5-pro', 'mimo-v2.5', 'mimo-v2.5-asr', 'mimo-v2.5-tts'],
   custom: ['custom-model'],
 }
 
@@ -389,6 +410,14 @@ const presets = [
     provider: 'openai' as const,
   },
   {
+    key: 'mimo',
+    name: 'MiMo (小米)',
+    desc: 'V2.5-Pro 万亿参数旗舰，1M 超长上下文，极致性价比',
+    color: 'linear-gradient(135deg, #ff6900, #ff9500)',
+    icon: 'XM',
+    provider: 'mimo' as const,
+  },
+  {
     key: 'custom',
     name: '自定义服务',
     desc: '兼容 OpenAI API 格式的其他服务',
@@ -399,22 +428,61 @@ const presets = [
 ]
 
 async function addFromPreset(p: typeof presets[0]) {
-  try {
-    await chatStore.addConfig({ provider: p.provider, name: p.name })
-    ElMessage.success(`已添加 ${p.name} 配置`)
-  } catch (err: any) {
-    ElMessage.error(err.message)
+  // 移除已有临时配置，一次只能保留一个待添加模型
+  removePendingConfigs()
+  // 本地创建临时配置，不调 API
+  tempIdCounter++
+  const tempId = -tempIdCounter
+  const defaults = {
+    name: p.name,
+    provider: p.provider,
+    billingMode: p.provider === 'mimo' ? 'payg' : '',
+    apiKey: '',
+    hasKey: false,
+    model: p.provider === 'mimo' ? 'mimo-v2.5-pro' : p.provider,
+    baseUrl: p.provider === 'mimo' ? 'https://api.xiaomimimo.com/v1' : '',
+    isActive: false,
   }
+  const cfg: LLMConfig = { id: tempId, ...defaults }
+  chatStore.configs.push(cfg)
+  showKeyMap[tempId] = false
+  // 自动展开该配置
+  foldedIds.delete(tempId)
+  // 不弹提示，等测试通过保存时再提示
 }
 
 async function addNewConfig() {
-  try {
-    const cfg = await chatStore.addConfig()
-    showKeyMap[cfg.id] = false
-    ElMessage.success('已添加新配置')
-  } catch (err: any) {
-    ElMessage.error(err.message)
+  // 移除已有临时配置，一次只能保留一个待添加模型
+  removePendingConfigs()
+  // 本地创建临时配置，不调 API
+  tempIdCounter++
+  const tempId = -tempIdCounter
+  const defaults = {
+    name: '新配置',
+    provider: 'deepseek' as const,
+    billingMode: '',
+    apiKey: '',
+    hasKey: false,
+    model: 'deepseek-v4-pro',
+    baseUrl: 'https://api.deepseek.com',
+    isActive: false,
   }
+  const cfg: LLMConfig = { id: tempId, ...defaults }
+  chatStore.configs.push(cfg)
+  showKeyMap[tempId] = false
+  foldedIds.delete(tempId)
+  // 不弹提示，等测试通过保存时再提示
+}
+
+/** 移除所有临时配置（负 id），并将清理相关的内部状态 */
+function removePendingConfigs() {
+  const pendingIds = chatStore.configs.filter(c => isTempId(c.id)).map(c => c.id)
+  pendingIds.forEach(id => {
+    const idx = chatStore.configs.findIndex(x => x.id === id)
+    if (idx >= 0) chatStore.configs.splice(idx, 1)
+    delete showKeyMap[id]
+    foldedIds.delete(id)
+  })
 }
 
 // ---- 角色约束操作 ----
@@ -457,17 +525,41 @@ async function onProviderChange(cfg: LLMConfig, val: string) {
     kimi: 'https://api.moonshot.cn',
     glm: 'https://open.bigmodel.cn',
     openai: 'https://api.openai.com',
+    mimo: 'https://api.xiaomimimo.com/v1',
     custom: '',
   }
   const models = modelMap[val] || []
-  try {
-    await chatStore.updateConfig(cfg.id, {
-      provider: val as LLMConfig['provider'],
-      baseUrl: baseUrlMap[val] || '',
-      model: models[0] || cfg.model,
-    })
-  } catch (err: any) {
-    ElMessage.error(err.message)
+  // 更新本地对象
+  cfg.provider = val as LLMConfig['provider']
+  cfg.billingMode = val === 'mimo' ? 'payg' : ''
+  cfg.baseUrl = baseUrlMap[val] || ''
+  cfg.model = models[0] || cfg.model
+  // 非临时配置 → 同步到后端
+  if (!isTempId(cfg.id)) {
+    try {
+      await chatStore.updateConfig(cfg.id, {
+        provider: val as LLMConfig['provider'],
+        billingMode: val === 'mimo' ? 'payg' : '',
+        baseUrl: baseUrlMap[val] || '',
+        model: models[0] || cfg.model,
+      })
+    } catch (err: any) {
+      ElMessage.error(err.message)
+    }
+  }
+}
+
+async function onBillingModeChange(cfg: LLMConfig, val: string) {
+  const baseUrl = val === 'plan' ? 'https://token-plan-cn.xiaomimimo.com/v1' : 'https://api.xiaomimimo.com/v1'
+  cfg.billingMode = val
+  cfg.baseUrl = baseUrl
+  // 非临时配置 → 同步到后端
+  if (!isTempId(cfg.id)) {
+    try {
+      await chatStore.updateConfig(cfg.id, { billingMode: val, baseUrl })
+    } catch (err: any) {
+      ElMessage.error(err.message)
+    }
   }
 }
 
@@ -478,7 +570,13 @@ async function handleRemove(id: number) {
   }
   try {
     await ElMessageBox.confirm('确定删除此配置？', '提示', { type: 'warning' })
-    await chatStore.removeConfig(id)
+    if (isTempId(id)) {
+      // 临时配置：直接从本地移除
+      const idx = chatStore.configs.findIndex(c => c.id === id)
+      if (idx >= 0) chatStore.configs.splice(idx, 1)
+    } else {
+      await chatStore.removeConfig(id)
+    }
     foldedIds.delete(id)
     ElMessage.success('已删除')
   } catch { /* canceled */ }
@@ -492,7 +590,8 @@ async function handleTest(cfg: LLMConfig) {
   testingId.value = cfg.id
 
   try {
-    const res = await fetch(`${cfg.baseUrl}/v1/chat/completions`, {
+    const apiPath = cfg.baseUrl.endsWith('/v1') ? '/chat/completions' : '/v1/chat/completions'
+    const res = await fetch(`${cfg.baseUrl}${apiPath}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -507,17 +606,34 @@ async function handleTest(cfg: LLMConfig) {
     if (res.ok) {
       const data = await res.json()
       const reply = data.choices?.[0]?.message?.content || ''
-      ElMessage.success(`[${cfg.name}] 连接成功: "${reply.trim()}"`)
-      // 测试通过，保存所有配置到后端
-      await chatStore.updateConfig(cfg.id, {
-        name: cfg.name,
-        provider: cfg.provider,
-        model: cfg.model,
-        baseUrl: cfg.baseUrl,
-        apiKey: cfg.apiKey,
-      })
-      // 自动折叠
-      foldConfig(cfg.id)
+      // 临时配置：先创建到后端，再更新
+      if (isTempId(cfg.id)) {
+        const dto = await chatStore.addConfig({
+          name: cfg.name,
+          provider: cfg.provider,
+          apiKey: cfg.apiKey,
+          model: cfg.model,
+          baseUrl: cfg.baseUrl,
+        })
+        // addConfig 已在末尾 push 新配置，只需移除旧的临时配置
+        const idx = chatStore.configs.findIndex(c => c.id === cfg.id)
+        if (idx >= 0) {
+          chatStore.configs.splice(idx, 1)
+        }
+        foldConfig(dto.id)
+        ElMessage.success(`已添加 ${cfg.name} 配置`)
+      } else {
+        // 已有配置，直接更新
+        await chatStore.updateConfig(cfg.id, {
+          name: cfg.name,
+          provider: cfg.provider,
+          model: cfg.model,
+          baseUrl: cfg.baseUrl,
+          apiKey: cfg.apiKey,
+        })
+        foldConfig(cfg.id)
+        ElMessage.success(`[${cfg.name}] 连接成功: "${reply.trim()}"`)
+      }
     } else {
       const body = await res.text()
       ElMessage.error(`[${cfg.name}] HTTP ${res.status}: ${body.slice(0, 150)}`)
@@ -604,6 +720,12 @@ async function handleTest(cfg: LLMConfig) {
 .card-header-actions {
   display: flex;
   align-items: center;
+}
+.form-item-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  line-height: 1.4;
 }
 .config-item {
   border: 1px solid var(--border-color);

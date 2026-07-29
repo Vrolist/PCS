@@ -4,6 +4,7 @@ export interface LLMConfigDTO {
   id: number
   name: string
   provider: string
+  billing_mode: string
   api_key?: string       // 仅写入时使用 (write_only)
   has_key: boolean       // 后端是否有加密 key
   model: string

@@ -25,7 +25,8 @@ export interface ChatMessage {
 export interface LLMConfig {
   id: number
   name: string
-  provider: 'openai' | 'deepseek' | 'kimi' | 'glm' | 'custom'
+  provider: 'openai' | 'deepseek' | 'kimi' | 'glm' | 'mimo' | 'custom'
+  billingMode: string
   apiKey: string
   hasKey: boolean
   model: string
@@ -72,14 +73,16 @@ const BASE_URL_MAP: Record<string, string> = {
 
 export function createDefaultConfig(provider: LLMConfig['provider'] = 'deepseek'): Omit<LLMConfig, 'id'> {
   return {
-    name: provider === 'custom' ? '自定义' : provider.charAt(0).toUpperCase() + provider.slice(1),
+    name: provider === 'custom' ? '自定义' : provider === 'mimo' ? 'MiMo' : provider.charAt(0).toUpperCase() + provider.slice(1),
     provider,
+    billingMode: provider === 'mimo' ? 'payg' : '',
     apiKey: '',
     hasKey: false,
     model: provider === 'deepseek' ? 'deepseek-v4-pro'
       : provider === 'kimi' ? 'kimi-k3'
       : provider === 'glm' ? 'glm-5.2'
       : provider === 'openai' ? 'gpt-5.6-sol'
+      : provider === 'mimo' ? 'mimo-v2.5-pro'
       : 'custom-model',
     baseUrl: BASE_URL_MAP[provider] || '',
     isActive: false,
@@ -165,6 +168,7 @@ export const useChatStore = defineStore('chat', () => {
         id: dto.id,
         name: dto.name,
         provider: dto.provider as LLMConfig['provider'],
+        billingMode: dto.billing_mode || '',
         apiKey: dto.api_key || '',
         hasKey: dto.has_key,
         model: dto.model,
@@ -283,6 +287,7 @@ export const useChatStore = defineStore('chat', () => {
         id: dto.id,
         name: dto.name,
         provider: dto.provider as LLMConfig['provider'],
+        billingMode: dto.billing_mode || '',
         apiKey: dto.api_key || '',
         hasKey: dto.has_key,
         model: dto.model,
@@ -412,7 +417,8 @@ export const useChatStore = defineStore('chat', () => {
     let fullReply = ''
 
     try {
-      const response = await fetch(`${cfg.baseUrl}/v1/chat/completions`, {
+      const apiPath = cfg.baseUrl.endsWith('/v1') ? '/chat/completions' : '/v1/chat/completions'
+      const response = await fetch(`${cfg.baseUrl}${apiPath}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

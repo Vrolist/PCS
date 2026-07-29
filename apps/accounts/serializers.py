@@ -163,7 +163,7 @@ class UserLLMConfigSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserLLMConfig
-        fields = ['id', 'name', 'provider', 'api_key', 'has_key', 'model', 'base_url', 'is_active']
+        fields = ['id', 'name', 'provider', 'billing_mode', 'api_key', 'has_key', 'model', 'base_url', 'is_active']
 
     def create(self, validated_data):
         api_key = validated_data.pop('api_key', '')
