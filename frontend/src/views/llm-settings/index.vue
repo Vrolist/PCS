@@ -66,32 +66,8 @@
         </el-card>
       </div>
 
-      <!-- 右侧：连接状态 + 模型配置列表 -->
+      <!-- 右侧：模型配置列表 -->
       <div class="settings-info-wrap">
-        <!-- 连接状态 -->
-        <el-card shadow="hover" class="info-card">
-          <template #header>
-            <div class="card-header">
-              <el-icon :size="18"><Connection /></el-icon>
-              <span>连接状态</span>
-            </div>
-          </template>
-          <div v-if="testResult" class="test-result" :class="testResult.ok ? 'success' : 'error'">
-            <el-icon :size="20">
-              <CircleCheckFilled v-if="testResult.ok" />
-              <CircleCloseFilled v-else />
-            </el-icon>
-            <div>
-              <div class="test-title">{{ testResult.ok ? '连接成功' : '连接失败' }}</div>
-              <div class="test-detail">{{ testResult.message }}</div>
-            </div>
-          </div>
-          <div v-else class="test-placeholder">
-            <el-icon :size="24" color="var(--text-muted)"><InfoFilled /></el-icon>
-            <span>点击配置右侧的「测试」按钮验证</span>
-          </div>
-        </el-card>
-
         <!-- 模型配置列表 -->
         <el-card shadow="hover" class="config-card">
           <template #header>
@@ -109,80 +85,107 @@
             <span>暂无配置，点击「添加配置」或从左侧快速开始添加</span>
           </div>
 
-          <div v-for="cfg in chatStore.configs" :key="cfg.id" class="config-item" :class="{ active: cfg.id === chatStore.activeConfigId }">
-            <div class="config-item-header">
-              <div class="config-item-name">
-                <el-input
-                  v-model="cfg.name"
-                  size="small"
-                  class="name-input"
-                  placeholder="配置名称"
-                />
-                <el-tag
-                  v-if="cfg.id === chatStore.activeConfigId"
-                  size="small"
-                  type="primary"
-                  class="active-tag"
-                >当前</el-tag>
+          <div v-for="cfg in chatStore.configs" :key="cfg.id" class="config-item" :class="{ active: cfg.id === chatStore.activeConfigId, folded: isFolded(cfg.id) }">
+            <!-- 折叠态：紧凑展示 -->
+            <div v-if="isFolded(cfg.id)" class="folded-view">
+              <div class="folded-left">
+                <div class="folded-icon" :style="{ background: getProviderStyle(cfg.provider).bg }">
+                  <span>{{ getProviderStyle(cfg.provider).icon }}</span>
+                </div>
+                <div class="folded-info">
+                  <div class="folded-name">
+                    <span>{{ cfg.name }}</span>
+                    <span class="folded-model">{{ cfg.model }}</span>
+                  </div>
+                  <div class="folded-meta">
+                    <span>{{ cfg.provider === 'custom' ? '自定义' : cfg.provider.charAt(0).toUpperCase() + cfg.provider.slice(1) }}</span>
+                  </div>
+                </div>
               </div>
-              <div class="config-item-actions">
-                <el-button
-                  v-if="cfg.id !== chatStore.activeConfigId"
-                  size="small"
-                  text
-                  type="primary"
-                  @click="chatStore.setActiveConfig(cfg.id)"
-                >设为当前</el-button>
-                <el-button
-                  size="small"
-                  text
-                  :loading="testingId === cfg.id"
-                  @click="handleTest(cfg)"
-                >测试</el-button>
-                <el-button
-                  size="small"
-                  text
-                  type="danger"
-                  :disabled="chatStore.configs.length <= 1"
-                  @click="handleRemove(cfg.id)"
-                >删除</el-button>
+              <div class="folded-actions">
+                <el-button size="small" text type="primary" @click="expandConfig(cfg.id)">编辑</el-button>
+                <el-button size="small" text :loading="testingId === cfg.id" @click="handleTest(cfg)">测试</el-button>
+                <el-button size="small" text type="danger" :disabled="chatStore.configs.length <= 1" @click="handleRemove(cfg.id)">删除</el-button>
+                <el-button v-if="cfg.id !== chatStore.activeConfigId" size="small" text type="primary" @click="chatStore.setActiveConfig(cfg.id)">设为当前</el-button>
               </div>
             </div>
 
-            <div class="config-item-body">
-              <el-form :model="cfg" label-position="top" class="config-inner-form" size="small">
-                <el-form-item label="服务提供商">
-                  <el-select v-model="cfg.provider" @change="(val: string) => onProviderChange(cfg, val)">
-                    <el-option v-for="p in providers" :key="p.value" :label="p.label" :value="p.value" />
-                  </el-select>
-                </el-form-item>
-
-                <el-form-item label="API Key">
+            <!-- 展开态：完整编辑表单 -->
+            <template v-else>
+              <div class="config-item-header">
+                <div class="config-item-name">
                   <el-input
-                    v-model="cfg.apiKey"
-                    :type="showKeyMap[cfg.id] ? 'text' : 'password'"
-                    placeholder="输入 API Key"
-                  >
-                    <template #suffix>
-                      <el-icon class="key-toggle" @click="toggleKey(cfg.id)">
-                        <View v-if="showKeyMap[cfg.id]" />
-                        <Hide v-else />
-                      </el-icon>
-                    </template>
-                  </el-input>
-                </el-form-item>
+                    v-model="cfg.name"
+                    size="small"
+                    class="name-input"
+                    placeholder="配置名称"
+                  />
+                  <el-tag
+                    v-if="cfg.id === chatStore.activeConfigId"
+                    size="small"
+                    type="primary"
+                    class="active-tag"
+                  >当前</el-tag>
+                </div>
+                <div class="config-item-actions">
+                  <el-button
+                    v-if="cfg.id !== chatStore.activeConfigId"
+                    size="small"
+                    text
+                    type="primary"
+                    @click="chatStore.setActiveConfig(cfg.id)"
+                  >设为当前</el-button>
+                  <el-button
+                    size="small"
+                    text
+                    :loading="testingId === cfg.id"
+                    @click="handleTest(cfg)"
+                  >测试</el-button>
+                  <el-button
+                    size="small"
+                    text
+                    type="danger"
+                    :disabled="chatStore.configs.length <= 1"
+                    @click="handleRemove(cfg.id)"
+                  >删除</el-button>
+                </div>
+              </div>
 
-                <el-form-item label="模型">
-                  <el-select v-model="cfg.model" filterable allow-create>
-                    <el-option v-for="m in getModels(cfg.provider)" :key="m" :label="m" :value="m" />
-                  </el-select>
-                </el-form-item>
+              <div class="config-item-body">
+                <el-form :model="cfg" label-position="top" class="config-inner-form" size="small">
+                  <el-form-item label="服务提供商">
+                    <el-select v-model="cfg.provider" @change="(val: string) => onProviderChange(cfg, val)">
+                      <el-option v-for="p in providers" :key="p.value" :label="p.label" :value="p.value" />
+                    </el-select>
+                  </el-form-item>
 
-                <el-form-item v-if="cfg.provider === 'custom'" label="API 地址">
-                  <el-input v-model="cfg.baseUrl" placeholder="https://api.example.com" />
-                </el-form-item>
-              </el-form>
-            </div>
+                  <el-form-item label="API Key">
+                    <el-input
+                      v-model="cfg.apiKey"
+                      :type="showKeyMap[cfg.id] ? 'text' : 'password'"
+                      placeholder="输入 API Key"
+                    >
+                      <template #suffix>
+                        <el-icon class="key-toggle" @click="toggleKey(cfg.id)">
+                          <View v-if="showKeyMap[cfg.id]" />
+                          <Hide v-else />
+                        </el-icon>
+                      </template>
+                    </el-input>
+                  </el-form-item>
+
+                  <el-form-item label="模型">
+                    <el-select v-model="cfg.model" filterable allow-create>
+                      <el-option v-for="m in getModels(cfg.provider)" :key="m" :label="m" :value="m" />
+                    </el-select>
+                  </el-form-item>
+
+                  <el-form-item v-if="cfg.provider === 'custom'" label="API 地址">
+                    <el-input v-model="cfg.baseUrl" placeholder="https://api.example.com" />
+                  </el-form-item>
+                </el-form>
+              </div>
+            </template>
           </div>
         </el-card>
       </div>
@@ -196,15 +199,45 @@ import { useChatStore } from '@/stores/chat'
 import type { LLMConfig } from '@/stores/chat'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  Setting, Connection, Promotion, Document, View, Hide,
-  InfoFilled, CircleCheckFilled, CircleCloseFilled, Plus,
+  Setting, Promotion, Document, View, Hide,
+  InfoFilled, Plus,
 } from '@element-plus/icons-vue'
 
 const chatStore = useChatStore()
 
 const testingId = ref<string | null>(null)
-const testResult = ref<{ ok: boolean; message: string } | null>(null)
 const showKeyMap = reactive<Record<string, boolean>>({})
+const foldedIds = reactive<Set<string>>(new Set())
+
+function isFolded(id: string) {
+  return foldedIds.has(id)
+}
+
+function expandConfig(id: string) {
+  foldedIds.delete(id)
+}
+
+function foldConfig(id: string) {
+  foldedIds.add(id)
+}
+
+const providerStyles: Record<string, { bg: string; icon: string }> = {
+  deepseek: { bg: 'linear-gradient(135deg, #409eff, #36d399)', icon: 'DS' },
+  kimi: { bg: 'linear-gradient(135deg, #6366f1, #8b5cf6)', icon: 'Ki' },
+  glm: { bg: 'linear-gradient(135deg, #f59e0b, #ef4444)', icon: 'GL' },
+  openai: { bg: 'linear-gradient(135deg, #10a37f, #1a7f5a)', icon: 'AI' },
+  custom: { bg: 'linear-gradient(135deg, #8b5cf6, #6366f1)', icon: '...' },
+}
+
+function getProviderStyle(provider: string) {
+  return providerStyles[provider] || providerStyles.custom
+}
+
+function maskKey(key: string): string {
+  if (!key) return '未配置'
+  if (key.length <= 6) return key.slice(0, 2) + '****'
+  return key.slice(0, 4) + '****' + key.slice(-4)
+}
 
 function toggleKey(id: string) {
   showKeyMap[id] = !showKeyMap[id]
@@ -318,7 +351,6 @@ async function handleTest(cfg: LLMConfig) {
     return
   }
   testingId.value = cfg.id
-  testResult.value = null
 
   try {
     const res = await fetch(`${cfg.baseUrl}/v1/chat/completions`, {
@@ -336,13 +368,15 @@ async function handleTest(cfg: LLMConfig) {
     if (res.ok) {
       const data = await res.json()
       const reply = data.choices?.[0]?.message?.content || ''
-      testResult.value = { ok: true, message: `[${cfg.name}] 响应: "${reply.trim()}"` }
+      ElMessage.success(`[${cfg.name}] 连接成功: "${reply.trim()}"`)
+      // 测试通过，自动折叠
+      foldConfig(cfg.id)
     } else {
       const body = await res.text()
-      testResult.value = { ok: false, message: `[${cfg.name}] HTTP ${res.status}: ${body.slice(0, 150)}` }
+      ElMessage.error(`[${cfg.name}] HTTP ${res.status}: ${body.slice(0, 150)}`)
     }
   } catch (err: any) {
-    testResult.value = { ok: false, message: `[${cfg.name}] 连接失败: ${err.message}` }
+    ElMessage.error(`[${cfg.name}] 连接失败: ${err.message}`)
   } finally {
     testingId.value = null
   }
@@ -429,6 +463,90 @@ async function handleTest(cfg: LLMConfig) {
 .config-item:last-child {
   margin-bottom: 0;
 }
+.config-item.folded {
+  padding: 0;
+}
+.config-item.folded.active {
+  box-shadow: none;
+  border-color: var(--border-color);
+}
+.config-item.folded.active .folded-view {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 1px var(--primary-color);
+  border-radius: 10px;
+}
+
+/* 折叠态 */
+.folded-view {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.folded-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+.folded-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.folded-info {
+  min-width: 0;
+  flex: 1;
+}
+.folded-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+.folded-model {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+.folded-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.folded-dot {
+  opacity: 0.4;
+}
+.folded-masked {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+}
+.folded-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  margin-left: 12px;
+}
+.folded-actions .el-button {
+  font-size: 12px;
+}
+
 .config-item-header {
   display: flex;
   align-items: center;
