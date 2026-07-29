@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
-import { fetchLLMConfigs, createLLMConfig, updateLLMConfig, deleteLLMConfig, setActiveLLMConfig } from '@/api/llm'
+import { ref, computed, watch } from 'vue'
+import { fetchLLMConfigs, createLLMConfig, updateLLMConfig, deleteLLMConfig } from '@/api/llm'
 import {
   fetchConversations,
   createConversation,
@@ -31,7 +31,6 @@ export interface LLMConfig {
   hasKey: boolean
   model: string
   baseUrl: string
-  isActive: boolean
 }
 
 export interface ConversationItem {
@@ -85,7 +84,6 @@ export function createDefaultConfig(provider: LLMConfig['provider'] = 'deepseek'
       : provider === 'mimo' ? 'mimo-v2.5-pro'
       : 'custom-model',
     baseUrl: BASE_URL_MAP[provider] || '',
-    isActive: false,
   }
 }
 
@@ -94,7 +92,6 @@ export const useChatStore = defineStore('chat', () => {
   const messages = ref<ChatMessage[]>([])
   const loading = ref(false)
   const configs = ref<LLMConfig[]>([])
-  const activeConfigId = ref<number | null>(null)
   const currentController = ref<AbortController | null>(null)
   const layoutMode = ref<'float' | 'sidebar'>(loadLayoutMode())
   const configLoading = ref(false)
@@ -106,8 +103,41 @@ export const useChatStore = defineStore('chat', () => {
 
   // 角色约束管理
   const prompts = ref<SystemPromptItem[]>([])
-  const activePromptId = ref<number | null>(null)
   const promptsLoaded = ref(false)
+
+  // 本地暂存：AI 助手中用户选择的模型和约束（不保存到后端，仅存 localStorage）
+  const CHAT_SELECTED_CONFIG_KEY = 'pcs_chat_selected_config'
+  const CHAT_SELECTED_PROMPT_KEY = 'pcs_chat_selected_prompt'
+  const chatSelectedConfigId = ref<number | null>(loadChatSelectedConfigId())
+  const chatSelectedPromptId = ref<number | null>(loadChatSelectedPromptId())
+  function loadChatSelectedConfigId(): number | null {
+    try { const v = localStorage.getItem(CHAT_SELECTED_CONFIG_KEY); return v ? Number(v) : null } catch { return null }
+  }
+  function saveChatSelectedConfigId(id: number | null) {
+    chatSelectedConfigId.value = id
+    if (id !== null) localStorage.setItem(CHAT_SELECTED_CONFIG_KEY, String(id))
+    else localStorage.removeItem(CHAT_SELECTED_CONFIG_KEY)
+  }
+  function loadChatSelectedPromptId(): number | null {
+    try { const v = localStorage.getItem(CHAT_SELECTED_PROMPT_KEY); return v ? Number(v) : null } catch { return null }
+  }
+  function saveChatSelectedPromptId(id: number | null) {
+    chatSelectedPromptId.value = id
+    if (id !== null) localStorage.setItem(CHAT_SELECTED_PROMPT_KEY, String(id))
+    else localStorage.removeItem(CHAT_SELECTED_PROMPT_KEY)
+  }
+
+  // 数据加载后自动默认选择第一项（无 localStorage 记录或记录已失效时）
+  watch(configs, (list) => {
+    if (list.length > 0 && (chatSelectedConfigId.value === null || !list.find(c => c.id === chatSelectedConfigId.value))) {
+      saveChatSelectedConfigId(list[0].id)
+    }
+  })
+  watch(prompts, (list) => {
+    if (list.length > 0 && (chatSelectedPromptId.value === null || !list.find(p => p.id === chatSelectedPromptId.value))) {
+      saveChatSelectedPromptId(list[0].id)
+    }
+  })
 
   /** 加载角色约束列表 */
   async function loadPrompts() {
@@ -115,9 +145,6 @@ export const useChatStore = defineStore('chat', () => {
     try {
       const data: SystemPromptItem[] = await fetchSystemPrompts()
       prompts.value = data
-      if (!activePromptId.value && data.length > 0) {
-        activePromptId.value = data[0].id
-      }
       promptsLoaded.value = true
     } catch (err) {
       console.error('加载角色约束失败:', err)
@@ -147,15 +174,6 @@ export const useChatStore = defineStore('chat', () => {
   async function removePrompt(id: number) {
     await apiDeletePrompt(id)
     prompts.value = prompts.value.filter(p => p.id !== id)
-    if (activePromptId.value === id) {
-      activePromptId.value = prompts.value[0]?.id || null
-    }
-  }
-
-  function setActivePrompt(id: number) {
-    if (prompts.value.find(p => p.id === id)) {
-      activePromptId.value = id
-    }
   }
 
   // 异步从后端加载配置
@@ -173,14 +191,7 @@ export const useChatStore = defineStore('chat', () => {
         hasKey: dto.has_key,
         model: dto.model,
         baseUrl: dto.base_url,
-        isActive: dto.is_active,
       }))
-      const active = configs.value.find(c => c.isActive)
-      if (active) {
-        activeConfigId.value = active.id
-      } else if (configs.value.length > 0) {
-        activeConfigId.value = configs.value[0].id
-      }
       configLoaded.value = true
     } catch (err) {
       console.error('加载 LLM 配置失败:', err)
@@ -257,20 +268,19 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   const activeConfig = computed(() => {
-    return configs.value.find(c => c.id === activeConfigId.value) || configs.value[0] || null
+    const id = chatSelectedConfigId.value
+    // 如果已选中的配置存在且有效，使用它
+    if (id && configs.value.find(c => c.id === id)) {
+      return configs.value.find(c => c.id === id)!
+    }
+    // 否则默认使用第一个
+    return configs.value[0] || null
   })
 
   const hasApiKey = computed(() => {
     const cfg = activeConfig.value
     return cfg ? cfg.hasKey || !!cfg.apiKey : false
   })
-
-  function setActiveConfig(id: number) {
-    if (configs.value.find(c => c.id === id)) {
-      activeConfigId.value = id
-      setActiveLLMConfig(id).catch(() => {})
-    }
-  }
 
   async function addConfig(data?: Partial<LLMConfig>) {
     const defaults = createDefaultConfig()
@@ -292,7 +302,6 @@ export const useChatStore = defineStore('chat', () => {
         hasKey: dto.has_key,
         model: dto.model,
         baseUrl: dto.base_url,
-        isActive: dto.is_active,
       }
       configs.value.push(newCfg)
       return newCfg
@@ -320,7 +329,6 @@ export const useChatStore = defineStore('chat', () => {
           hasKey: dto.has_key,
           model: dto.model,
           baseUrl: dto.base_url,
-          isActive: dto.is_active,
           apiKey: data.apiKey !== undefined ? data.apiKey : configs.value[idx].apiKey,
         }
       }
@@ -335,9 +343,6 @@ export const useChatStore = defineStore('chat', () => {
       const idx = configs.value.findIndex(c => c.id === id)
       if (idx === -1) return
       configs.value.splice(idx, 1)
-      if (activeConfigId.value === id) {
-        activeConfigId.value = configs.value[0]?.id || null
-      }
     } catch (err: any) {
       throw new Error(err.response?.data?.detail || '删除配置失败')
     }
@@ -409,7 +414,7 @@ export const useChatStore = defineStore('chat', () => {
     }))
 
     // 使用选中的角色约束作为 system prompt
-    const activePrompt = prompts.value.find(p => p.id === activePromptId.value)
+    const activePrompt = prompts.value.find(p => p.id === chatSelectedPromptId.value)
     const systemPrompt = activePrompt ? activePrompt.content : buildSystemPrompt(clusterId)
     const controller = new AbortController()
     currentController.value = controller
@@ -520,17 +525,19 @@ export const useChatStore = defineStore('chat', () => {
     messages,
     loading,
     configs,
-    activeConfigId,
     layoutMode,
     configLoading,
     configLoaded,
     conversations,
     currentConversationId,
     prompts,
-    activePromptId,
     promptsLoaded,
     activeConfig,
     hasApiKey,
+    chatSelectedConfigId,
+    chatSelectedPromptId,
+    saveChatSelectedConfigId,
+    saveChatSelectedPromptId,
     loadConfigsFromAPI,
     loadConversations,
     loadPrompts,
@@ -540,8 +547,6 @@ export const useChatStore = defineStore('chat', () => {
     addPrompt,
     updatePrompt,
     removePrompt,
-    setActivePrompt,
-    setActiveConfig,
     addConfig,
     updateConfig,
     removeConfig,

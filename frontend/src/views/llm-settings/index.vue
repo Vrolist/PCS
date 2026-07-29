@@ -25,7 +25,7 @@
             </div>
             <div class="tip-item">
               <span class="tip-num">2</span>
-              <span>点击「设为当前」选择默认使用的模型</span>
+              <span>在 AI 助手中可随时切换模型</span>
             </div>
             <div class="tip-item">
               <span class="tip-num">3</span>
@@ -85,7 +85,7 @@
             <span>暂无配置，点击「添加配置」或从左侧快速开始添加</span>
           </div>
 
-          <div v-for="cfg in chatStore.configs" :key="cfg.id" class="config-item" :class="{ active: cfg.id === chatStore.activeConfigId, folded: isFolded(cfg.id) }">
+          <div v-for="cfg in chatStore.configs" :key="cfg.id" class="config-item" :class="{ folded: isFolded(cfg.id) }">
             <!-- 折叠态：紧凑展示 -->
             <div v-if="isFolded(cfg.id)" class="folded-view">
               <div class="folded-left">
@@ -106,7 +106,6 @@
                 <el-button size="small" text type="primary" @click="expandConfig(cfg.id)">编辑</el-button>
                 <el-button size="small" text :loading="testingId === cfg.id" @click="handleTest(cfg)">测试</el-button>
                 <el-button size="small" text type="danger" :disabled="!isTempId(cfg.id) && chatStore.configs.length <= 1" @click="handleRemove(cfg.id)">删除</el-button>
-                <el-button v-if="cfg.id !== chatStore.activeConfigId" size="small" text type="primary" @click="chatStore.setActiveConfig(cfg.id)">设为当前</el-button>
               </div>
             </div>
 
@@ -120,21 +119,15 @@
                     class="name-input"
                     placeholder="配置名称"
                   />
-                  <el-tag
-                    v-if="cfg.id === chatStore.activeConfigId"
-                    size="small"
-                    type="primary"
-                    class="active-tag"
-                  >当前</el-tag>
                 </div>
                 <div class="config-item-actions">
                   <el-button
-                    v-if="cfg.id !== chatStore.activeConfigId"
                     size="small"
                     text
                     type="primary"
-                    @click="chatStore.setActiveConfig(cfg.id)"
-                  >设为当前</el-button>
+                    :loading="testingId === cfg.id"
+                    @click="handleSave(cfg)"
+                  >保存</el-button>
                   <el-button
                     size="small"
                     text
@@ -221,14 +214,13 @@
             <span>暂无约束</span>
           </div>
 
-          <div v-for="p in chatStore.prompts" :key="p.id" class="config-item" :class="{ active: p.id === chatStore.activePromptId, folded: isPromptFolded(p.id) }">
+          <div v-for="p in chatStore.prompts" :key="p.id" class="config-item" :class="{ folded: isPromptFolded(p.id) }">
             <!-- 折叠态 -->
             <div v-if="isPromptFolded(p.id)" class="folded-view" @click="expandPrompt(p.id)">
               <div class="folded-left">
                 <div class="folded-info">
                   <div class="folded-name">
                     <span>{{ p.name }}</span>
-                    <el-tag v-if="p.is_default" size="small" type="info" class="folded-model">默认</el-tag>
                   </div>
                 </div>
               </div>
@@ -244,7 +236,6 @@
               <div class="config-item-header">
                 <div class="config-item-name">
                   <el-input v-model="p.name" size="small" class="name-input" placeholder="约束名称" />
-                  <el-tag v-if="p.is_default" size="small" type="info" class="active-tag">默认</el-tag>
                 </div>
                 <div class="config-item-actions">
                   <el-button size="small" text type="primary" @click="handleSavePrompt(p)">保存</el-button>
@@ -337,6 +328,7 @@ const providerStyles: Record<string, { bg: string; icon: string }> = {
   kimi: { bg: 'linear-gradient(135deg, #6366f1, #8b5cf6)', icon: 'Ki' },
   glm: { bg: 'linear-gradient(135deg, #f59e0b, #ef4444)', icon: 'GL' },
   openai: { bg: 'linear-gradient(135deg, #10a37f, #1a7f5a)', icon: 'AI' },
+  mimo: { bg: 'linear-gradient(135deg, #ff6900, #ff9500)', icon: 'XM' },
   custom: { bg: 'linear-gradient(135deg, #8b5cf6, #6366f1)', icon: '...' },
 }
 
@@ -441,7 +433,6 @@ async function addFromPreset(p: typeof presets[0]) {
     hasKey: false,
     model: p.provider === 'mimo' ? 'mimo-v2.5-pro' : p.provider,
     baseUrl: p.provider === 'mimo' ? 'https://api.xiaomimimo.com/v1' : '',
-    isActive: false,
   }
   const cfg: LLMConfig = { id: tempId, ...defaults }
   chatStore.configs.push(cfg)
@@ -465,7 +456,6 @@ async function addNewConfig() {
     hasKey: false,
     model: 'deepseek-v4-pro',
     baseUrl: 'https://api.deepseek.com',
-    isActive: false,
   }
   const cfg: LLMConfig = { id: tempId, ...defaults }
   chatStore.configs.push(cfg)
@@ -606,40 +596,54 @@ async function handleTest(cfg: LLMConfig) {
     if (res.ok) {
       const data = await res.json()
       const reply = data.choices?.[0]?.message?.content || ''
-      // 临时配置：先创建到后端，再更新
-      if (isTempId(cfg.id)) {
-        const dto = await chatStore.addConfig({
-          name: cfg.name,
-          provider: cfg.provider,
-          apiKey: cfg.apiKey,
-          model: cfg.model,
-          baseUrl: cfg.baseUrl,
-        })
-        // addConfig 已在末尾 push 新配置，只需移除旧的临时配置
-        const idx = chatStore.configs.findIndex(c => c.id === cfg.id)
-        if (idx >= 0) {
-          chatStore.configs.splice(idx, 1)
-        }
-        foldConfig(dto.id)
-        ElMessage.success(`已添加 ${cfg.name} 配置`)
-      } else {
-        // 已有配置，直接更新
-        await chatStore.updateConfig(cfg.id, {
-          name: cfg.name,
-          provider: cfg.provider,
-          model: cfg.model,
-          baseUrl: cfg.baseUrl,
-          apiKey: cfg.apiKey,
-        })
-        foldConfig(cfg.id)
-        ElMessage.success(`[${cfg.name}] 连接成功: "${reply.trim()}"`)
-      }
+      ElMessage.success(`[${cfg.name}] 连接成功: "${reply.trim()}"`)
     } else {
       const body = await res.text()
       ElMessage.error(`[${cfg.name}] HTTP ${res.status}: ${body.slice(0, 150)}`)
     }
   } catch (err: any) {
     ElMessage.error(`[${cfg.name}] 连接失败: ${err.message}`)
+  } finally {
+    testingId.value = null
+  }
+}
+
+/** 保存配置到后端，非临时配置直接更新，临时配置先创建再替换 */
+async function handleSave(cfg: LLMConfig) {
+  if (!cfg.apiKey) {
+    ElMessage.warning('请先输入 API Key')
+    return
+  }
+  testingId.value = cfg.id
+  try {
+    if (isTempId(cfg.id)) {
+      const dto = await chatStore.addConfig({
+        name: cfg.name,
+        provider: cfg.provider,
+        apiKey: cfg.apiKey,
+        model: cfg.model,
+        baseUrl: cfg.baseUrl,
+      })
+      // addConfig 已在末尾 push 新配置，移除旧的临时配置
+      const idx = chatStore.configs.findIndex(c => c.id === cfg.id)
+      if (idx >= 0) {
+        chatStore.configs.splice(idx, 1)
+      }
+      foldConfig(dto.id)
+      ElMessage.success(`已添加 ${cfg.name} 配置`)
+    } else {
+      await chatStore.updateConfig(cfg.id, {
+        name: cfg.name,
+        provider: cfg.provider,
+        model: cfg.model,
+        baseUrl: cfg.baseUrl,
+        apiKey: cfg.apiKey,
+      })
+      foldConfig(cfg.id)
+      ElMessage.success(`已保存 ${cfg.name} 配置`)
+    }
+  } catch (err: any) {
+    ElMessage.error(err.message || '保存失败')
   } finally {
     testingId.value = null
   }

@@ -118,13 +118,13 @@
           <div v-if="chatStore.prompts.length > 0 || chatStore.configs.length > 0" class="chat-selectors-row">
             <div v-if="chatStore.prompts.length > 0" class="chat-selector-item">
               <span class="model-label">约束</span>
-              <el-select v-model="chatStore.activePromptId" size="small" class="model-selector-input" popper-class="model-selector-popper">
+              <el-select v-model="chatStore.chatSelectedPromptId" size="small" class="model-selector-input" popper-class="model-selector-popper" @change="(val: number) => chatStore.saveChatSelectedPromptId(val)">
                 <el-option v-for="p in chatStore.prompts" :key="p.id" :label="p.name" :value="p.id" />
               </el-select>
             </div>
             <div v-if="chatStore.configs.length > 0" class="chat-selector-item">
               <span class="model-label">模型</span>
-              <el-select v-model="chatStore.activeConfigId" size="small" class="model-selector-input" popper-class="model-selector-popper" @change="onModelChange">
+              <el-select v-model="chatStore.chatSelectedConfigId" size="small" class="model-selector-input" popper-class="model-selector-popper" @change="onModelChange">
                 <el-option v-for="cfg in chatStore.configs" :key="cfg.id" :label="cfg.name" :value="cfg.id">
                   <span>{{ cfg.name }}</span>
                   <span class="model-selector-detail">{{ cfg.model }}</span>
@@ -262,13 +262,13 @@
             <div v-if="chatStore.prompts.length > 0 || chatStore.configs.length > 0" class="chat-selectors-row">
               <div v-if="chatStore.prompts.length > 0" class="chat-selector-item">
                 <span class="model-label">约束</span>
-                <el-select v-model="chatStore.activePromptId" size="small" class="model-selector-input" popper-class="model-selector-popper">
+                <el-select v-model="chatStore.chatSelectedPromptId" size="small" class="model-selector-input" popper-class="model-selector-popper" @change="(val: number) => chatStore.saveChatSelectedPromptId(val)">
                   <el-option v-for="p in chatStore.prompts" :key="p.id" :label="p.name" :value="p.id" />
                 </el-select>
               </div>
               <div v-if="chatStore.configs.length > 0" class="chat-selector-item">
                 <span class="model-label">模型</span>
-                <el-select v-model="chatStore.activeConfigId" size="small" class="model-selector-input" popper-class="model-selector-popper" @change="onModelChange">
+                <el-select v-model="chatStore.chatSelectedConfigId" size="small" class="model-selector-input" popper-class="model-selector-popper" @change="onModelChange">
                   <el-option v-for="cfg in chatStore.configs" :key="cfg.id" :label="cfg.name" :value="cfg.id">
                     <span>{{ cfg.name }}</span>
                     <span class="model-selector-detail">{{ cfg.model }}</span>
@@ -394,8 +394,8 @@ async function handleRemoveConversation(id: number) {
   await chatStore.removeConversation(id)
 }
 
-function onModelChange(id: string) {
-  chatStore.setActiveConfig(id)
+function onModelChange(id: number) {
+  chatStore.saveChatSelectedConfigId(id)
 }
 
 function copyMessage(content: string) {
