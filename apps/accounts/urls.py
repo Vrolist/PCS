@@ -25,4 +25,9 @@ urlpatterns = [
     path("llm-configs/", views.llm_config_list_view, name="auth-llm-configs"),
     path("llm-configs/<int:pk>/", views.llm_config_detail_view, name="auth-llm-config-detail"),
     path("llm-configs/<int:pk>/set-active/", views.llm_config_set_active_view, name="auth-llm-config-set-active"),
+    
+    # AI 助手对话
+    path("chat/conversations/", views.chat_conversation_list_view, name="auth-chat-conversations"),
+    path("chat/conversations/<int:pk>/", views.chat_conversation_detail_view, name="auth-chat-conversation-detail"),
+    path("chat/conversations/<int:pk>/messages/", views.chat_message_create_view, name="auth-chat-messages"),
 ]

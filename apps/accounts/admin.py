@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
-from .models import User, PasswordResetCode, UserLog, SystemConfig, UserLLMConfig
+from .models import User, PasswordResetCode, UserLog, SystemConfig, UserLLMConfig, ChatConversation, ChatMessage
 
 
 @admin.register(User)
@@ -40,3 +40,24 @@ class UserLLMConfigAdmin(admin.ModelAdmin):
     list_filter = ['provider', 'is_active']
     search_fields = ['user__username', 'name']
     readonly_fields = ['api_key_encrypted']
+
+
+@admin.register(ChatConversation)
+class ChatConversationAdmin(admin.ModelAdmin):
+    list_display = ['user', 'title', 'message_count', 'created_at', 'updated_at']
+    search_fields = ['user__username', 'title']
+
+    def message_count(self, obj):
+        return obj.messages.count()
+    message_count.short_description = '消息数'
+
+
+@admin.register(ChatMessage)
+class ChatMessageAdmin(admin.ModelAdmin):
+    list_display = ['conversation', 'role', 'short_content', 'created_at']
+    list_filter = ['role']
+    search_fields = ['content']
+
+    def short_content(self, obj):
+        return obj.content[:60]
+    short_content.short_description = '内容摘要'

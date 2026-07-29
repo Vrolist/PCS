@@ -167,3 +167,35 @@ class UserLLMConfig(models.Model):
     @property
     def has_key(self) -> bool:
         return bool(self.api_key_encrypted)
+
+
+class ChatConversation(models.Model):
+    """AI 助手对话会话"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='chat_conversations')
+    title = models.CharField('对话标题', max_length=256, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+        verbose_name = '对话会话'
+        verbose_name_plural = '对话会话'
+
+    def __str__(self):
+        return f'{self.user.username} - {self.title or "未命名对话"}'
+
+
+class ChatMessage(models.Model):
+    """AI 助手对话消息"""
+    conversation = models.ForeignKey(ChatConversation, on_delete=models.CASCADE, related_name='messages')
+    role = models.CharField('角色', max_length=16)  # 'user' or 'assistant'
+    content = models.TextField('内容')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+        verbose_name = '对话消息'
+        verbose_name_plural = '对话消息'
+
+    def __str__(self):
+        return f'[{self.role}] {self.content[:50]}'

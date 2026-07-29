@@ -2,7 +2,7 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
-from .models import User, PasswordResetCode, UserLog, UserLLMConfig
+from .models import User, PasswordResetCode, UserLog, UserLLMConfig, ChatConversation, ChatMessage
 
 
 class LoginSerializer(serializers.Serializer):
@@ -157,8 +157,8 @@ class UserLogSerializer(serializers.ModelSerializer):
 
 
 class UserLLMConfigSerializer(serializers.ModelSerializer):
-    """用户 LLM 配置序列化（写入时接收明文 api_key，读出时只返回 has_key）"""
-    api_key = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    """用户 LLM 配置序列化"""
+    api_key = serializers.CharField(required=False, allow_blank=True)
     has_key = serializers.BooleanField(read_only=True)
 
     class Meta:
@@ -180,3 +180,46 @@ class UserLLMConfigSerializer(serializers.ModelSerializer):
             instance.api_key = api_key
         instance.save()
         return instance
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # 返回解密后的明文 key
+        data['api_key'] = instance.api_key
+        return data
+
+
+class ChatMessageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChatMessage
+        fields = ['id', 'role', 'content', 'created_at']
+
+
+class ChatConversationSerializer(serializers.ModelSerializer):
+    messages = ChatMessageSerializer(many=True, read_only=True)
+    message_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ChatConversation
+        fields = ['id', 'title', 'message_count', 'messages', 'created_at', 'updated_at']
+
+    def get_message_count(self, obj):
+        return obj.messages.count()
+
+
+class ChatConversationListSerializer(serializers.ModelSerializer):
+    """列表用（不含完整消息，只含摘要）"""
+    last_message = serializers.SerializerMethodField()
+    message_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ChatConversation
+        fields = ['id', 'title', 'message_count', 'last_message', 'created_at', 'updated_at']
+
+    def get_message_count(self, obj):
+        return obj.messages.count()
+
+    def get_last_message(self, obj):
+        last = obj.messages.last()
+        if last:
+            return {'role': last.role, 'content': last.content[:80]}
+        return None

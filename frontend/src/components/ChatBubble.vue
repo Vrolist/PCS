@@ -21,6 +21,9 @@
             <button class="chat-action-btn" @click="goSettings" title="设置">
               <el-icon :size="14"><Setting /></el-icon>
             </button>
+            <button class="chat-action-btn" @click="handleNewConversation" title="新对话">
+              <el-icon :size="14"><Plus /></el-icon>
+            </button>
             <button class="chat-action-btn" @click="chatStore.visible = false" title="关闭">
               <el-icon :size="14"><Close /></el-icon>
             </button>
@@ -135,6 +138,7 @@
             <div class="chat-header-actions">
               <button class="chat-action-btn" @click="chatStore.toggleLayoutMode" title="切换为侧边栏模式"><el-icon :size="14"><FullScreen /></el-icon></button>
               <button class="chat-action-btn" @click="goSettings" title="设置"><el-icon :size="14"><Setting /></el-icon></button>
+              <button class="chat-action-btn" @click="handleNewConversation" title="新对话"><el-icon :size="14"><Plus /></el-icon></button>
               <button class="chat-action-btn" @click="chatStore.visible = false" title="关闭"><el-icon :size="14"><Close /></el-icon></button>
             </div>
           </div>
@@ -226,7 +230,7 @@ import { useClusterStore } from '@/stores/cluster'
 import {
   ChatDotRound, Close, Setting, Monitor, User, Promotion,
   DataAnalysis, Warning, MagicStick, CopyDocument, WarningFilled,
-  VideoPause, CircleCheck, DCaret, FullScreen,
+  VideoPause, CircleCheck, DCaret, FullScreen, Plus,
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 
@@ -240,9 +244,10 @@ const messagesRef = ref<HTMLDivElement>()
 
 const hasApiKey = computed(() => chatStore.hasApiKey)
 
-// 页面加载时从后端拉取 LLM 配置
+// 页面加载时从后端拉取 LLM 配置和对话列表
 onMounted(() => {
   chatStore.loadConfigsFromAPI()
+  chatStore.loadConversations()
 })
 
 // 流式内容用于判断是否显示打字指示器
@@ -299,6 +304,10 @@ function sendQuick(text: string) {
 function goSettings() {
   chatStore.visible = false
   router.push('/dashboard/llm-settings')
+}
+
+async function handleNewConversation() {
+  await chatStore.createNewConversation()
 }
 
 function onModelChange(id: string) {

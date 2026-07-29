@@ -1,6 +1,13 @@
 import { defineStore } from 'pinia'
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { fetchLLMConfigs, createLLMConfig, updateLLMConfig, deleteLLMConfig, setActiveLLMConfig } from '@/api/llm'
+import {
+  fetchConversations,
+  createConversation,
+  fetchConversation,
+  deleteConversation as apiDeleteConversation,
+  createMessage,
+} from '@/api/chat'
 
 export interface ChatMessage {
   id: string
@@ -18,6 +25,14 @@ export interface LLMConfig {
   model: string
   baseUrl: string
   isActive: boolean
+}
+
+export interface ConversationItem {
+  id: number
+  title: string
+  message_count: number
+  created_at: string
+  updated_at: string
 }
 
 const LAYOUT_KEY = 'pcs_chat_layout'
@@ -69,6 +84,10 @@ export const useChatStore = defineStore('chat', () => {
   const configLoading = ref(false)
   const configLoaded = ref(false)
 
+  // 对话管理
+  const conversations = ref<ConversationItem[]>([])
+  const currentConversationId = ref<number | null>(null)
+
   // 异步从后端加载配置
   async function loadConfigsFromAPI() {
     if (configLoaded.value) return
@@ -79,13 +98,12 @@ export const useChatStore = defineStore('chat', () => {
         id: dto.id,
         name: dto.name,
         provider: dto.provider as LLMConfig['provider'],
-        apiKey: '',
+        apiKey: dto.api_key || '',
         hasKey: dto.has_key,
         model: dto.model,
         baseUrl: dto.base_url,
         isActive: dto.is_active,
       }))
-      // 恢复 active 状态
       const active = configs.value.find(c => c.isActive)
       if (active) {
         activeConfigId.value = active.id
@@ -97,6 +115,73 @@ export const useChatStore = defineStore('chat', () => {
       console.error('加载 LLM 配置失败:', err)
     } finally {
       configLoading.value = false
+    }
+  }
+
+  /** 加载对话列表，并自动加载最近一个对话的消息 */
+  async function loadConversations() {
+    try {
+      const list = await fetchConversations()
+      conversations.value = list
+      if (list.length > 0) {
+        await switchConversation(list[0].id)
+      }
+    } catch (err) {
+      console.error('加载对话列表失败:', err)
+    }
+  }
+
+  /** 切换对话 */
+  async function switchConversation(id: number) {
+    currentConversationId.value = id
+    try {
+      const detail = await fetchConversation(id)
+      messages.value = (detail.messages || []).map(m => ({
+        id: String(m.id),
+        role: m.role,
+        content: m.content,
+        timestamp: new Date(m.created_at).getTime(),
+      }))
+    } catch (err) {
+      console.error('加载对话消息失败:', err)
+      messages.value = []
+    }
+  }
+
+  /** 创建新对话 */
+  async function createNewConversation() {
+    try {
+      const conv = await createConversation()
+      conversations.value.unshift({
+        id: conv.id,
+        title: conv.title,
+        message_count: 0,
+        created_at: conv.created_at,
+        updated_at: conv.updated_at,
+      })
+      currentConversationId.value = conv.id
+      messages.value = []
+      return conv
+    } catch (err) {
+      console.error('创建对话失败:', err)
+    }
+  }
+
+  /** 删除对话 */
+  async function removeConversation(id: number) {
+    try {
+      await apiDeleteConversation(id)
+      conversations.value = conversations.value.filter(c => c.id !== id)
+      if (currentConversationId.value === id) {
+        if (conversations.value.length > 0) {
+          await switchConversation(conversations.value[0].id)
+        } else {
+          currentConversationId.value = null
+          messages.value = []
+        }
+      }
+    } catch (err) {
+      console.error('删除对话失败:', err)
     }
   }
 
@@ -112,7 +197,6 @@ export const useChatStore = defineStore('chat', () => {
   function setActiveConfig(id: number) {
     if (configs.value.find(c => c.id === id)) {
       activeConfigId.value = id
-      // 同步到后端
       setActiveLLMConfig(id).catch(() => {})
     }
   }
@@ -132,7 +216,7 @@ export const useChatStore = defineStore('chat', () => {
         id: dto.id,
         name: dto.name,
         provider: dto.provider as LLMConfig['provider'],
-        apiKey: '',
+        apiKey: dto.api_key || '',
         hasKey: dto.has_key,
         model: dto.model,
         baseUrl: dto.base_url,
@@ -165,7 +249,6 @@ export const useChatStore = defineStore('chat', () => {
           model: dto.model,
           baseUrl: dto.base_url,
           isActive: dto.is_active,
-          // 如果传了新 key，保留内存中的 apiKey
           apiKey: data.apiKey !== undefined ? data.apiKey : configs.value[idx].apiKey,
         }
       }
@@ -202,24 +285,28 @@ export const useChatStore = defineStore('chat', () => {
     visible.value = true
   }
 
-  function clearMessages() {
-    messages.value = []
-  }
-
   async function sendMessage(content: string, clusterId?: number) {
     if (!content.trim() || loading.value) return
     const cfg = activeConfig.value
-    if (!cfg || (!cfg.hasKey && !cfg.apiKey)) return
+    if (!cfg || !cfg.apiKey) return
 
-    // 如果内存中没有 apiKey（从后端加载时为空），需要提示用户重新输入
-    if (!cfg.apiKey && cfg.hasKey) {
-      messages.value.push({
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: '该配置的 API Key 已加密存储在后端，请在设置页重新输入 Key 后使用。',
-        timestamp: Date.now(),
-      })
-      return
+    // 如果没有对话，自动创建
+    let convId = currentConversationId.value
+    if (!convId) {
+      try {
+        const conv = await createConversation()
+        conversations.value.unshift({
+          id: conv.id,
+          title: conv.title,
+          message_count: 0,
+          created_at: conv.created_at,
+          updated_at: conv.updated_at,
+        })
+        convId = conv.id
+        currentConversationId.value = convId
+      } catch {
+        return
+      }
     }
 
     // 用户消息
@@ -230,6 +317,10 @@ export const useChatStore = defineStore('chat', () => {
       timestamp: Date.now(),
     }
     messages.value.push(userMsg)
+    loading.value = true
+
+    // 保存用户消息到后端
+    createMessage(convId, 'user', content.trim()).catch(() => {})
 
     // 助手占位
     const assistantMsg: ChatMessage = {
@@ -239,7 +330,6 @@ export const useChatStore = defineStore('chat', () => {
       timestamp: Date.now(),
     }
     messages.value.push(assistantMsg)
-    loading.value = true
 
     const history = messages.value.slice(0, -2).map(m => ({
       role: m.role,
@@ -249,6 +339,8 @@ export const useChatStore = defineStore('chat', () => {
     const systemPrompt = buildSystemPrompt(clusterId)
     const controller = new AbortController()
     currentController.value = controller
+
+    let fullReply = ''
 
     try {
       const response = await fetch(`${cfg.baseUrl}/v1/chat/completions`, {
@@ -289,12 +381,13 @@ export const useChatStore = defineStore('chat', () => {
           const trimmed = line.trim()
           if (!trimmed || !trimmed.startsWith('data: ')) continue
           const data = trimmed.slice(6)
-          if (data === '[DONE]') return
+          if (data === '[DONE]') break
           try {
             const parsed = JSON.parse(data)
             const delta = parsed.choices?.[0]?.delta?.content
             if (delta) {
               assistantMsg.content += delta
+              fullReply += delta
             }
           } catch { /* skip */ }
         }
@@ -308,6 +401,11 @@ export const useChatStore = defineStore('chat', () => {
     } finally {
       loading.value = false
       currentController.value = null
+    }
+
+    // 保存助手回复到后端
+    if (fullReply && convId) {
+      createMessage(convId, 'assistant', fullReply).catch(() => {})
     }
   }
 
@@ -351,9 +449,15 @@ export const useChatStore = defineStore('chat', () => {
     layoutMode,
     configLoading,
     configLoaded,
+    conversations,
+    currentConversationId,
     activeConfig,
     hasApiKey,
     loadConfigsFromAPI,
+    loadConversations,
+    switchConversation,
+    createNewConversation,
+    removeConversation,
     setActiveConfig,
     addConfig,
     updateConfig,
@@ -361,7 +465,6 @@ export const useChatStore = defineStore('chat', () => {
     openChat,
     toggleChat,
     toggleLayoutMode,
-    clearMessages,
     sendMessage,
     stopGeneration,
   }

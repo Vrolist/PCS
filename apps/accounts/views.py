@@ -7,7 +7,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import User, PasswordResetCode, UserLog, SystemConfig, UserLLMConfig
+from .models import User, PasswordResetCode, UserLog, SystemConfig, UserLLMConfig, ChatConversation, ChatMessage
 from .serializers import (
     LoginSerializer,
     RegisterSerializer,
@@ -20,6 +20,9 @@ from .serializers import (
     AdminUserUpdateSerializer,
     AdminChangePasswordSerializer,
     UserLLMConfigSerializer,
+    ChatConversationSerializer,
+    ChatConversationListSerializer,
+    ChatMessageSerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -362,3 +365,67 @@ def llm_config_set_active_view(request, pk):
     config.is_active = True
     config.save(update_fields=["is_active"])
     return Response({"detail": "已设为当前配置", "id": config.pk})
+
+
+# ---- AI 助手对话 CRUD ----
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def chat_conversation_list_view(request):
+    """GET/POST /api/auth/chat/conversations/"""
+    if request.method == "GET":
+        qs = ChatConversation.objects.filter(user=request.user)
+        serializer = ChatConversationListSerializer(qs, many=True)
+        return Response(serializer.data)
+
+    # POST - 创建新对话
+    serializer = ChatConversationSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    serializer.save(user=request.user)
+    return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["GET", "PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def chat_conversation_detail_view(request, pk):
+    """GET/PATCH/DELETE /api/auth/chat/conversations/:id/"""
+    try:
+        conv = ChatConversation.objects.get(pk=pk, user=request.user)
+    except ChatConversation.DoesNotExist:
+        return Response({"detail": "对话不存在"}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == "GET":
+        serializer = ChatConversationSerializer(conv)
+        return Response(serializer.data)
+
+    if request.method == "DELETE":
+        conv.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    # PATCH - 重命名
+    serializer = ChatConversationSerializer(conv, data=request.data, partial=True)
+    serializer.is_valid(raise_exception=True)
+    serializer.save()
+    return Response(serializer.data)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def chat_message_create_view(request, pk):
+    """POST /api/auth/chat/conversations/:id/messages/ - 添加消息"""
+    try:
+        conv = ChatConversation.objects.get(pk=pk, user=request.user)
+    except ChatConversation.DoesNotExist:
+        return Response({"detail": "对话不存在"}, status=status.HTTP_404_NOT_FOUND)
+
+    serializer = ChatMessageSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    serializer.save(conversation=conv)
+
+    # 如果是第一条用户消息，自动用其内容生成标题
+    if conv.messages.count() == 1 and not conv.title:
+        content = serializer.validated_data.get('content', '')
+        conv.title = content[:50]
+        conv.save(update_fields=['title'])
+
+    return Response(serializer.data, status=status.HTTP_201_CREATED)
