@@ -18,14 +18,8 @@
             <button class="chat-action-btn" @click="chatStore.toggleLayoutMode" title="切换为浮动模式">
               <el-icon :size="14"><DCaret /></el-icon>
             </button>
-            <button class="chat-action-btn" @click="goSettings" title="设置">
-              <el-icon :size="14"><Setting /></el-icon>
-            </button>
             <button class="chat-action-btn" @click="handleNewConversation" title="新对话">
               <el-icon :size="14"><Plus /></el-icon>
-            </button>
-            <button class="chat-action-btn" @click="chatStore.visible = false" title="关闭">
-              <el-icon :size="14"><Close /></el-icon>
             </button>
           </div>
         </div>
@@ -137,9 +131,7 @@
             </div>
             <div class="chat-header-actions">
               <button class="chat-action-btn" @click="chatStore.toggleLayoutMode" title="切换为侧边栏模式"><el-icon :size="14"><FullScreen /></el-icon></button>
-              <button class="chat-action-btn" @click="goSettings" title="设置"><el-icon :size="14"><Setting /></el-icon></button>
               <button class="chat-action-btn" @click="handleNewConversation" title="新对话"><el-icon :size="14"><Plus /></el-icon></button>
-              <button class="chat-action-btn" @click="chatStore.visible = false" title="关闭"><el-icon :size="14"><Close /></el-icon></button>
             </div>
           </div>
           <!-- API 未配置提示 -->
@@ -230,7 +222,7 @@ import { useClusterStore } from '@/stores/cluster'
 import {
   ChatDotRound, Close, Setting, Monitor, User, Promotion,
   DataAnalysis, Warning, MagicStick, CopyDocument, WarningFilled,
-  VideoPause, CircleCheck, DCaret, FullScreen, Plus,
+  VideoPause, CircleCheck, DCaret, FullScreen, Plus, Clock,
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 

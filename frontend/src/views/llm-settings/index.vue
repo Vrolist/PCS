@@ -393,8 +393,14 @@ async function handleTest(cfg: LLMConfig) {
       const data = await res.json()
       const reply = data.choices?.[0]?.message?.content || ''
       ElMessage.success(`[${cfg.name}] 连接成功: "${reply.trim()}"`)
-      // 测试通过，保存 key 到后端
-      await chatStore.updateConfig(cfg.id, { apiKey: cfg.apiKey })
+      // 测试通过，保存所有配置到后端
+      await chatStore.updateConfig(cfg.id, {
+        name: cfg.name,
+        provider: cfg.provider,
+        model: cfg.model,
+        baseUrl: cfg.baseUrl,
+        apiKey: cfg.apiKey,
+      })
       // 自动折叠
       foldConfig(cfg.id)
     } else {
