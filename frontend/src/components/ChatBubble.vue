@@ -87,6 +87,7 @@
         <!-- 输入区 -->
         <div class="chat-input-area">
           <div v-if="chatStore.configs.length > 0" class="chat-model-row">
+            <span class="model-label">模型</span>
             <el-select v-model="chatStore.activeConfigId" size="small" class="model-selector-input" popper-class="model-selector-popper" @change="onModelChange">
               <el-option v-for="cfg in chatStore.configs" :key="cfg.id" :label="cfg.name" :value="cfg.id">
                 <span>{{ cfg.name }}</span>
@@ -195,6 +196,7 @@
           <!-- 输入区 -->
           <div class="chat-input-area">
             <div v-if="chatStore.configs.length > 0" class="chat-model-row">
+              <span class="model-label">模型</span>
               <el-select v-model="chatStore.activeConfigId" size="small" class="model-selector-input" popper-class="model-selector-popper" @change="onModelChange">
                 <el-option v-for="cfg in chatStore.configs" :key="cfg.id" :label="cfg.name" :value="cfg.id">
                   <span>{{ cfg.name }}</span>
@@ -502,17 +504,33 @@ function renderMarkdown(text: string): string {
 }
 
 /* 输入区模型选择器 */
+.chat-model-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border-color);
+}
+.model-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
 .model-selector-input {
   width: 140px;
   flex-shrink: 0;
 }
 .model-selector-input :deep(.el-select__wrapper) {
-  background: transparent;
-  border: none;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
   box-shadow: none;
   padding: 0 4px;
-  font-size: 11px;
-  min-height: 0;
+  font-size: 12px;
+  min-height: 28px;
+  border-radius: 4px;
+}
+.model-selector-input :deep(.el-select__wrapper:hover) {
+  border-color: #409eff;
 }
 .model-selector-input :deep(.el-select__placeholder) {
   font-size: 11px;
@@ -779,7 +797,7 @@ function renderMarkdown(text: string): string {
   line-height: 1.5;
   resize: none;
   font-family: inherit;
-  min-height: 20px;
+  min-height: 40px;
   max-height: 120px;
 }
 .chat-textarea::placeholder {
