@@ -1,45 +1,143 @@
 <template>
-  <!-- 悬浮气泡 -->
-  <div class="chat-bubble" :class="{ active: chatStore.visible }" @click="chatStore.toggleChat">
+  <!-- 侧边栏模式（固定右侧，始终显示） -->
+  <teleport to="body">
+    <div v-if="chatStore.layoutMode === 'sidebar'" class="chat-panel sidebar">
+      <div class="chat-container">
+        <!-- 头部 -->
+        <div class="chat-header">
+          <div class="chat-header-left">
+            <div class="chat-avatar-wrap">
+              <el-icon :size="18"><Monitor /></el-icon>
+            </div>
+            <div>
+              <h3 class="chat-title">AI 助手</h3>
+              <span class="chat-subtitle">PVE 集群运维分析</span>
+            </div>
+          </div>
+          <div class="chat-header-actions">
+            <button class="chat-action-btn" @click="chatStore.toggleLayoutMode" title="切换为浮动模式">
+              <el-icon :size="14"><DCaret /></el-icon>
+            </button>
+            <button class="chat-action-btn" @click="goSettings" title="设置">
+              <el-icon :size="14"><Setting /></el-icon>
+            </button>
+            <button class="chat-action-btn" @click="chatStore.toggleLayoutMode" title="关闭">
+              <el-icon :size="14"><Close /></el-icon>
+            </button>
+          </div>
+        </div>
+
+        <!-- API 未配置提示 -->
+        <div v-if="!hasApiKey" class="chat-no-config">
+          <el-icon :size="20"><WarningFilled /></el-icon>
+          <span>尚未配置 API Key，请先前往设置</span>
+          <el-button size="small" type="primary" link @click="goSettings">去设置</el-button>
+        </div>
+
+        <!-- 消息列表 -->
+        <div class="chat-messages" ref="messagesRef">
+          <!-- 空状态 -->
+          <div v-if="chatStore.messages.length === 0" class="chat-empty">
+            <div class="chat-empty-icon">
+              <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                <rect width="48" height="48" rx="12" fill="url(#grad1)" />
+                <path d="M16 18h16M16 24h12M16 30h8" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+                <defs><linearGradient id="grad1" x1="0" y1="0" x2="48" y2="48"><stop stop-color="#409eff"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient></defs>
+              </svg>
+            </div>
+            <h4 class="chat-empty-title">AI 集群运维助手</h4>
+            <p class="chat-empty-desc">我可以帮你分析集群状态、排查问题、给出优化建议</p>
+            <div class="chat-quick-actions">
+              <button class="quick-btn" @click="sendQuick('帮我分析一下当前集群的整体健康状况')">
+                <el-icon><DataAnalysis /></el-icon> 健康分析
+              </button>
+              <button class="quick-btn" @click="sendQuick('哪些资源的使用率过高？需要关注？')">
+                <el-icon><Warning /></el-icon> 资源预警
+              </button>
+              <button class="quick-btn" @click="sendQuick('请给出集群性能优化建议')">
+                <el-icon><MagicStick /></el-icon> 优化建议
+              </button>
+              <button class="quick-btn" @click="sendQuick('当前集群有哪些潜在风险？')">
+                <el-icon><CircleCheck /></el-icon> 风险排查
+              </button>
+            </div>
+          </div>
+          <!-- 消息 -->
+          <template v-for="msg in chatStore.messages" :key="msg.id">
+            <div :class="['chat-msg', msg.role]">
+              <div v-if="msg.role === 'assistant'" class="msg-avatar"><el-icon :size="16"><Monitor /></el-icon></div>
+              <div class="msg-body">
+                <div class="msg-content" v-html="renderMarkdown(msg.content)" />
+                <div v-if="msg.role === 'assistant' && msg.content && !chatStore.loading" class="msg-actions">
+                  <button class="msg-action-btn" @click="copyMessage(msg.content)" title="复制"><el-icon :size="12"><CopyDocument /></el-icon></button>
+                </div>
+              </div>
+              <div v-if="msg.role === 'user'" class="msg-avatar user-avatar"><el-icon :size="16"><User /></el-icon></div>
+            </div>
+          </template>
+          <!-- 加载中 -->
+          <div v-if="chatStore.loading && !streamingContent" class="chat-msg assistant">
+            <div class="msg-avatar"><el-icon :size="16"><Monitor /></el-icon></div>
+            <div class="msg-body">
+              <div class="typing-indicator"><span></span><span></span><span></span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 输入区 -->
+        <div class="chat-input-area">
+          <div v-if="chatStore.configs.length > 0" class="chat-model-row">
+            <el-select v-model="chatStore.activeConfigId" size="small" class="model-selector-input" popper-class="model-selector-popper" @change="onModelChange">
+              <el-option v-for="cfg in chatStore.configs" :key="cfg.id" :label="cfg.name" :value="cfg.id">
+                <span>{{ cfg.name }}</span>
+                <span class="model-selector-detail">{{ cfg.model }}</span>
+              </el-option>
+            </el-select>
+          </div>
+          <div class="chat-input-wrap">
+            <textarea ref="inputRef" v-model="inputText" class="chat-textarea" :placeholder="hasApiKey ? '输入消息，Shift+Enter 换行...' : '请先配置 API Key'" :disabled="!hasApiKey" rows="1" @keydown.enter.exact.prevent="handleSend" @input="autoResize" />
+            <div class="chat-input-actions">
+              <button v-if="chatStore.loading" class="input-btn stop-btn" @click="chatStore.stopGeneration" title="停止生成"><el-icon :size="16"><VideoPause /></el-icon></button>
+              <button v-else class="input-btn send-btn" :class="{ active: inputText.trim() }" :disabled="!inputText.trim() || !hasApiKey" @click="handleSend" title="发送"><el-icon :size="16"><Promotion /></el-icon></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </teleport>
+
+  <!-- 浮动模式（悬浮气泡 + 动画面板） -->
+  <div v-if="chatStore.layoutMode === 'float'" class="chat-bubble" :class="{ active: chatStore.visible }" @click="chatStore.toggleChat">
     <transition name="bubble-icon" mode="out-in">
       <el-icon v-if="!chatStore.visible" :size="24"><ChatDotRound /></el-icon>
       <el-icon v-else :size="24"><Close /></el-icon>
     </transition>
   </div>
-
-  <!-- 对话框 -->
   <teleport to="body">
     <transition name="chat-slide">
-      <div v-if="chatStore.visible" class="chat-panel">
+      <div v-if="chatStore.visible && chatStore.layoutMode === 'float'" class="chat-panel float">
         <div class="chat-container">
           <!-- 头部 -->
           <div class="chat-header">
             <div class="chat-header-left">
-              <div class="chat-avatar-wrap">
-                <el-icon :size="18"><Monitor /></el-icon>
-              </div>
+              <div class="chat-avatar-wrap"><el-icon :size="18"><Monitor /></el-icon></div>
               <div>
                 <h3 class="chat-title">AI 助手</h3>
                 <span class="chat-subtitle">PVE 集群运维分析</span>
               </div>
             </div>
             <div class="chat-header-actions">
-              <button class="chat-action-btn" @click="goSettings" title="设置">
-                <el-icon :size="14"><Setting /></el-icon>
-              </button>
-              <button class="chat-action-btn" @click="chatStore.visible = false" title="关闭">
-                <el-icon :size="14"><Close /></el-icon>
-              </button>
+              <button class="chat-action-btn" @click="chatStore.toggleLayoutMode" title="切换为侧边栏模式"><el-icon :size="14"><FullScreen /></el-icon></button>
+              <button class="chat-action-btn" @click="goSettings" title="设置"><el-icon :size="14"><Setting /></el-icon></button>
+              <button class="chat-action-btn" @click="chatStore.visible = false" title="关闭"><el-icon :size="14"><Close /></el-icon></button>
             </div>
           </div>
-
           <!-- API 未配置提示 -->
           <div v-if="!hasApiKey" class="chat-no-config">
             <el-icon :size="20"><WarningFilled /></el-icon>
             <span>尚未配置 API Key，请先前往设置</span>
             <el-button size="small" type="primary" link @click="goSettings">去设置</el-button>
           </div>
-
           <!-- 消息列表 -->
           <div class="chat-messages" ref="messagesRef">
             <!-- 空状态 -->
@@ -55,108 +153,55 @@
               <p class="chat-empty-desc">我可以帮你分析集群状态、排查问题、给出优化建议</p>
               <div class="chat-quick-actions">
                 <button class="quick-btn" @click="sendQuick('帮我分析一下当前集群的整体健康状况')">
-                  <el-icon><DataAnalysis /></el-icon>
-                  健康分析
+                  <el-icon><DataAnalysis /></el-icon> 健康分析
                 </button>
                 <button class="quick-btn" @click="sendQuick('哪些资源的使用率过高？需要关注？')">
-                  <el-icon><Warning /></el-icon>
-                  资源预警
+                  <el-icon><Warning /></el-icon> 资源预警
                 </button>
                 <button class="quick-btn" @click="sendQuick('请给出集群性能优化建议')">
-                  <el-icon><MagicStick /></el-icon>
-                  优化建议
+                  <el-icon><MagicStick /></el-icon> 优化建议
                 </button>
                 <button class="quick-btn" @click="sendQuick('当前集群有哪些潜在风险？')">
-                  <el-icon><CircleCheck /></el-icon>
-                  风险排查
+                  <el-icon><CircleCheck /></el-icon> 风险排查
                 </button>
               </div>
             </div>
-
             <!-- 消息 -->
             <template v-for="msg in chatStore.messages" :key="msg.id">
               <div :class="['chat-msg', msg.role]">
-                <div v-if="msg.role === 'assistant'" class="msg-avatar">
-                  <el-icon :size="16"><Monitor /></el-icon>
-                </div>
+                <div v-if="msg.role === 'assistant'" class="msg-avatar"><el-icon :size="16"><Monitor /></el-icon></div>
                 <div class="msg-body">
                   <div class="msg-content" v-html="renderMarkdown(msg.content)" />
                   <div v-if="msg.role === 'assistant' && msg.content && !chatStore.loading" class="msg-actions">
-                    <button class="msg-action-btn" @click="copyMessage(msg.content)" title="复制">
-                      <el-icon :size="12"><CopyDocument /></el-icon>
-                    </button>
+                    <button class="msg-action-btn" @click="copyMessage(msg.content)" title="复制"><el-icon :size="12"><CopyDocument /></el-icon></button>
                   </div>
                 </div>
-                <div v-if="msg.role === 'user'" class="msg-avatar user-avatar">
-                  <el-icon :size="16"><User /></el-icon>
-                </div>
+                <div v-if="msg.role === 'user'" class="msg-avatar user-avatar"><el-icon :size="16"><User /></el-icon></div>
               </div>
             </template>
-
             <!-- 加载中 -->
             <div v-if="chatStore.loading && !streamingContent" class="chat-msg assistant">
-              <div class="msg-avatar">
-                <el-icon :size="16"><Monitor /></el-icon>
-              </div>
+              <div class="msg-avatar"><el-icon :size="16"><Monitor /></el-icon></div>
               <div class="msg-body">
-                <div class="typing-indicator">
-                  <span></span><span></span><span></span>
-                </div>
+                <div class="typing-indicator"><span></span><span></span><span></span></div>
               </div>
             </div>
           </div>
-
           <!-- 输入区 -->
           <div class="chat-input-area">
             <div v-if="chatStore.configs.length > 0" class="chat-model-row">
-              <el-select
-                v-model="chatStore.activeConfigId"
-                size="small"
-                class="model-selector-input"
-                popper-class="model-selector-popper"
-                @change="onModelChange"
-              >
-                <el-option
-                  v-for="cfg in chatStore.configs"
-                  :key="cfg.id"
-                  :label="cfg.name"
-                  :value="cfg.id"
-                >
+              <el-select v-model="chatStore.activeConfigId" size="small" class="model-selector-input" popper-class="model-selector-popper" @change="onModelChange">
+                <el-option v-for="cfg in chatStore.configs" :key="cfg.id" :label="cfg.name" :value="cfg.id">
                   <span>{{ cfg.name }}</span>
                   <span class="model-selector-detail">{{ cfg.model }}</span>
                 </el-option>
               </el-select>
             </div>
             <div class="chat-input-wrap">
-              <textarea
-                ref="inputRef"
-                v-model="inputText"
-                class="chat-textarea"
-                :placeholder="hasApiKey ? '输入消息，Shift+Enter 换行...' : '请先配置 API Key'"
-                :disabled="!hasApiKey"
-                rows="1"
-                @keydown.enter.exact.prevent="handleSend"
-                @input="autoResize"
-              />
+              <textarea ref="inputRef" v-model="inputText" class="chat-textarea" :placeholder="hasApiKey ? '输入消息，Shift+Enter 换行...' : '请先配置 API Key'" :disabled="!hasApiKey" rows="1" @keydown.enter.exact.prevent="handleSend" @input="autoResize" />
               <div class="chat-input-actions">
-                <button
-                  v-if="chatStore.loading"
-                  class="input-btn stop-btn"
-                  @click="chatStore.stopGeneration"
-                  title="停止生成"
-                >
-                  <el-icon :size="16"><VideoPause /></el-icon>
-                </button>
-                <button
-                  v-else
-                  class="input-btn send-btn"
-                  :class="{ active: inputText.trim() }"
-                  :disabled="!inputText.trim() || !hasApiKey"
-                  @click="handleSend"
-                  title="发送"
-                >
-                  <el-icon :size="16"><Promotion /></el-icon>
-                </button>
+                <button v-if="chatStore.loading" class="input-btn stop-btn" @click="chatStore.stopGeneration" title="停止生成"><el-icon :size="16"><VideoPause /></el-icon></button>
+                <button v-else class="input-btn send-btn" :class="{ active: inputText.trim() }" :disabled="!inputText.trim() || !hasApiKey" @click="handleSend" title="发送"><el-icon :size="16"><Promotion /></el-icon></button>
               </div>
             </div>
           </div>
@@ -174,7 +219,7 @@ import { useClusterStore } from '@/stores/cluster'
 import {
   ChatDotRound, Close, Setting, Monitor, User, Promotion,
   DataAnalysis, Warning, MagicStick, CopyDocument, WarningFilled,
-  VideoPause, CircleCheck,
+  VideoPause, CircleCheck, DCaret, FullScreen,
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 
@@ -335,6 +380,22 @@ function renderMarkdown(text: string): string {
   overflow: hidden;
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.2), 0 0 0 1px var(--border-color);
   background: var(--bg-secondary);
+}
+/* 侧边栏模式 */
+.chat-panel.sidebar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
+  width: 420px;
+  height: 100vh;
+  border-radius: 0;
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.1), 0 0 0 1px var(--border-color);
+  border-left: 1px solid var(--border-color);
+}
+.chat-panel.sidebar .chat-container {
+  max-height: 100vh;
 }
 .chat-container {
   display: flex;
@@ -731,6 +792,9 @@ function renderMarkdown(text: string): string {
 /* ===== 暗色适配 ===== */
 :global(.dark) .chat-panel {
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+:global(.dark) .chat-panel.sidebar {
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 /* 模型选择器下拉弹窗 z-index */

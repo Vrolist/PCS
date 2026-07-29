@@ -23,6 +23,7 @@ function genId(): string {
 
 const STORAGE_KEY = 'pcs_llm_configs'
 const ACTIVE_KEY = 'pcs_llm_active_id'
+const LAYOUT_KEY = 'pcs_chat_layout'
 
 function loadConfigs(): LLMConfig[] {
   try {
@@ -99,6 +100,18 @@ export function createDefaultConfig(provider: LLMConfig['provider'] = 'deepseek'
   }
 }
 
+function loadLayoutMode(): 'float' | 'sidebar' {
+  try {
+    const v = localStorage.getItem(LAYOUT_KEY)
+    if (v === 'float' || v === 'sidebar') return v
+  } catch { /* ignore */ }
+  return 'float'
+}
+
+function saveLayoutMode(mode: 'float' | 'sidebar') {
+  localStorage.setItem(LAYOUT_KEY, mode)
+}
+
 export const useChatStore = defineStore('chat', () => {
   const visible = ref(false)
   const messages = ref<ChatMessage[]>([])
@@ -106,6 +119,7 @@ export const useChatStore = defineStore('chat', () => {
   const configs = ref<LLMConfig[]>(loadConfigs())
   const activeConfigId = ref(loadActiveId())
   const currentController = ref<AbortController | null>(null)
+  const layoutMode = ref<'float' | 'sidebar'>(loadLayoutMode())
 
   // 如果没有有效的 activeConfigId，默认选中第一个
   if (!configs.value.find(c => c.id === activeConfigId.value) && configs.value.length > 0) {
@@ -165,6 +179,15 @@ export const useChatStore = defineStore('chat', () => {
 
   function toggleChat() {
     visible.value = !visible.value
+  }
+
+  function toggleLayoutMode() {
+    layoutMode.value = layoutMode.value === 'float' ? 'sidebar' : 'float'
+    saveLayoutMode(layoutMode.value)
+    // 切到侧边栏时自动打开
+    if (layoutMode.value === 'sidebar') {
+      visible.value = true
+    }
   }
 
   function clearMessages() {
@@ -305,6 +328,7 @@ export const useChatStore = defineStore('chat', () => {
     loading,
     configs,
     activeConfigId,
+    layoutMode,
     activeConfig,
     hasApiKey,
     setActiveConfig,
@@ -313,6 +337,7 @@ export const useChatStore = defineStore('chat', () => {
     removeConfig,
     openChat,
     toggleChat,
+    toggleLayoutMode,
     clearMessages,
     sendMessage,
     stopGeneration,

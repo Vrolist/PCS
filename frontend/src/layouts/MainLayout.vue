@@ -12,7 +12,7 @@
       class="sidebar-resize-handle"
       @mousedown="onDragStart"
     />
-    <div class="layout-main">
+    <div class="layout-main" :class="{ 'has-chat-sidebar': chatStore.layoutMode === 'sidebar' }">
       <AppHeader />
       <main class="main-content">
         <router-view />
@@ -29,9 +29,11 @@ import AppHeader from '@/components/AppHeader.vue'
 import ChatBubble from '@/components/ChatBubble.vue'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
+import { useChatStore } from '@/stores/chat'
 
 const appStore = useAppStore()
 const authStore = useAuthStore()
+const chatStore = useChatStore()
 
 let dragging = false
 
@@ -107,6 +109,10 @@ onUnmounted(() => {
   flex-direction: column;
   min-width: 0;
   overflow: hidden;
+  transition: margin-right 0.3s;
+}
+.layout-main.has-chat-sidebar {
+  margin-right: 420px;
 }
 .main-content {
   flex: 1;
