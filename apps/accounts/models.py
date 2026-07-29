@@ -1,7 +1,19 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils import timezone
+from cryptography.fernet import Fernet
+from django.conf import settings
+import base64
+import hashlib
 import secrets
+
+
+def _get_fernet():
+    """用 Django SECRET_KEY 派生加密密钥"""
+    key = base64.urlsafe_b64encode(
+        hashlib.sha256(settings.SECRET_KEY.encode()).digest()
+    )
+    return Fernet(key)
 
 
 class User(AbstractUser):
@@ -106,3 +118,52 @@ class SystemConfig(models.Model):
     def set(cls, key, value):
         obj, _ = cls.objects.update_or_create(key=key, defaults={"value": str(value)})
         return obj
+
+
+class UserLLMConfig(models.Model):
+    """用户的大模型配置"""
+    PROVIDER_CHOICES = [
+        ('deepseek', 'DeepSeek'),
+        ('kimi', 'Kimi'),
+        ('glm', 'GLM'),
+        ('openai', 'OpenAI'),
+        ('custom', '自定义'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='llm_configs')
+    name = models.CharField('配置名称', max_length=64, default='')
+    provider = models.CharField('服务提供商', max_length=16, choices=PROVIDER_CHOICES, default='deepseek')
+    api_key_encrypted = models.TextField('API Key（加密）', blank=True, default='')
+    model = models.CharField('模型', max_length=128, default='')
+    base_url = models.CharField('API 地址', max_length=256, blank=True, default='')
+    is_active = models.BooleanField('当前选中', default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-is_active', 'created_at']
+        verbose_name = '用户模型配置'
+        verbose_name_plural = '用户模型配置'
+
+    def __str__(self):
+        return f'{self.user.username} - {self.name}'
+
+    @property
+    def api_key(self):
+        if not self.api_key_encrypted:
+            return ''
+        try:
+            return _get_fernet().decrypt(self.api_key_encrypted.encode()).decode()
+        except Exception:
+            return ''
+
+    @api_key.setter
+    def api_key(self, value):
+        if value:
+            self.api_key_encrypted = _get_fernet().encrypt(value.encode()).decode()
+        else:
+            self.api_key_encrypted = ''
+
+    @property
+    def has_key(self) -> bool:
+        return bool(self.api_key_encrypted)

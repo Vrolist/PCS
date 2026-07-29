@@ -7,7 +7,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import User, PasswordResetCode, UserLog, SystemConfig
+from .models import User, PasswordResetCode, UserLog, SystemConfig, UserLLMConfig
 from .serializers import (
     LoginSerializer,
     RegisterSerializer,
@@ -19,6 +19,7 @@ from .serializers import (
     AdminUserCreateSerializer,
     AdminUserUpdateSerializer,
     AdminChangePasswordSerializer,
+    UserLLMConfigSerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -304,3 +305,60 @@ def toggle_registration_view(request):
     enabled = new_value == 'True'
     log_user_action(request.user, "update", "system", "", f"注册开关已{'开启' if enabled else '关闭'}", request)
     return Response({"detail": f"注册功能已{'开启' if enabled else '关闭'}", "enabled": enabled})
+
+
+# ---- LLM 配置 CRUD ----
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def llm_config_list_view(request):
+    """GET/POST /api/auth/llm-configs/"""
+    if request.method == "GET":
+        qs = UserLLMConfig.objects.filter(user=request.user)
+        serializer = UserLLMConfigSerializer(qs, many=True)
+        return Response(serializer.data)
+
+    # POST
+    serializer = UserLLMConfigSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    serializer.save(user=request.user)
+    log_user_action(request.user, "create", "llm_config", "", f"新增 LLM 配置: {serializer.data.get('name')}", request)
+    return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def llm_config_detail_view(request, pk):
+    """PATCH/DELETE /api/auth/llm-configs/:id/"""
+    try:
+        config = UserLLMConfig.objects.get(pk=pk, user=request.user)
+    except UserLLMConfig.DoesNotExist:
+        return Response({"detail": "配置不存在"}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == "DELETE":
+        config.delete()
+        log_user_action(request.user, "delete", "llm_config", str(pk), "删除 LLM 配置", request)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    # PATCH
+    serializer = UserLLMConfigSerializer(config, data=request.data, partial=True)
+    serializer.is_valid(raise_exception=True)
+    serializer.save()
+    log_user_action(request.user, "update", "llm_config", str(pk), f"更新 LLM 配置: {serializer.data.get('name')}", request)
+    return Response(serializer.data)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def llm_config_set_active_view(request, pk):
+    """POST /api/auth/llm-configs/:id/set-active/ - 设为当前选中"""
+    try:
+        config = UserLLMConfig.objects.get(pk=pk, user=request.user)
+    except UserLLMConfig.DoesNotExist:
+        return Response({"detail": "配置不存在"}, status=status.HTTP_404_NOT_FOUND)
+
+    # 该用户所有配置 is_active 设为 False
+    UserLLMConfig.objects.filter(user=request.user).update(is_active=False)
+    config.is_active = True
+    config.save(update_fields=["is_active"])
+    return Response({"detail": "已设为当前配置", "id": config.pk})

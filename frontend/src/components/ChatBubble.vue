@@ -1,7 +1,7 @@
 <template>
   <!-- 侧边栏模式（固定右侧，始终显示） -->
   <teleport to="body">
-    <div v-if="chatStore.layoutMode === 'sidebar'" class="chat-panel sidebar">
+    <div v-if="chatStore.layoutMode === 'sidebar' && chatStore.visible" class="chat-panel sidebar">
       <div class="chat-container">
         <!-- 头部 -->
         <div class="chat-header">
@@ -21,7 +21,7 @@
             <button class="chat-action-btn" @click="goSettings" title="设置">
               <el-icon :size="14"><Setting /></el-icon>
             </button>
-            <button class="chat-action-btn" @click="chatStore.toggleLayoutMode" title="关闭">
+            <button class="chat-action-btn" @click="chatStore.visible = false" title="关闭">
               <el-icon :size="14"><Close /></el-icon>
             </button>
           </div>
@@ -105,6 +105,11 @@
       </div>
     </div>
   </teleport>
+
+  <!-- 侧边栏隐藏时的触发按钮 -->
+  <div v-if="chatStore.layoutMode === 'sidebar' && !chatStore.visible" class="sidebar-trigger" @click="chatStore.visible = true" title="打开 AI 助手">
+    <el-icon :size="20"><ChatDotRound /></el-icon>
+  </div>
 
   <!-- 浮动模式（悬浮气泡 + 动画面板） -->
   <div v-if="chatStore.layoutMode === 'float'" class="chat-bubble" :class="{ active: chatStore.visible }" @click="chatStore.toggleChat">
@@ -212,7 +217,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, watch } from 'vue'
+import { ref, computed, nextTick, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useChatStore } from '@/stores/chat'
 import { useClusterStore } from '@/stores/cluster'
@@ -232,6 +237,11 @@ const inputRef = ref<HTMLTextAreaElement>()
 const messagesRef = ref<HTMLDivElement>()
 
 const hasApiKey = computed(() => chatStore.hasApiKey)
+
+// 页面加载时从后端拉取 LLM 配置
+onMounted(() => {
+  chatStore.loadConfigsFromAPI()
+})
 
 // 流式内容用于判断是否显示打字指示器
 const streamingContent = computed(() => {
@@ -366,6 +376,30 @@ function renderMarkdown(text: string): string {
 .bubble-icon-leave-to {
   transform: scale(0.5);
   opacity: 0;
+}
+
+/* ===== 侧边栏触发按钮（隐藏时右下角悬浮） ===== */
+.sidebar-trigger {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  z-index: 9999;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #409eff, #8b5cf6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(64, 158, 255, 0.4);
+  transition: transform 0.2s, box-shadow 0.2s;
+  user-select: none;
+}
+.sidebar-trigger:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 24px rgba(64, 158, 255, 0.5);
 }
 
 /* ===== 对话面板 ===== */

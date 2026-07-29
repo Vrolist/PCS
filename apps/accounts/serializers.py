@@ -2,7 +2,7 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
-from .models import User, PasswordResetCode, UserLog
+from .models import User, PasswordResetCode, UserLog, UserLLMConfig
 
 
 class LoginSerializer(serializers.Serializer):
@@ -154,3 +154,29 @@ class UserLogSerializer(serializers.ModelSerializer):
         model = UserLog
         fields = ["id", "username", "action", "action_display", "resource_type", "resource_id",
                   "detail", "ip_address", "created_at"]
+
+
+class UserLLMConfigSerializer(serializers.ModelSerializer):
+    """用户 LLM 配置序列化（写入时接收明文 api_key，读出时只返回 has_key）"""
+    api_key = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    has_key = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = UserLLMConfig
+        fields = ['id', 'name', 'provider', 'api_key', 'has_key', 'model', 'base_url', 'is_active']
+
+    def create(self, validated_data):
+        api_key = validated_data.pop('api_key', '')
+        instance = UserLLMConfig(**validated_data)
+        instance.api_key = api_key
+        instance.save()
+        return instance
+
+    def update(self, instance, validated_data):
+        api_key = validated_data.pop('api_key', None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        if api_key is not None:
+            instance.api_key = api_key
+        instance.save()
+        return instance

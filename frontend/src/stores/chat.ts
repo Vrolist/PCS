@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
+import { fetchLLMConfigs, createLLMConfig, updateLLMConfig, deleteLLMConfig, setActiveLLMConfig } from '@/api/llm'
 
 export interface ChatMessage {
   id: string
@@ -9,96 +10,17 @@ export interface ChatMessage {
 }
 
 export interface LLMConfig {
-  id: string
+  id: number
   name: string
   provider: 'openai' | 'deepseek' | 'kimi' | 'glm' | 'custom'
   apiKey: string
+  hasKey: boolean
   model: string
   baseUrl: string
+  isActive: boolean
 }
 
-function genId(): string {
-  return Math.random().toString(36).slice(2, 10)
-}
-
-const STORAGE_KEY = 'pcs_llm_configs'
-const ACTIVE_KEY = 'pcs_llm_active_id'
 const LAYOUT_KEY = 'pcs_chat_layout'
-
-function loadConfigs(): LLMConfig[] {
-  try {
-    // 兼容旧版单配置格式
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed)) return parsed
-      // 旧版单对象 → 迁移
-      if (parsed.provider) {
-        const migrated: LLMConfig = {
-          id: genId(),
-          name: parsed.provider === 'custom' ? '自定义' : parsed.provider.charAt(0).toUpperCase() + parsed.provider.slice(1),
-          provider: parsed.provider,
-          apiKey: parsed.apiKey || '',
-          model: parsed.model || 'deepseek-v4-pro',
-          baseUrl: parsed.baseUrl || 'https://api.deepseek.com',
-        }
-        saveConfigs([migrated])
-        return [migrated]
-      }
-    }
-  } catch { /* ignore */ }
-  return [defaultConfig()]
-}
-
-function saveConfigs(configs: LLMConfig[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(configs))
-}
-
-function loadActiveId(): string {
-  try {
-    return localStorage.getItem(ACTIVE_KEY) || ''
-  } catch {
-    return ''
-  }
-}
-
-function saveActiveId(id: string) {
-  localStorage.setItem(ACTIVE_KEY, id)
-}
-
-function defaultConfig(): LLMConfig {
-  return {
-    id: genId(),
-    name: 'DeepSeek',
-    provider: 'deepseek',
-    apiKey: '',
-    model: 'deepseek-v4-pro',
-    baseUrl: 'https://api.deepseek.com',
-  }
-}
-
-const BASE_URL_MAP: Record<string, string> = {
-  deepseek: 'https://api.deepseek.com',
-  kimi: 'https://api.moonshot.cn',
-  glm: 'https://open.bigmodel.cn',
-  openai: 'https://api.openai.com',
-  custom: '',
-}
-
-export function createDefaultConfig(provider: LLMConfig['provider'] = 'deepseek'): LLMConfig {
-  return {
-    id: genId(),
-    name: provider === 'custom' ? '自定义' : provider.charAt(0).toUpperCase() + provider.slice(1),
-    provider,
-    apiKey: '',
-    model: provider === 'deepseek' ? 'deepseek-v4-pro'
-      : provider === 'kimi' ? 'kimi-k3'
-      : provider === 'glm' ? 'glm-5.2'
-      : provider === 'openai' ? 'gpt-5.6-sol'
-      : 'custom-model',
-    baseUrl: BASE_URL_MAP[provider] || '',
-  }
-}
 
 function loadLayoutMode(): 'float' | 'sidebar' {
   try {
@@ -112,65 +34,158 @@ function saveLayoutMode(mode: 'float' | 'sidebar') {
   localStorage.setItem(LAYOUT_KEY, mode)
 }
 
+const BASE_URL_MAP: Record<string, string> = {
+  deepseek: 'https://api.deepseek.com',
+  kimi: 'https://api.moonshot.cn',
+  glm: 'https://open.bigmodel.cn',
+  openai: 'https://api.openai.com',
+  custom: '',
+}
+
+export function createDefaultConfig(provider: LLMConfig['provider'] = 'deepseek'): Omit<LLMConfig, 'id'> {
+  return {
+    name: provider === 'custom' ? '自定义' : provider.charAt(0).toUpperCase() + provider.slice(1),
+    provider,
+    apiKey: '',
+    hasKey: false,
+    model: provider === 'deepseek' ? 'deepseek-v4-pro'
+      : provider === 'kimi' ? 'kimi-k3'
+      : provider === 'glm' ? 'glm-5.2'
+      : provider === 'openai' ? 'gpt-5.6-sol'
+      : 'custom-model',
+    baseUrl: BASE_URL_MAP[provider] || '',
+    isActive: false,
+  }
+}
+
 export const useChatStore = defineStore('chat', () => {
   const visible = ref(false)
   const messages = ref<ChatMessage[]>([])
   const loading = ref(false)
-  const configs = ref<LLMConfig[]>(loadConfigs())
-  const activeConfigId = ref(loadActiveId())
+  const configs = ref<LLMConfig[]>([])
+  const activeConfigId = ref<number | null>(null)
   const currentController = ref<AbortController | null>(null)
   const layoutMode = ref<'float' | 'sidebar'>(loadLayoutMode())
+  const configLoading = ref(false)
+  const configLoaded = ref(false)
 
-  // 如果没有有效的 activeConfigId，默认选中第一个
-  if (!configs.value.find(c => c.id === activeConfigId.value) && configs.value.length > 0) {
-    activeConfigId.value = configs.value[0].id
-    saveActiveId(activeConfigId.value)
+  // 异步从后端加载配置
+  async function loadConfigsFromAPI() {
+    if (configLoaded.value) return
+    configLoading.value = true
+    try {
+      const data: any[] = await fetchLLMConfigs()
+      configs.value = data.map(dto => ({
+        id: dto.id,
+        name: dto.name,
+        provider: dto.provider as LLMConfig['provider'],
+        apiKey: '',
+        hasKey: dto.has_key,
+        model: dto.model,
+        baseUrl: dto.base_url,
+        isActive: dto.is_active,
+      }))
+      // 恢复 active 状态
+      const active = configs.value.find(c => c.isActive)
+      if (active) {
+        activeConfigId.value = active.id
+      } else if (configs.value.length > 0) {
+        activeConfigId.value = configs.value[0].id
+      }
+      configLoaded.value = true
+    } catch (err) {
+      console.error('加载 LLM 配置失败:', err)
+    } finally {
+      configLoading.value = false
+    }
   }
-
-  // 自动保存配置变更到 localStorage
-  watch(configs, () => {
-    saveConfigs(configs.value)
-  }, { deep: true })
 
   const activeConfig = computed(() => {
     return configs.value.find(c => c.id === activeConfigId.value) || configs.value[0] || null
   })
 
-  const hasApiKey = computed(() => !!activeConfig.value?.apiKey)
+  const hasApiKey = computed(() => {
+    const cfg = activeConfig.value
+    return cfg ? cfg.hasKey || !!cfg.apiKey : false
+  })
 
-  function setActiveConfig(id: string) {
+  function setActiveConfig(id: number) {
     if (configs.value.find(c => c.id === id)) {
       activeConfigId.value = id
-      saveActiveId(id)
+      // 同步到后端
+      setActiveLLMConfig(id).catch(() => {})
     }
   }
 
-  function addConfig(config?: Partial<LLMConfig>) {
-    const cfg = config
-      ? { ...defaultConfig(), ...config, id: genId() }
-      : defaultConfig()
-    configs.value.push(cfg)
-    saveConfigs(configs.value)
-    return cfg
-  }
-
-  function updateConfig(id: string, data: Partial<LLMConfig>) {
-    const idx = configs.value.findIndex(c => c.id === id)
-    if (idx === -1) return
-    configs.value[idx] = { ...configs.value[idx], ...data }
-    saveConfigs(configs.value)
-  }
-
-  function removeConfig(id: string) {
-    const idx = configs.value.findIndex(c => c.id === id)
-    if (idx === -1) return
-    configs.value.splice(idx, 1)
-    if (activeConfigId.value === id) {
-      activeConfigId.value = configs.value[0]?.id || ''
-      if (activeConfigId.value) saveActiveId(activeConfigId.value)
-      else localStorage.removeItem(ACTIVE_KEY)
+  async function addConfig(data?: Partial<LLMConfig>) {
+    const defaults = createDefaultConfig()
+    const payload = {
+      name: data?.name ?? defaults.name,
+      provider: data?.provider ?? defaults.provider,
+      api_key: data?.apiKey ?? '',
+      model: data?.model ?? defaults.model,
+      base_url: data?.baseUrl ?? defaults.baseUrl,
     }
-    saveConfigs(configs.value)
+    try {
+      const dto = await createLLMConfig(payload)
+      const newCfg: LLMConfig = {
+        id: dto.id,
+        name: dto.name,
+        provider: dto.provider as LLMConfig['provider'],
+        apiKey: '',
+        hasKey: dto.has_key,
+        model: dto.model,
+        baseUrl: dto.base_url,
+        isActive: dto.is_active,
+      }
+      configs.value.push(newCfg)
+      return newCfg
+    } catch (err: any) {
+      throw new Error(err.response?.data?.detail || '创建配置失败')
+    }
+  }
+
+  async function updateConfig(id: number, data: Partial<LLMConfig>) {
+    const payload: Record<string, any> = {}
+    if (data.name !== undefined) payload.name = data.name
+    if (data.provider !== undefined) payload.provider = data.provider
+    if (data.apiKey !== undefined) payload.api_key = data.apiKey
+    if (data.model !== undefined) payload.model = data.model
+    if (data.baseUrl !== undefined) payload.base_url = data.baseUrl
+
+    try {
+      const dto = await updateLLMConfig(id, payload)
+      const idx = configs.value.findIndex(c => c.id === id)
+      if (idx !== -1) {
+        configs.value[idx] = {
+          ...configs.value[idx],
+          name: dto.name,
+          provider: dto.provider as LLMConfig['provider'],
+          hasKey: dto.has_key,
+          model: dto.model,
+          baseUrl: dto.base_url,
+          isActive: dto.is_active,
+          // 如果传了新 key，保留内存中的 apiKey
+          apiKey: data.apiKey !== undefined ? data.apiKey : configs.value[idx].apiKey,
+        }
+      }
+    } catch (err: any) {
+      throw new Error(err.response?.data?.detail || '更新配置失败')
+    }
+  }
+
+  async function removeConfig(id: number) {
+    try {
+      await deleteLLMConfig(id)
+      const idx = configs.value.findIndex(c => c.id === id)
+      if (idx === -1) return
+      configs.value.splice(idx, 1)
+      if (activeConfigId.value === id) {
+        activeConfigId.value = configs.value[0]?.id || null
+      }
+    } catch (err: any) {
+      throw new Error(err.response?.data?.detail || '删除配置失败')
+    }
   }
 
   function openChat() {
@@ -184,10 +199,7 @@ export const useChatStore = defineStore('chat', () => {
   function toggleLayoutMode() {
     layoutMode.value = layoutMode.value === 'float' ? 'sidebar' : 'float'
     saveLayoutMode(layoutMode.value)
-    // 切到侧边栏时自动打开
-    if (layoutMode.value === 'sidebar') {
-      visible.value = true
-    }
+    visible.value = true
   }
 
   function clearMessages() {
@@ -197,7 +209,18 @@ export const useChatStore = defineStore('chat', () => {
   async function sendMessage(content: string, clusterId?: number) {
     if (!content.trim() || loading.value) return
     const cfg = activeConfig.value
-    if (!cfg || !cfg.apiKey) return
+    if (!cfg || (!cfg.hasKey && !cfg.apiKey)) return
+
+    // 如果内存中没有 apiKey（从后端加载时为空），需要提示用户重新输入
+    if (!cfg.apiKey && cfg.hasKey) {
+      messages.value.push({
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: '该配置的 API Key 已加密存储在后端，请在设置页重新输入 Key 后使用。',
+        timestamp: Date.now(),
+      })
+      return
+    }
 
     // 用户消息
     const userMsg: ChatMessage = {
@@ -218,15 +241,12 @@ export const useChatStore = defineStore('chat', () => {
     messages.value.push(assistantMsg)
     loading.value = true
 
-    // 构建上下文消息
     const history = messages.value.slice(0, -2).map(m => ({
       role: m.role,
       content: m.content,
     }))
 
-    // 系统提示
     const systemPrompt = buildSystemPrompt(clusterId)
-
     const controller = new AbortController()
     currentController.value = controller
 
@@ -276,7 +296,7 @@ export const useChatStore = defineStore('chat', () => {
             if (delta) {
               assistantMsg.content += delta
             }
-          } catch { /* skip malformed */ }
+          } catch { /* skip */ }
         }
       }
     } catch (err: any) {
@@ -329,8 +349,11 @@ export const useChatStore = defineStore('chat', () => {
     configs,
     activeConfigId,
     layoutMode,
+    configLoading,
+    configLoaded,
     activeConfig,
     hasApiKey,
+    loadConfigsFromAPI,
     setActiveConfig,
     addConfig,
     updateConfig,

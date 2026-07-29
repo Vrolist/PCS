@@ -20,4 +20,9 @@ urlpatterns = [
     path("admin/users/<int:pk>/", views.AdminUserDetailView.as_view(), name="admin-user-detail"),
     path("admin/users/<int:user_id>/change-password/", views.admin_change_password_view, name="admin-change-password"),
     path("admin/users/<int:user_id>/toggle-active/", views.admin_toggle_user_active_view, name="admin-toggle-active"),
+    
+    # LLM 配置
+    path("llm-configs/", views.llm_config_list_view, name="auth-llm-configs"),
+    path("llm-configs/<int:pk>/", views.llm_config_detail_view, name="auth-llm-config-detail"),
+    path("llm-configs/<int:pk>/set-active/", views.llm_config_set_active_view, name="auth-llm-config-set-active"),
 ]

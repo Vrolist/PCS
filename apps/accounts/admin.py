@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
-from .models import User, PasswordResetCode, UserLog, SystemConfig
+from .models import User, PasswordResetCode, UserLog, SystemConfig, UserLLMConfig
 
 
 @admin.register(User)
@@ -32,3 +32,11 @@ class UserLogAdmin(admin.ModelAdmin):
 class SystemConfigAdmin(admin.ModelAdmin):
     list_display = ['key', 'value', 'updated_at']
     search_fields = ['key']
+
+
+@admin.register(UserLLMConfig)
+class UserLLMConfigAdmin(admin.ModelAdmin):
+    list_display = ['user', 'name', 'provider', 'model', 'is_active', 'has_key', 'created_at']
+    list_filter = ['provider', 'is_active']
+    search_fields = ['user__username', 'name']
+    readonly_fields = ['api_key_encrypted']

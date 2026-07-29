@@ -12,7 +12,7 @@
       class="sidebar-resize-handle"
       @mousedown="onDragStart"
     />
-    <div class="layout-main" :class="{ 'has-chat-sidebar': chatStore.layoutMode === 'sidebar' }">
+    <div class="layout-main" :class="{ 'has-chat-sidebar': chatStore.layoutMode === 'sidebar' && chatStore.visible }">
       <AppHeader />
       <main class="main-content">
         <router-view />

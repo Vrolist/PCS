@@ -194,7 +194,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import type { LLMConfig } from '@/stores/chat'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -205,26 +205,30 @@ import {
 
 const chatStore = useChatStore()
 
-const testingId = ref<string | null>(null)
-const showKeyMap = reactive<Record<string, boolean>>({})
-const foldedIds = reactive<Set<string>>(new Set())
+const testingId = ref<number | null>(null)
+const showKeyMap = reactive<Record<number, boolean>>({})
+const foldedIds = reactive<Set<number>>(new Set())
 
-// 已有 API Key 的配置默认折叠
-chatStore.configs.forEach(cfg => {
-  if (cfg.apiKey) {
-    foldedIds.add(cfg.id)
-  }
+// 页面加载时从后端拉取配置
+onMounted(async () => {
+  await chatStore.loadConfigsFromAPI()
+  // 已有 key 的配置默认折叠
+  chatStore.configs.forEach(cfg => {
+    if (cfg.hasKey) {
+      foldedIds.add(cfg.id)
+    }
+  })
 })
 
-function isFolded(id: string) {
+function isFolded(id: number) {
   return foldedIds.has(id)
 }
 
-function expandConfig(id: string) {
+function expandConfig(id: number) {
   foldedIds.delete(id)
 }
 
-function foldConfig(id: string) {
+function foldConfig(id: number) {
   foldedIds.add(id)
 }
 
@@ -246,7 +250,7 @@ function maskKey(key: string): string {
   return key.slice(0, 4) + '****' + key.slice(-4)
 }
 
-function toggleKey(id: string) {
+function toggleKey(id: number) {
   showKeyMap[id] = !showKeyMap[id]
 }
 
@@ -313,18 +317,26 @@ const presets = [
   },
 ]
 
-function addFromPreset(p: typeof presets[0]) {
-  chatStore.addConfig({ provider: p.provider, name: p.name })
-  ElMessage.success(`已添加 ${p.name} 配置`)
+async function addFromPreset(p: typeof presets[0]) {
+  try {
+    await chatStore.addConfig({ provider: p.provider, name: p.name })
+    ElMessage.success(`已添加 ${p.name} 配置`)
+  } catch (err: any) {
+    ElMessage.error(err.message)
+  }
 }
 
-function addNewConfig() {
-  const cfg = chatStore.addConfig()
-  showKeyMap[cfg.id] = false
-  ElMessage.success('已添加新配置')
+async function addNewConfig() {
+  try {
+    const cfg = await chatStore.addConfig()
+    showKeyMap[cfg.id] = false
+    ElMessage.success('已添加新配置')
+  } catch (err: any) {
+    ElMessage.error(err.message)
+  }
 }
 
-function onProviderChange(cfg: LLMConfig, val: string) {
+async function onProviderChange(cfg: LLMConfig, val: string) {
   const baseUrlMap: Record<string, string> = {
     deepseek: 'https://api.deepseek.com',
     kimi: 'https://api.moonshot.cn',
@@ -333,21 +345,26 @@ function onProviderChange(cfg: LLMConfig, val: string) {
     custom: '',
   }
   const models = modelMap[val] || []
-  chatStore.updateConfig(cfg.id, {
-    provider: val as LLMConfig['provider'],
-    baseUrl: baseUrlMap[val] || '',
-    model: models[0] || cfg.model,
-  })
+  try {
+    await chatStore.updateConfig(cfg.id, {
+      provider: val as LLMConfig['provider'],
+      baseUrl: baseUrlMap[val] || '',
+      model: models[0] || cfg.model,
+    })
+  } catch (err: any) {
+    ElMessage.error(err.message)
+  }
 }
 
-async function handleRemove(id: string) {
+async function handleRemove(id: number) {
   if (chatStore.configs.length <= 1) {
     ElMessage.warning('至少保留一个配置')
     return
   }
   try {
     await ElMessageBox.confirm('确定删除此配置？', '提示', { type: 'warning' })
-    chatStore.removeConfig(id)
+    await chatStore.removeConfig(id)
+    foldedIds.delete(id)
     ElMessage.success('已删除')
   } catch { /* canceled */ }
 }
@@ -376,7 +393,9 @@ async function handleTest(cfg: LLMConfig) {
       const data = await res.json()
       const reply = data.choices?.[0]?.message?.content || ''
       ElMessage.success(`[${cfg.name}] 连接成功: "${reply.trim()}"`)
-      // 测试通过，自动折叠
+      // 测试通过，保存 key 到后端
+      await chatStore.updateConfig(cfg.id, { apiKey: cfg.apiKey })
+      // 自动折叠
       foldConfig(cfg.id)
     } else {
       const body = await res.text()
