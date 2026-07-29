@@ -209,6 +209,13 @@ const testingId = ref<string | null>(null)
 const showKeyMap = reactive<Record<string, boolean>>({})
 const foldedIds = reactive<Set<string>>(new Set())
 
+// 已有 API Key 的配置默认折叠
+chatStore.configs.forEach(cfg => {
+  if (cfg.apiKey) {
+    foldedIds.add(cfg.id)
+  }
+})
+
 function isFolded(id: string) {
   return foldedIds.has(id)
 }

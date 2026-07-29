@@ -23,29 +23,7 @@
                 <span class="chat-subtitle">PVE 集群运维分析</span>
               </div>
             </div>
-            <div class="chat-header-center">
-              <el-select
-                v-if="chatStore.configs.length > 0"
-                v-model="chatStore.activeConfigId"
-                size="small"
-                class="model-selector"
-                @change="onModelChange"
-              >
-                <el-option
-                  v-for="cfg in chatStore.configs"
-                  :key="cfg.id"
-                  :label="cfg.name"
-                  :value="cfg.id"
-                >
-                  <span>{{ cfg.name }}</span>
-                  <span class="model-selector-detail">{{ cfg.model }}</span>
-                </el-option>
-              </el-select>
-            </div>
             <div class="chat-header-actions">
-              <button class="chat-action-btn" @click="chatStore.clearMessages" title="清空对话">
-                <el-icon :size="14"><Delete /></el-icon>
-              </button>
               <button class="chat-action-btn" @click="goSettings" title="设置">
                 <el-icon :size="14"><Setting /></el-icon>
               </button>
@@ -130,6 +108,25 @@
 
           <!-- 输入区 -->
           <div class="chat-input-area">
+            <div v-if="chatStore.configs.length > 0" class="chat-model-row">
+              <el-select
+                v-model="chatStore.activeConfigId"
+                size="small"
+                class="model-selector-input"
+                popper-class="model-selector-popper"
+                @change="onModelChange"
+              >
+                <el-option
+                  v-for="cfg in chatStore.configs"
+                  :key="cfg.id"
+                  :label="cfg.name"
+                  :value="cfg.id"
+                >
+                  <span>{{ cfg.name }}</span>
+                  <span class="model-selector-detail">{{ cfg.model }}</span>
+                </el-option>
+              </el-select>
+            </div>
             <div class="chat-input-wrap">
               <textarea
                 ref="inputRef"
@@ -175,7 +172,7 @@ import { useRouter } from 'vue-router'
 import { useChatStore } from '@/stores/chat'
 import { useClusterStore } from '@/stores/cluster'
 import {
-  ChatDotRound, Close, Delete, Setting, Monitor, User, Promotion,
+  ChatDotRound, Close, Setting, Monitor, User, Promotion,
   DataAnalysis, Warning, MagicStick, CopyDocument, WarningFilled,
   VideoPause, CircleCheck,
 } from '@element-plus/icons-vue'
@@ -401,25 +398,29 @@ function renderMarkdown(text: string): string {
   display: flex;
   gap: 4px;
 }
-.chat-header-center {
-  flex: 1;
+
+/* 模型选择器行 */
+.chat-model-row {
   display: flex;
-  justify-content: center;
-  padding: 0 8px;
-  min-width: 0;
+  justify-content: flex-end;
+  padding: 0 0 6px 0;
 }
-.model-selector {
+
+/* 输入区模型选择器 */
+.model-selector-input {
   width: 140px;
+  flex-shrink: 0;
 }
-.model-selector :deep(.el-select__wrapper) {
+.model-selector-input :deep(.el-select__wrapper) {
   background: transparent;
   border: none;
   box-shadow: none;
   padding: 0 4px;
-  font-size: 12px;
+  font-size: 11px;
+  min-height: 0;
 }
-.model-selector :deep(.el-select__placeholder) {
-  font-size: 12px;
+.model-selector-input :deep(.el-select__placeholder) {
+  font-size: 11px;
   color: var(--text-muted);
 }
 .model-selector-detail {
@@ -695,6 +696,7 @@ function renderMarkdown(text: string): string {
 .chat-input-actions {
   display: flex;
   align-items: center;
+  gap: 4px;
 }
 .input-btn {
   width: 32px;
@@ -729,5 +731,10 @@ function renderMarkdown(text: string): string {
 /* ===== 暗色适配 ===== */
 :global(.dark) .chat-panel {
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+/* 模型选择器下拉弹窗 z-index */
+:global(.model-selector-popper) {
+  z-index: 10001 !important;
 }
 </style>
