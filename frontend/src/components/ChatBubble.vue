@@ -15,6 +15,35 @@
             </div>
           </div>
           <div class="chat-header-actions">
+            <el-popover placement="bottom" :width="240" trigger="click" popper-class="chat-history-popover">
+              <template #reference>
+                <button class="chat-action-btn" title="历史对话">
+                  <el-icon :size="14"><Clock /></el-icon>
+                </button>
+              </template>
+              <div class="history-list">
+                <div class="history-list-header">
+                  <span class="history-list-title">历史对话</span>
+                  <span class="history-list-count">{{ chatStore.conversations.length }} 条</span>
+                </div>
+                <div v-if="chatStore.conversations.length === 0" class="history-empty">暂无对话记录</div>
+                <div
+                  v-for="c in chatStore.conversations"
+                  :key="c.id"
+                  class="history-item"
+                  :class="{ active: c.id === chatStore.currentConversationId }"
+                  @click="switchToConversation(c.id)"
+                >
+                  <div class="history-item-info">
+                    <div class="history-item-title">{{ c.title || '未命名对话' }}</div>
+                    <div class="history-item-meta">{{ c.message_count }} 条消息 · {{ formatDate(c.updated_at) }}</div>
+                  </div>
+                  <button class="history-item-del" @click.stop="handleRemoveConversation(c.id)" title="删除">
+                    <el-icon :size="12"><Close /></el-icon>
+                  </button>
+                </div>
+              </div>
+            </el-popover>
             <button class="chat-action-btn" @click="chatStore.toggleLayoutMode" title="切换为浮动模式">
               <el-icon :size="14"><DCaret /></el-icon>
             </button>
@@ -130,6 +159,33 @@
               </div>
             </div>
             <div class="chat-header-actions">
+              <el-popover placement="bottom" :width="240" trigger="click" popper-class="chat-history-popover">
+                <template #reference>
+                  <button class="chat-action-btn" title="历史对话"><el-icon :size="14"><Clock /></el-icon></button>
+                </template>
+                <div class="history-list">
+                  <div class="history-list-header">
+                    <span class="history-list-title">历史对话</span>
+                    <span class="history-list-count">{{ chatStore.conversations.length }} 条</span>
+                  </div>
+                  <div v-if="chatStore.conversations.length === 0" class="history-empty">暂无对话记录</div>
+                  <div
+                    v-for="c in chatStore.conversations"
+                    :key="c.id"
+                    class="history-item"
+                    :class="{ active: c.id === chatStore.currentConversationId }"
+                    @click="switchToConversation(c.id)"
+                  >
+                    <div class="history-item-info">
+                      <div class="history-item-title">{{ c.title || '未命名对话' }}</div>
+                      <div class="history-item-meta">{{ c.message_count }} 条消息 · {{ formatDate(c.updated_at) }}</div>
+                    </div>
+                    <button class="history-item-del" @click.stop="handleRemoveConversation(c.id)" title="删除">
+                      <el-icon :size="12"><Close /></el-icon>
+                    </button>
+                  </div>
+                </div>
+              </el-popover>
               <button class="chat-action-btn" @click="chatStore.toggleLayoutMode" title="切换为侧边栏模式"><el-icon :size="14"><FullScreen /></el-icon></button>
               <button class="chat-action-btn" @click="handleNewConversation" title="新对话"><el-icon :size="14"><Plus /></el-icon></button>
             </div>
@@ -300,6 +356,21 @@ function goSettings() {
 
 async function handleNewConversation() {
   await chatStore.createNewConversation()
+}
+
+function formatDate(dateStr: string) {
+  const d = new Date(dateStr)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+async function switchToConversation(id: number) {
+  if (id === chatStore.currentConversationId) return
+  await chatStore.switchConversation(id)
+}
+
+async function handleRemoveConversation(id: number) {
+  await chatStore.removeConversation(id)
 }
 
 function onModelChange(id: string) {
@@ -852,5 +923,101 @@ function renderMarkdown(text: string): string {
 /* 模型选择器下拉弹窗 z-index */
 :global(.model-selector-popper) {
   z-index: 10001 !important;
+}
+
+/* ===== 历史对话弹窗 ===== */
+:global(.chat-history-popover) {
+  padding: 0 !important;
+  max-height: 360px;
+  overflow-y: auto;
+  z-index: 10002 !important;
+}
+.history-list {
+  padding: 8px 0;
+}
+.history-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 14px 10px;
+  border-bottom: 1px solid var(--border-color, #eee);
+  margin-bottom: 4px;
+}
+.history-list-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-primary, #303133);
+}
+.history-list-count {
+  font-size: 11px;
+  color: var(--text-muted, #909399);
+}
+.history-empty {
+  text-align: center;
+  padding: 24px 0;
+  color: var(--text-muted, #909399);
+  font-size: 13px;
+}
+.history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+  gap: 8px;
+}
+.history-item:hover {
+  background: var(--hover-bg, #f5f7fa);
+}
+.history-item.active {
+  background: var(--primary-bg, #ecf5ff);
+}
+.history-item-info {
+  flex: 1;
+  min-width: 0;
+}
+.history-item-title {
+  font-size: 13px;
+  color: var(--text-primary, #303133);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.history-item-meta {
+  font-size: 11px;
+  color: var(--text-muted, #909399);
+  margin-top: 2px;
+}
+.history-item-del {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted, #909399);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.history-item:hover .history-item-del {
+  opacity: 1;
+}
+.history-item-del:hover {
+  background: var(--danger-bg, #fef0f0);
+  color: var(--danger-color, #f56c6c);
+}
+:global(.dark) .history-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+:global(.dark) .history-item.active {
+  background: rgba(64, 158, 255, 0.12);
+}
+:global(.dark) .history-item-del:hover {
+  background: rgba(245, 108, 108, 0.15);
 }
 </style>
