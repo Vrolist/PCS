@@ -15,6 +15,12 @@
             </div>
           </div>
           <div class="chat-header-actions">
+            <button class="chat-action-btn" @click="chatStore.toggleLayoutMode" title="切换为浮动模式">
+              <el-icon :size="14"><DCaret /></el-icon>
+            </button>
+            <button class="chat-action-btn" @click="handleNewConversation" title="新对话">
+              <el-icon :size="14"><Plus /></el-icon>
+            </button>
             <el-popover placement="bottom" :width="240" trigger="click" popper-class="chat-history-popover">
               <template #reference>
                 <button class="chat-action-btn" title="历史对话">
@@ -44,12 +50,6 @@
                 </div>
               </div>
             </el-popover>
-            <button class="chat-action-btn" @click="chatStore.toggleLayoutMode" title="切换为浮动模式">
-              <el-icon :size="14"><DCaret /></el-icon>
-            </button>
-            <button class="chat-action-btn" @click="handleNewConversation" title="新对话">
-              <el-icon :size="14"><Plus /></el-icon>
-            </button>
             <button class="chat-action-btn" @click="chatStore.visible = false" title="关闭">
               <el-icon :size="14"><Close /></el-icon>
             </button>
@@ -170,6 +170,8 @@
               </div>
             </div>
             <div class="chat-header-actions">
+              <button class="chat-action-btn" @click="chatStore.toggleLayoutMode" title="切换为侧边栏模式"><el-icon :size="14"><FullScreen /></el-icon></button>
+              <button class="chat-action-btn" @click="handleNewConversation" title="新对话"><el-icon :size="14"><Plus /></el-icon></button>
               <el-popover placement="bottom" :width="240" trigger="click" popper-class="chat-history-popover">
                 <template #reference>
                   <button class="chat-action-btn" title="历史对话"><el-icon :size="14"><Clock /></el-icon></button>
@@ -197,8 +199,6 @@
                   </div>
                 </div>
               </el-popover>
-              <button class="chat-action-btn" @click="chatStore.toggleLayoutMode" title="切换为侧边栏模式"><el-icon :size="14"><FullScreen /></el-icon></button>
-              <button class="chat-action-btn" @click="handleNewConversation" title="新对话"><el-icon :size="14"><Plus /></el-icon></button>
               <button class="chat-action-btn" @click="chatStore.visible = false" title="关闭"><el-icon :size="14"><Close /></el-icon></button>
             </div>
           </div>
