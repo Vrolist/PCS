@@ -491,6 +491,40 @@ def system_prompt_detail_view(request, pk):
 # LLM 流式代理
 # ============================================================
 
+class ChatStreamingHttpResponse(StreamingHttpResponse):
+    """覆盖 streaming_content，在每个 yield 后 flush WSGI 输出缓冲区。
+
+    Django WSGI 开发服务器（wsgiref）的 BaseHandler.write() 将数据攒到
+    BytesIO _write_buffer，只在 close() 时才 flush——导致浏览器在整个流
+    结束前收不到增量数据。
+
+    本子类在每次 yield 后通过 _flush_wfile() 强制刷出 socket 缓冲区。"""
+
+    @StreamingHttpResponse.streaming_content.getter
+    def streaming_content(self):
+        for chunk in super(ChatStreamingHttpResponse, self).streaming_content:
+            yield chunk
+            _flush_wfile(self)
+
+
+def _flush_wfile(response):
+    """强制 flush WSGI socket 缓冲区，确保 streaming 数据立即到达浏览器。
+
+    wsgi_file_wrapper 由 WSGI handler 在视图返回后设置（BaseWSGIHandler.__call__），
+    它是 wsgiref.util.FileWrapper，内部存 self.filelike（即 WSGIHandler.wfile，
+    是 BufferedWriter wrapping socket）。FileWrapper 没有 flush()，
+    所以从 filelike 拿 BufferedWriter.flush()。
+    """
+    wrapper = getattr(response, 'wsgi_file_wrapper', None)
+    if wrapper is not None:
+        filelike = getattr(wrapper, 'filelike', None)
+        if filelike is not None and hasattr(filelike, 'flush'):
+            try:
+                filelike.flush()
+            except Exception:
+                pass
+
+
 @csrf_exempt
 @require_http_methods(["POST"])
 def chat_stream_view(request):
@@ -651,7 +685,7 @@ def chat_stream_view(request):
             done_event.set()
             reader_thread.join(timeout=3)
 
-    response = StreamingHttpResponse(generate(), content_type='text/event-stream')
+    response = ChatStreamingHttpResponse(generate(), content_type='text/event-stream')
     response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     response['X-Accel-Buffering'] = 'no'
     response['Access-Control-Allow-Origin'] = '*'
