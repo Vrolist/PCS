@@ -1,10 +1,7 @@
 import logging
 import json
-import time
-import threading
-import queue
 
-import requests as http_requests
+from asgiref.sync import sync_to_async
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.http import StreamingHttpResponse, JsonResponse
@@ -491,49 +488,16 @@ def system_prompt_detail_view(request, pk):
 # LLM 流式代理
 # ============================================================
 
-class ChatStreamingHttpResponse(StreamingHttpResponse):
-    """覆盖 streaming_content，在每个 yield 后 flush WSGI 输出缓冲区。
 
-    Django WSGI 开发服务器（wsgiref）的 BaseHandler.write() 将数据攒到
-    BytesIO _write_buffer，只在 close() 时才 flush——导致浏览器在整个流
-    结束前收不到增量数据。
-
-    本子类在每次 yield 后通过 _flush_wfile() 强制刷出 socket 缓冲区。"""
-
-    @StreamingHttpResponse.streaming_content.getter
-    def streaming_content(self):
-        for chunk in super(ChatStreamingHttpResponse, self).streaming_content:
-            yield chunk
-            _flush_wfile(self)
-
-
-def _flush_wfile(response):
-    """强制 flush WSGI socket 缓冲区，确保 streaming 数据立即到达浏览器。
-
-    wsgi_file_wrapper 由 WSGI handler 在视图返回后设置（BaseWSGIHandler.__call__），
-    它是 wsgiref.util.FileWrapper，内部存 self.filelike（即 WSGIHandler.wfile，
-    是 BufferedWriter wrapping socket）。FileWrapper 没有 flush()，
-    所以从 filelike 拿 BufferedWriter.flush()。
-    """
-    wrapper = getattr(response, 'wsgi_file_wrapper', None)
-    if wrapper is not None:
-        filelike = getattr(wrapper, 'filelike', None)
-        if filelike is not None and hasattr(filelike, 'flush'):
-            try:
-                filelike.flush()
-            except Exception:
-                pass
 
 
 @csrf_exempt
 @require_http_methods(["POST"])
-def chat_stream_view(request):
+async def chat_stream_view(request):
     """
     POST /api/auth/chat/stream/
-    纯 Django 视图（无 DRF 装饰器），避免 DRF + ASGI 下的 StreamingHttpResponse 兼容问题。
-    后端代理 LLM 请求，注入 PVE 数据上下文，流式返回响应。
+    使用 LangChain 流式调用 LLM，注入 PVE 数据上下文，SSE 返回响应。
     """
-    # 手动解析 JSON 请求体
     try:
         data = json.loads(request.body)
     except json.JSONDecodeError:
@@ -542,12 +506,14 @@ def chat_stream_view(request):
     # 手动 JWT 鉴权
     auth = request.META.get('HTTP_AUTHORIZATION', '')
     if not auth.startswith('Bearer '):
+        logger.warning("chat stream: 无 Authorization 头")
         return JsonResponse({"detail": "未授权"}, status=401)
     try:
         token = AccessToken(auth[7:])
-        user = User.objects.get(id=token['user_id'])
-    except Exception:
-        return JsonResponse({"detail": "token 无效"}, status=401)
+        user = await sync_to_async(User.objects.get)(id=token['user_id'])
+    except Exception as e:
+        logger.warning(f"chat stream: token 解析失败: {type(e).__name__}: {e}")
+        return JsonResponse({"detail": f"token 无效: {type(e).__name__}"}, status=401)
 
     config_id = data.get('config_id')
     messages = data.get('messages', [])
@@ -559,158 +525,42 @@ def chat_stream_view(request):
 
     # 获取 LLM 配置
     try:
-        config = UserLLMConfig.objects.get(pk=config_id, user=user)
+        config = await sync_to_async(UserLLMConfig.objects.get)(pk=config_id, user=user)
     except UserLLMConfig.DoesNotExist:
         return JsonResponse({"detail": "配置不存在"}, status=404)
 
-    api_key = config.api_key
-    if not api_key:
+    if not config.api_key:
         return JsonResponse({"detail": "未配置 API Key"}, status=400)
 
-    # 注入 PVE 数据上下文到 system prompt
+    # 注入 PVE 数据上下文
     from .chat_context import build_pve_context
-    pve_context = build_pve_context(cluster_id, user_message) if cluster_id else ''
+    from .llm_service import build_llm, build_langchain_messages, stream_chat
 
-    if pve_context:
-        enhanced_messages = _inject_context(messages, pve_context)
-    else:
-        enhanced_messages = messages
+    pve_context = await sync_to_async(build_pve_context)(cluster_id, user_message) if cluster_id else ''
+    langchain_msgs = build_langchain_messages(messages, pve_context)
+    llm = build_llm(config)
 
-    # 构建 LLM API URL
-    base_url = config.base_url.rstrip('/')
-    api_path = '/chat/completions' if base_url.endswith('/v1') else '/v1/chat/completions'
-    llm_url = f"{base_url}{api_path}"
-
-    # 转发请求到 LLM API（流式）
-    try:
-        llm_response = http_requests.post(
-            llm_url,
-            json={
-                "model": config.model,
-                "messages": enhanced_messages,
-                "stream": True,
-            },
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {api_key}",
-            },
-            stream=True,
-            timeout=120,
-        )
-    except http_requests.exceptions.RequestException as e:
-        logger.warning(f"chat stream: LLM 连接失败 (user {user.id}): {e}")
-        return JsonResponse({"detail": f"连接 LLM 失败: {str(e)}"}, status=502)
-
-    if llm_response.status_code != 200:
-        err_body = llm_response.text[:500]
-        logger.warning(f"chat stream: LLM 返回错误 (user {user.id}): {llm_response.status_code}")
-        return JsonResponse(
-            {"detail": f"LLM 返回错误 ({llm_response.status_code}): {err_body}"},
-            status=llm_response.status_code,
-        )
-
-    # 流式透传 — 后台线程 + 队列非阻塞读取，支持心跳保活
-    KEEPALIVE_INTERVAL = 15  # 每 15 秒无数据时发送心跳
-
-    def generate():
+    # 流式 SSE 响应
+    async def generate():
         yield ": connected\n\n"
-
-        # 后台读取线程：从 LLM 原始响应中逐行读取，放入队列
-        line_queue = queue.Queue(maxsize=200)
-        done_event = threading.Event()
-        error_event = threading.Event()
-        error_msg = [""]
-
-        def reader():
-            try:
-                buf = b''
-                for chunk in llm_response.iter_content(chunk_size=4096):
-                    if done_event.is_set():
-                        return
-                    if not chunk:
-                        continue
-                    buf += chunk
-                    while b'\n' in buf:
-                        line, buf = buf.split(b'\n', 1)
-                        line = line.strip()
-                        if line:
-                            line_queue.put(line.decode('utf-8', errors='ignore'))
-                if buf.strip():
-                    line_queue.put(buf.strip().decode('utf-8', errors='ignore'))
-            except Exception as e:
-                error_msg[0] = str(e)
-                error_event.set()
-            finally:
-                done_event.set()
-
-        reader_thread = threading.Thread(target=reader, daemon=True)
-        reader_thread.start()
-
-        # 主生成器：非阻塞轮询队列 + 心跳保活
         try:
-            last_yield = time.time()
-            while True:
-                # 检查读取线程是否已结束且队列已空
-                if done_event.is_set() and line_queue.empty():
-                    break
-                if error_event.is_set():
-                    logger.warning(f"chat stream: 读取线程出错: {error_msg[0]}")
-                    break
-
-                try:
-                    line = line_queue.get(timeout=KEEPALIVE_INTERVAL)
-                    yield f"{line}\n\n"
-                    last_yield = time.time()
-                except queue.Empty:
-                    now = time.time()
-                    if now - last_yield >= KEEPALIVE_INTERVAL:
-                        yield ": keepalive\n\n"
-                        last_yield = now
-                    continue
-
+            async for token in stream_chat(llm, langchain_msgs):
+                chunk = json.dumps({
+                    "choices": [{"delta": {"content": token}}]
+                }, ensure_ascii=False)
+                yield f"data: {chunk}\n\n"
             yield "data: [DONE]\n\n"
             logger.info(f"chat stream: 完成 (user {user.id})")
+        except Exception as e:
+            logger.warning(f"chat stream: LLM 调用失败 (user {user.id}): {e}")
+            err_chunk = json.dumps({
+                "choices": [{"delta": {"content": f"\n\n[错误: {e}]"}}]
+            }, ensure_ascii=False)
+            yield f"data: {err_chunk}\n\n"
+            yield "data: [DONE]\n\n"
 
-        except GeneratorExit:
-            logger.warning(f"chat stream: 客户端断开 (user {user.id})")
-            done_event.set()
-        except Exception:
-            logger.exception(f"chat stream: 流式处理异常 (user {user.id})")
-            done_event.set()
-            try:
-                yield "data: [DONE]\n\n"
-            except GeneratorExit:
-                pass
-        finally:
-            done_event.set()
-            reader_thread.join(timeout=3)
-
-    response = ChatStreamingHttpResponse(generate(), content_type='text/event-stream')
+    response = StreamingHttpResponse(generate(), content_type='text/event-stream')
     response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     response['X-Accel-Buffering'] = 'no'
     response['Access-Control-Allow-Origin'] = '*'
     return response
-
-
-def _inject_context(messages, pve_context):
-    """将 PVE 数据上下文注入到 system prompt 中"""
-    enhanced = []
-    context_block = f"\n\n--- 当前集群实时数据 ---\n{pve_context}\n--- 数据结束 ---\n"
-
-    for msg in messages:
-        if msg.get('role') == 'system':
-            enhanced.append({
-                'role': 'system',
-                'content': msg['content'] + context_block,
-            })
-        else:
-            enhanced.append(msg)
-
-    # 如果没有 system message，在最前面插入
-    if not any(m.get('role') == 'system' for m in enhanced):
-        enhanced.insert(0, {
-            'role': 'system',
-            'content': f"你是 PCS 平台的 AI 运维助手。{context_block}",
-        })
-
-    return enhanced

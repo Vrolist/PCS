@@ -1,10 +1,8 @@
 """
 ASGI config for config project.
 
-It exposes the ASGI callable as a module-level variable named ``application``.
-
-For more information on this file, see
-https://docs.djangoproject.com/en/5.0/howto/deployment/asgi/
+Usage:
+    uvicorn config.asgi:application --host 0.0.0.0 --port 8066 --reload
 """
 
 import os
