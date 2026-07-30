@@ -148,10 +148,15 @@ async def stream_chat_with_tools(llm, messages, cluster_id):
     messages.append(response)
 
     # 执行工具调用
+    tool_names = [t.name for t in tools]
     for tc in response.tool_calls:
         tool_fn = next((t for t in tools if t.name == tc["name"]), None)
         if not tool_fn:
-            logger.warning(f"tool calling: 未知工具 {tc['name']}")
+            logger.warning(f"tool calling: 未知工具 {tc['name']}，可用工具: {tool_names}")
+            messages.append(ToolMessage(
+                content=f"[工具不存在: {tc['name']}。可用工具: {', '.join(tool_names)}]",
+                tool_call_id=tc["id"],
+            ))
             continue
 
         try:
