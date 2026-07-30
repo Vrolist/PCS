@@ -1,5 +1,6 @@
 import logging
 import json
+import time
 
 import requests as http_requests
 from django.views.decorators.csrf import csrf_exempt
@@ -572,33 +573,46 @@ def chat_stream_view(request):
             status=llm_response.status_code,
         )
 
-    # 流式透传 — 逐字节读取 + 字节级行缓冲
+    # 流式透传 — 使用 iter_lines() 高效按行读取 + 心跳保活
+    KEEPALIVE_INTERVAL = 15  # 每 15 秒发送一次心跳
+
     def generate():
         try:
             # 立即 yield → 发送 HTTP 200 + 建立 SSE 连接
             yield ": connected\n\n"
 
-            remainder = b''
-            for chunk in llm_response.iter_content(chunk_size=1):
-                if not chunk:
+            last_yield = time.time()
+            line_iter = llm_response.iter_lines(decode_unicode=True)
+
+            while True:
+                # 带超时的行读取（用 time 模拟非阻塞）
+                try:
+                    line = next(line_iter)
+                except StopIteration:
+                    break
+
+                if not line:
+                    # 心跳保活：如果距上次发送数据超过 KEEPALIVE_INTERVAL 秒，发送注释行
+                    now = time.time()
+                    if now - last_yield >= KEEPALIVE_INTERVAL:
+                        yield ": keepalive\n\n"
+                        last_yield = now
                     continue
-                remainder += chunk
-                while b'\n' in remainder:
-                    line, remainder = remainder.split(b'\n', 1)
-                    line = line.strip()
-                    if line:
-                        yield f"{line.decode('utf-8', errors='ignore')}\n\n"
-            if remainder.strip():
-                yield f"{remainder.strip().decode('utf-8', errors='ignore')}\n\n"
+
+                # SSE data 行 → 直接透传
+                yield f"{line}\n\n"
+                last_yield = time.time()
+
             yield "data: [DONE]\n\n"
             logger.info(f"chat stream: 完成 (user {user.id})")
         except GeneratorExit:
-            # 客户端断开连接 → 正常终止
             logger.warning(f"chat stream: 客户端断开 (user {user.id})")
-            pass
         except Exception:
             logger.exception(f"chat stream: 流式处理异常 (user {user.id})")
-            yield "data: [DONE]\n\n"
+            try:
+                yield "data: [DONE]\n\n"
+            except GeneratorExit:
+                pass
 
     response = StreamingHttpResponse(generate(), content_type='text/event-stream')
     response['Cache-Control'] = 'no-cache, no-store, must-revalidate'

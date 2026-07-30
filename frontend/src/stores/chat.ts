@@ -472,13 +472,16 @@ export const useChatStore = defineStore('chat', () => {
 
       const reader = response.body!.getReader()
       const decoder = new TextDecoder()
+      let lineBuffer = ''  // 跨 chunk 行缓冲，防止 SSE 行被截断
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
 
-        const chunk = decoder.decode(value, { stream: true })
-        const lines = chunk.split('\n')
+        lineBuffer += decoder.decode(value, { stream: true })
+        const lines = lineBuffer.split('\n')
+        // 最后一个元素可能是不完整的行，保留到下一次
+        lineBuffer = lines.pop() || ''
 
         for (const line of lines) {
           const trimmed = line.trim()
