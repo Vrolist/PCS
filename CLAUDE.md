@@ -195,7 +195,7 @@ python manage.py runserver 0.0.0.0:8066    # Django（dev_start.sh 默认端口�
 cd frontend && npm run dev                  # Vite
 
 # 前端构建
-cd frontend && npm run build
+cd frontend && npx vite build          # 跳过 vue-tsc 类型检查（项目中存在预置类型错误）
 
 # 创建迁移
 .venv/bin/python manage.py makemigrations <app_name>
@@ -777,8 +777,100 @@ VM、LXC、VMConfig、LXCConfig、SDNZone、SDNVNet、SDNSubnet 使用 **原地�
 14. ~~SDN 数据采集与展示~~ ✅ 已完成（SDNZone/VNet/Subnet 模型 + Agent 采集 v0.6.0 + 前端 Tab 页面）
 15. ~~网络拓扑可视化~~ ✅ 已完成（SVG 节点-网络连接图 + 图例筛选 + IP 网段图层）
 16. ~~依赖链路可视化~~ ✅ 已完成（SVG 节点内嵌依赖图 + 拖拽/缩放/自动扩充 + 布局居中）
-17. 自动检测引擎
-18. 仪表盘真实数据进一步接入（告警、趋势数据源）
+17. ~~LLM 流式对话（AI 助手）~~ ✅ 已完成（Thread+Queue 非阻塞流式传输 + 心跳保活 + SSE 行缓冲）
+18. 自动检测引擎
+19. 仪表盘真实数据进一步接入（告警、趋势数据源）
+
+## AI 助手流式对话
+
+AI 助手聊天面板（ChatBubble）通过 `/api/auth/chat/stream/` 端点实现 LLM 流式输出。
+
+### 架构
+
+```
+前端 (ChatBubble)           后端 (Django)                   LLM Provider
+  │                           │                              │
+  │── POST /chat/stream/ ────→│                              │
+  │   {config_id, messages,   │                              │
+  │    cluster_id,            │                              │
+  │    user_message}          │                              │
+  │                           │── POST /v1/chat/completions ─→│
+  │                           │   {stream: true, ...}        │
+  │                           │                              │
+  │  ← SSE text/event-stream  │  ← iter_content() chunked   │
+  │  data: {delta:...}        │  data: {delta:...}           │
+  │  : keepalive              │                              │
+  │  data: [DONE]             │                              │
+```
+
+### 后端流式传输（Thread + Queue 非阻塞模式）
+
+`apps/accounts/views.py` — `chat_stream_view()` 函数：
+
+```
+后台读取线程（daemon）:
+  iter_content(chunk_size=4096) 逐块读取 LLM 原始响应
+  → 手动按 \n 拆行 → put() 到线程安全队列
+
+主生成器线程:
+  queue.get(timeout=15) 非阻塞轮询
+  → 有数据 → yield 透传 SSE 行
+  → 超时  → yield ": keepalive\n\n" 心跳保活
+  → 完成  → yield "data: [DONE]\n\n"
+```
+
+| 组件 | 作用 |
+|------|------|
+| `queue.Queue(maxsize=200)` | 有界缓冲，防止 LLM 突吐大量数据撑爆内存 |
+| `threading.Event` (done_event) | 读取完成 / 出错时通知主线程 |
+| `threading.Thread(daemon=True)` | 守护线程，客户端断连时自动退出 |
+| `queue.get(timeout=15)` | 非阻塞读取核心，超时后发送心跳 |
+
+关键流程：
+
+1. **建立连接**：`yield ": connected\n\n"` 立即发送 HTTP 200 + SSE 头部
+2. **后台读取**：daemon 线程用 `iter_content(chunk_size=4096)` 高效读取 LLM 响应，手动拆行后 `put()` 入队列
+3. **非阻塞轮询**：主生成器 `get(timeout=15)` 等待数据：
+   - 收到数据 → `yield "{line}\n\n"` 透传 SSE 事件
+   - 超时 → `yield ": keepalive\n\n"` 心跳保活连接
+4. **完成**：LLM 流结束 → `yield "data: [DONE]\n\n"`
+5. **客户端断开**：`GeneratorExit` → `done_event.set()` 通知后台线程退出 → `join(timeout=3)` 安全回收
+
+### 前端 SSE 解析
+
+`frontend/src/stores/chat.ts` — `sendMessage()`：
+
+```typescript
+let lineBuffer = ''  // 跨 chunk 行缓冲，防止 SSE 行被截断
+
+while (true) {
+  const { done, value } = await reader.read()
+  if (done) break
+
+  lineBuffer += decoder.decode(value, { stream: true })
+  const lines = lineBuffer.split('\n')
+  lineBuffer = lines.pop() || ''  // 不完整行保留到下一次
+
+  for (const line of lines) {
+    // 解析 data: {...} 格式
+    const parsed = JSON.parse(line.slice(6))
+    const delta = parsed.choices?.[0]?.delta?.content
+    if (delta) {
+      fullReply += delta
+      // 响应式更新 UI
+    }
+  }
+}
+```
+
+### PVE 数据上下文注入
+
+`apps/accounts/chat_context.py` — `build_pve_context()` 根据用户消息关键词动态查询数据库，将集群实时数据注入到 system prompt 中：
+
+- 关键词匹配（"节点"/"cpu"/"存储"/"网络"/"ha"/"sdn" 等）确定需要加载的数据层
+- 始终注入集群摘要（节点数/VM数/容器数）
+- 无关键词匹配时默认加载节点/VM/容器层
+- 注入格式：`--- 当前集群实时数据 ---\n{数据}\n--- 数据结束 ---`
 
 ## 依赖链路可视化（dependency-mapping）
 

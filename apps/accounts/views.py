@@ -1,6 +1,8 @@
 import logging
 import json
 import time
+import threading
+import queue
 
 import requests as http_requests
 from django.views.decorators.csrf import csrf_exempt
@@ -573,46 +575,81 @@ def chat_stream_view(request):
             status=llm_response.status_code,
         )
 
-    # 流式透传 — 使用 iter_lines() 高效按行读取 + 心跳保活
-    KEEPALIVE_INTERVAL = 15  # 每 15 秒发送一次心跳
+    # 流式透传 — 后台线程 + 队列非阻塞读取，支持心跳保活
+    KEEPALIVE_INTERVAL = 15  # 每 15 秒无数据时发送心跳
 
     def generate():
+        yield ": connected\n\n"
+
+        # 后台读取线程：从 LLM 原始响应中逐行读取，放入队列
+        line_queue = queue.Queue(maxsize=200)
+        done_event = threading.Event()
+        error_event = threading.Event()
+        error_msg = [""]
+
+        def reader():
+            try:
+                buf = b''
+                for chunk in llm_response.iter_content(chunk_size=4096):
+                    if done_event.is_set():
+                        return
+                    if not chunk:
+                        continue
+                    buf += chunk
+                    while b'\n' in buf:
+                        line, buf = buf.split(b'\n', 1)
+                        line = line.strip()
+                        if line:
+                            line_queue.put(line)
+                if buf.strip():
+                    line_queue.put(buf.strip().decode('utf-8', errors='ignore'))
+            except Exception as e:
+                error_msg[0] = str(e)
+                error_event.set()
+            finally:
+                done_event.set()
+
+        reader_thread = threading.Thread(target=reader, daemon=True)
+        reader_thread.start()
+
+        # 主生成器：非阻塞轮询队列 + 心跳保活
         try:
-            # 立即 yield → 发送 HTTP 200 + 建立 SSE 连接
-            yield ": connected\n\n"
-
             last_yield = time.time()
-            line_iter = llm_response.iter_lines(decode_unicode=True)
-
             while True:
-                # 带超时的行读取（用 time 模拟非阻塞）
-                try:
-                    line = next(line_iter)
-                except StopIteration:
+                # 检查读取线程是否已结束且队列已空
+                if done_event.is_set() and line_queue.empty():
+                    break
+                if error_event.is_set():
+                    logger.warning(f"chat stream: 读取线程出错: {error_msg[0]}")
                     break
 
-                if not line:
-                    # 心跳保活：如果距上次发送数据超过 KEEPALIVE_INTERVAL 秒，发送注释行
+                try:
+                    line = line_queue.get(timeout=KEEPALIVE_INTERVAL)
+                    yield f"{line}\n\n"
+                    last_yield = time.time()
+                except queue.Empty:
                     now = time.time()
                     if now - last_yield >= KEEPALIVE_INTERVAL:
                         yield ": keepalive\n\n"
                         last_yield = now
                     continue
 
-                # SSE data 行 → 直接透传
-                yield f"{line}\n\n"
-                last_yield = time.time()
-
             yield "data: [DONE]\n\n"
             logger.info(f"chat stream: 完成 (user {user.id})")
+
         except GeneratorExit:
             logger.warning(f"chat stream: 客户端断开 (user {user.id})")
+            done_event.set()
         except Exception:
             logger.exception(f"chat stream: 流式处理异常 (user {user.id})")
+            done_event.set()
             try:
                 yield "data: [DONE]\n\n"
             except GeneratorExit:
                 pass
+        finally:
+            done_event.set()
+            reader_thread.join(timeout=3)
 
     response = StreamingHttpResponse(generate(), content_type='text/event-stream')
     response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
