@@ -399,16 +399,8 @@ export const useChatStore = defineStore('chat', () => {
     // 保存用户消息到后端
     createMessage(convId, 'user', content.trim()).catch(() => {})
 
-    // 助手占位
-    const assistantMsg: ChatMessage = {
-      id: (Date.now() + 1).toString(),
-      role: 'assistant',
-      content: '',
-      timestamp: Date.now(),
-    }
-    messages.value.push(assistantMsg)
-
-    const history = messages.value.slice(0, -2).map(m => ({
+    // 历史消息（排除当前用户消息）
+    const history = messages.value.slice(0, -1).map(m => ({
       role: m.role,
       content: m.content,
     }))
@@ -420,6 +412,7 @@ export const useChatStore = defineStore('chat', () => {
     currentController.value = controller
 
     let fullReply = ''
+    let assistantMsg: ChatMessage | null = null
 
     try {
       const apiPath = cfg.baseUrl.endsWith('/v1') ? '/chat/completions' : '/v1/chat/completions'
@@ -443,7 +436,14 @@ export const useChatStore = defineStore('chat', () => {
 
       if (!response.ok) {
         const errBody = await response.text()
-        assistantMsg.content = `请求失败 (${response.status})：${errBody.slice(0, 200)}`
+        // 错误时直接添加带内容的 assistant 消息
+        assistantMsg = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: `请求失败 (${response.status})：${errBody.slice(0, 200)}`,
+          timestamp: Date.now(),
+        }
+        messages.value.push(assistantMsg)
         return
       }
 
@@ -466,17 +466,36 @@ export const useChatStore = defineStore('chat', () => {
             const parsed = JSON.parse(data)
             const delta = parsed.choices?.[0]?.delta?.content
             if (delta) {
-              assistantMsg.content += delta
               fullReply += delta
+              // 首次收到内容时创建 assistant 消息
+              if (!assistantMsg) {
+                assistantMsg = {
+                  id: (Date.now() + 1).toString(),
+                  role: 'assistant',
+                  content: '',
+                  timestamp: Date.now(),
+                }
+                messages.value.push(assistantMsg)
+              }
+              assistantMsg.content = fullReply
             }
           } catch { /* skip */ }
         }
       }
     } catch (err: any) {
-      if (err.name === 'AbortError') {
-        assistantMsg.content += '\n\n*[已停止]*'
+      const errText = err.name === 'AbortError'
+        ? '\n\n*[已停止]*'
+        : `连接失败：${err.message}。请检查 API 配置。`
+      if (assistantMsg) {
+        assistantMsg.content += errText
       } else {
-        assistantMsg.content = `连接失败：${err.message}。请检查 API 配置。`
+        assistantMsg = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: errText,
+          timestamp: Date.now(),
+        }
+        messages.value.push(assistantMsg)
       }
     } finally {
       loading.value = false
