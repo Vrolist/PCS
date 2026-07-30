@@ -144,7 +144,7 @@
           <div class="chat-input-wrap">
             <textarea ref="inputRef" v-model="inputText" class="chat-textarea" :placeholder="hasApiKey ? '输入消息，Shift+Enter 换行...' : '请先配置 API Key'" :disabled="!hasApiKey" @keydown.enter.exact.prevent="handleSend" @compositionstart="isComposing = true" @compositionend="isComposing = false" @input="autoResize" />
             <div class="chat-input-actions">
-              <button v-if="chatStore.loading" class="input-btn stop-btn" @click="chatStore.stopGeneration" title="停止生成"><el-icon :size="16"><VideoPause /></el-icon></button>
+              <button v-if="chatStore.loading" class="input-btn stop-btn" @click="chatStore.stopGeneration" title="停止生成"><el-icon :size="16"><CircleClose /></el-icon></button>
               <button v-else class="input-btn send-btn" :class="{ active: inputText.trim() }" :disabled="!inputText.trim() || !hasApiKey" @click="handleSend" title="发送"><el-icon :size="16"><Promotion /></el-icon></button>
             </div>
           </div>
@@ -299,7 +299,7 @@
             <div class="chat-input-wrap">
               <textarea ref="inputRef" v-model="inputText" class="chat-textarea" :placeholder="hasApiKey ? '输入消息，Shift+Enter 换行...' : '请先配置 API Key'" :disabled="!hasApiKey" @keydown.enter.exact.prevent="handleSend" @compositionstart="isComposing = true" @compositionend="isComposing = false" @input="autoResize" />
               <div class="chat-input-actions">
-                <button v-if="chatStore.loading" class="input-btn stop-btn" @click="chatStore.stopGeneration" title="停止生成"><el-icon :size="16"><VideoPause /></el-icon></button>
+                <button v-if="chatStore.loading" class="input-btn stop-btn" @click="chatStore.stopGeneration" title="停止生成"><el-icon :size="16"><CircleClose /></el-icon></button>
                 <button v-else class="input-btn send-btn" :class="{ active: inputText.trim() }" :disabled="!inputText.trim() || !hasApiKey" @click="handleSend" title="发送"><el-icon :size="16"><Promotion /></el-icon></button>
               </div>
             </div>
@@ -318,7 +318,7 @@ import { useClusterStore } from '@/stores/cluster'
 import {
   ChatDotRound, Close, Setting, Monitor, User, Promotion,
   DataAnalysis, Warning, MagicStick, CopyDocument, WarningFilled,
-  VideoPause, CircleCheck, DCaret, FullScreen, Plus, Clock,
+  CircleClose, CircleCheck, DCaret, FullScreen, Plus, Clock,
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 
