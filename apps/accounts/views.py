@@ -533,12 +533,10 @@ async def chat_stream_view(request):
     if not config.api_key:
         return JsonResponse({"detail": "未配置 API Key"}, status=400)
 
-    # 注入 PVE 数据上下文
-    from .chat_context import build_pve_context
-    from .llm_service import build_llm, build_langchain_messages, stream_chat
+    # 使用 Tool Calling 按需查询 PVE 数据
+    from .llm_service import build_llm, build_langchain_messages, stream_chat_with_tools
 
-    pve_context = await sync_to_async(build_pve_context)(cluster_id, user_message) if cluster_id else ''
-    langchain_msgs = build_langchain_messages(messages, pve_context)
+    langchain_msgs = build_langchain_messages(messages)
     llm = build_llm(config)
 
     # 流式 SSE 响应
@@ -547,7 +545,7 @@ async def chat_stream_view(request):
         t0 = time.monotonic()
         token_count = 0
         try:
-            async for token in stream_chat(llm, langchain_msgs):
+            async for token in stream_chat_with_tools(llm, langchain_msgs, cluster_id):
                 token_count += 1
                 elapsed = time.monotonic() - t0
                 logger.debug(f"chat stream: token#{token_count} +{elapsed:.2f}s len={len(token)}")

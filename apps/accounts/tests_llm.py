@@ -1005,10 +1005,10 @@ class SSEHandlerStreamingTest(TransactionTestCase):
 
         return receive
 
-    @patch("apps.accounts.llm_service.stream_chat")
+    @patch("apps.accounts.llm_service.stream_chat_with_tools")
     def test_sse_format(self, mock_stream_chat):
         """SSE 输出格式正确：data: {...} + [DONE]"""
-        async def mock_stream(_llm, _msgs):
+        async def mock_stream(*args, **kwargs):
             yield "Hello"
 
         mock_stream_chat.side_effect = mock_stream
@@ -1036,12 +1036,12 @@ class SSEHandlerStreamingTest(TransactionTestCase):
         self.assertIn("[DONE]", body_text)
         self.assertIn("Hello", body_text)
 
-    @patch("apps.accounts.llm_service.stream_chat")
+    @patch("apps.accounts.llm_service.stream_chat_with_tools")
     def test_streams_multiple_tokens(self, mock_stream_chat):
         """多个 token 逐个发送"""
         tokens_sent = ["A", "B", "C"]
 
-        async def mock_stream(_llm, _msgs):
+        async def mock_stream(*args, **kwargs):
             for t in tokens_sent:
                 yield t
 
@@ -1065,10 +1065,10 @@ class SSEHandlerStreamingTest(TransactionTestCase):
         non_final = [m for m in sent if m["type"] == "http.response.body" and m.get("more_body", False)]
         self.assertGreaterEqual(len(non_final), len(tokens_sent))
 
-    @patch("apps.accounts.llm_service.stream_chat")
+    @patch("apps.accounts.llm_service.stream_chat_with_tools")
     def test_handles_llm_error(self, mock_stream_chat):
         """LLM 异常时发送错误消息 + [DONE]"""
-        # stream_chat 直接抛出异常（不是 async generator 中抛）
+        # stream_chat_with_tools 直接抛出异常
         mock_stream_chat.side_effect = RuntimeError("API timeout")
 
         from config.sse_handler import sse_chat_stream
@@ -1088,10 +1088,10 @@ class SSEHandlerStreamingTest(TransactionTestCase):
         final_body = [m for m in sent if m["type"] == "http.response.body"][-1]
         self.assertFalse(final_body.get("more_body", True))
 
-    @patch("apps.accounts.llm_service.stream_chat")
+    @patch("apps.accounts.llm_service.stream_chat_with_tools")
     def test_handles_disconnect(self, mock_stream_chat):
         """客户端断连时正常终止"""
-        async def mock_stream(_llm, _msgs):
+        async def mock_stream(*args, **kwargs):
             yield "A"
             yield "B"
 
@@ -1125,13 +1125,10 @@ class SSEHandlerStreamingTest(TransactionTestCase):
         ).decode()
         self.assertIn("[DONE]", body_text)
 
-    @patch("apps.accounts.chat_context.build_pve_context")
-    @patch("apps.accounts.llm_service.stream_chat")
-    def test_injects_pve_context(self, mock_stream_chat, mock_build_pve_context):
-        """cluster_id 传入时 build_pve_context 被调用"""
-        mock_build_pve_context.return_value = "## 集群概览\n节点数: 3"
-
-        async def mock_stream(_llm, _msgs):
+    @patch("apps.accounts.llm_service.stream_chat_with_tools")
+    def test_calls_stream_chat_with_tools(self, mock_stream_chat):
+        """cluster_id 传入时 stream_chat_with_tools 被调用"""
+        async def mock_stream(*args, **kwargs):
             yield "OK"
 
         mock_stream_chat.side_effect = mock_stream
@@ -1143,11 +1140,15 @@ class SSEHandlerStreamingTest(TransactionTestCase):
 
         asyncio.run(sse_chat_stream(scope, receive, send))
 
-        mock_build_pve_context.assert_called_once_with(1, "查看节点")
+        # 验证 stream_chat_with_tools 被调用且 cluster_id 被传递
+        mock_stream_chat.assert_called_once()
+        call_args = mock_stream_chat.call_args
+        # 第三个参数应该是 cluster_id=1
+        self.assertEqual(call_args[0][2], 1)
 
     # ========== SEE 流式行为核心测试 ==========
 
-    @patch("apps.accounts.llm_service.stream_chat")
+    @patch("apps.accounts.llm_service.stream_chat_with_tools")
     def test_each_token_is_separate_sse_frame(self, mock_stream_chat):
         """
         核心测试：验证每个 token 对应一个独立的 more_body=True 帧。
@@ -1155,7 +1156,7 @@ class SSEHandlerStreamingTest(TransactionTestCase):
         """
         tokens = ["根据", "当前", "数据", "分析", "如下"]
 
-        async def mock_stream(_llm, _msgs):
+        async def mock_stream(*args, **kwargs):
             for t in tokens:
                 yield t
 
@@ -1193,10 +1194,10 @@ class SSEHandlerStreamingTest(TransactionTestCase):
             self.assertIn(token, frame_body,
                           f"第 {i} 个帧应包含 token '{token}'")
 
-    @patch("apps.accounts.llm_service.stream_chat")
+    @patch("apps.accounts.llm_service.stream_chat_with_tools")
     def test_sse_frame_body_is_valid_json(self, mock_stream_chat):
         """每个 SSE data: 行的 JSON body 格式正确"""
-        async def mock_stream(_llm, _msgs):
+        async def mock_stream(*args, **kwargs):
             yield "Hello"
 
         mock_stream_chat.side_effect = mock_stream
@@ -1226,10 +1227,10 @@ class SSEHandlerStreamingTest(TransactionTestCase):
             self.assertIn("delta", parsed["choices"][0])
             self.assertIn("content", parsed["choices"][0]["delta"])
 
-    @patch("apps.accounts.llm_service.stream_chat")
+    @patch("apps.accounts.llm_service.stream_chat_with_tools")
     def test_ordered_sse_sequence(self, mock_stream_chat):
         """SSE 序列顺序： connected → token data → [DONE]"""
-        async def mock_stream(_llm, _msgs):
+        async def mock_stream(*args, **kwargs):
             yield "A"
             yield "B"
 
@@ -1267,10 +1268,10 @@ class SSEHandlerStreamingTest(TransactionTestCase):
                 f"中间帧 {i} 应为 data: 格式"
             )
 
-    @patch("apps.accounts.llm_service.stream_chat")
+    @patch("apps.accounts.llm_service.stream_chat_with_tools")
     def test_final_frame_more_body_false(self, mock_stream_chat):
         """最后一个 [DONE] 帧的 more_body=False"""
-        async def mock_stream(_llm, _msgs):
+        async def mock_stream(*args, **kwargs):
             yield "A"
 
         mock_stream_chat.side_effect = mock_stream
@@ -1288,10 +1289,10 @@ class SSEHandlerStreamingTest(TransactionTestCase):
         final = body_msgs[-1]
         self.assertFalse(final.get("more_body", True))
 
-    @patch("apps.accounts.llm_service.stream_chat")
+    @patch("apps.accounts.llm_service.stream_chat_with_tools")
     def test_empty_stream_no_tokens(self, mock_stream_chat):
-        """stream_chat 不 yield 任何 token → 只发送 connected + [DONE]"""
-        async def mock_stream(_llm, _msgs):
+        """stream_chat_with_tools 不 yield 任何 token → 只发送 connected + [DONE]"""
+        async def mock_stream(*args, **kwargs):
             # 空生成器
             return
             yield  # pragma: no cover
@@ -1310,12 +1311,12 @@ class SSEHandlerStreamingTest(TransactionTestCase):
         ).decode()
         self.assertIn("[DONE]", body_text)
 
-    @patch("apps.accounts.llm_service.stream_chat")
+    @patch("apps.accounts.llm_service.stream_chat_with_tools")
     def test_error_after_partial_tokens(self, mock_stream_chat):
         """stream 在 yield 部分 token 后抛出异常"""
         tokens_sent_before_error = []
 
-        async def mock_stream(_llm, _msgs):
+        async def mock_stream(*args, **kwargs):
             nonlocal tokens_sent_before_error
             tokens_sent_before_error.append("AA")
             yield "AA"
@@ -1345,10 +1346,10 @@ class SSEHandlerStreamingTest(TransactionTestCase):
         # [DONE] 应该已发出
         self.assertIn("[DONE]", body_text)
 
-    @patch("apps.accounts.llm_service.stream_chat")
+    @patch("apps.accounts.llm_service.stream_chat_with_tools")
     def test_disconnect_after_first_token(self, mock_stream_chat):
         """客户端在收到第一个 token 后断连"""
-        async def mock_stream(_llm, _msgs):
+        async def mock_stream(*args, **kwargs):
             yield "token1"
             yield "token2"
 
@@ -1386,12 +1387,12 @@ class SSEHandlerStreamingTest(TransactionTestCase):
         # [DONE] 已发送（保证 chunked 编码正常结束）
         self.assertIn("[DONE]", body_text)
 
-    @patch("apps.accounts.llm_service.stream_chat")
+    @patch("apps.accounts.llm_service.stream_chat_with_tools")
     def test_large_token_in_sse(self, mock_stream_chat):
         """单 token 包含大规模内容（>10KB）在 SSE 中正确传输"""
         large_content = "X" * 15000
 
-        async def mock_stream(_llm, _msgs):
+        async def mock_stream(*args, **kwargs):
             yield large_content
 
         mock_stream_chat.side_effect = mock_stream
@@ -1562,50 +1563,46 @@ class FullLLMIntegrationTest(TransactionTestCase):
     # ---- 组合测试 ----
 
     def test_pipeline_from_config_to_sse(self):
-        """全链路：UserLLMConfig → build_llm → stream_chat → SSE output"""
-        import asyncio
-        from unittest.mock import AsyncMock, MagicMock, patch
-        from langchain_core.messages import HumanMessage
+        """全链路：UserLLMConfig → build_llm → build_langchain_messages → tool calling"""
+        from langchain_core.messages import SystemMessage
 
-        # 手动构建 LLM 消息
         raw = [
             {"role": "system", "content": "你是运维助手"},
             {"role": "user", "content": "组合测试"},
         ]
 
-        # 1) build_pve_context 返回实际数据
-        pve_ctx = build_pve_context(self.cluster.id, "节点")
-        self.assertIn("fullnode", pve_ctx)
-
-        # 2) build_langchain_messages 正确组装
-        msgs = build_langchain_messages(raw, pve_context=pve_ctx)
-        from langchain_core.messages import SystemMessage
+        # 1) build_langchain_messages 无 pve_context 时正常工作
+        msgs = build_langchain_messages(raw)
+        self.assertEqual(len(msgs), 2)
         self.assertIsInstance(msgs[0], SystemMessage)
-        self.assertIn("fullnode", msgs[0].content)
         self.assertIn("运维助手", msgs[0].content)
+        # 不应包含 PVE 数据
+        self.assertNotIn("fullnode", msgs[0].content)
 
-        # 3) build_llm 实例化
+        # 2) build_llm 实例化
         llm = build_llm(self.config)
         self.assertIsNotNone(llm)
         self.assertEqual(llm.model_name, "deepseek-v4-pro")
 
-        # 4) stream_chat mock 验证
-        mock_llm = AsyncMock()
-        async def mock_astream(_):
-            for t in ["组合", "测试", "结果"]:
-                chunk = MagicMock()
-                chunk.content = t
-                yield chunk
-        mock_llm.astream = mock_astream
+        # 3) make_pve_tools 正确创建 8 个工具
+        from apps.accounts.llm_tools import make_pve_tools
+        tools = make_pve_tools(self.cluster.id)
+        self.assertEqual(len(tools), 8)
+        tool_names = [t.name for t in tools]
+        self.assertIn("get_cluster_summary", tool_names)
+        self.assertIn("get_node_status", tool_names)
+        self.assertIn("get_vm_list", tool_names)
+        self.assertIn("get_container_list", tool_names)
+        self.assertIn("get_storage_list", tool_names)
+        self.assertIn("get_ceph_status", tool_names)
+        self.assertIn("get_network_info", tool_names)
+        self.assertIn("get_ha_resources", tool_names)
 
-        async def run():
-            tokens = []
-            async for t in stream_chat(mock_llm, msgs):
-                tokens.append(t)
-            return tokens
-
-        tokens = asyncio.run(run())
-        self.assertEqual(tokens, ["组合", "测试", "结果"])
+        # 4) 工具可执行，返回正确格式
+        summary = tools[0].invoke({})
+        self.assertIn("集群", summary)
+        self.assertIn("全链路集群", summary)
+        self.assertIn("虚拟机: 1", summary)
 
     def test_pipeline_without_cluster(self):
         """全链路无 cluster_id：不注入 PVE context，LLM 正常流式"""

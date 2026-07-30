@@ -105,3 +105,81 @@ async def stream_chat(llm, messages):
                 yield content
     except Exception as e:
         raise
+
+
+async def stream_chat_with_tools(llm, messages, cluster_id):
+    """
+    流式调用 LLM，支持 Tool Calling 按需查询 PVE 数据。
+
+    两轮制：
+    - Round 1: 非流式 invoke，LLM 决定是否调用工具
+    - Round 2: 流式输出最终回答（含工具执行结果）
+
+    如果 LLM 不支持 tool calling 或调用失败，自动降级为普通流式。
+    """
+    if not cluster_id:
+        logger.info("tool calling: 无 cluster_id，降级为普通流式")
+        async for token in stream_chat(llm, messages):
+            yield token
+        return
+
+    from .llm_tools import make_pve_tools
+    from langchain_core.messages import ToolMessage
+
+    tools = make_pve_tools(cluster_id)
+    llm_with_tools = llm.bind_tools(tools)
+
+    # Round 1: LLM 决定是否调用工具
+    try:
+        response = await llm_with_tools.ainvoke(messages)
+    except Exception as e:
+        logger.warning(f"tool calling round 1 失败，降级为普通流式: {e}")
+        async for token in stream_chat(llm, messages):
+            yield token
+        return
+
+    if not response.tool_calls:
+        # 没有工具调用，直接输出 LLM 的回答
+        if response.content:
+            yield response.content
+        return
+
+    # 执行工具调用
+    for tc in response.tool_calls:
+        tool_fn = next((t for t in tools if t.name == tc["name"]), None)
+        if not tool_fn:
+            logger.warning(f"tool calling: 未知工具 {tc['name']}")
+            continue
+
+        try:
+            logger.info(f"tool calling: 执行 {tc['name']}({tc['args']})")
+            result = await tool_fn.ainvoke(tc["args"])
+            messages.append(ToolMessage(content=result, tool_call_id=tc["id"]))
+        except Exception as e:
+            logger.warning(f"tool calling: {tc['name']} 执行失败: {e}")
+            messages.append(ToolMessage(
+                content=f"[工具执行错误: {e}]",
+                tool_call_id=tc["id"],
+            ))
+
+    # Round 2: 流式输出最终回答
+    try:
+        async for chunk in llm.astream(messages):
+            # 同样支持 reasoning_content 透传
+            content = getattr(chunk, "content", "") or ""
+            reasoning_content = ""
+            additional_kwargs = getattr(chunk, "additional_kwargs", None)
+            if isinstance(additional_kwargs, dict):
+                reasoning_content = additional_kwargs.get("reasoning_content", "") or ""
+            if not reasoning_content:
+                response_metadata = getattr(chunk, "response_metadata", None)
+                if isinstance(response_metadata, dict):
+                    reasoning_content = response_metadata.get("reasoning_content", "") or ""
+
+            if reasoning_content:
+                yield f" thinking{reasoning_content} response"
+            if content:
+                yield content
+    except Exception as e:
+        logger.warning(f"tool calling round 2 流式失败: {e}")
+        yield f"\n\n[错误: {e}]"

@@ -82,12 +82,10 @@ async def sse_chat_stream(scope, receive, send):
         await _send_json(send, 400, {"detail": "未配置 API Key"})
         return
 
-    # 构建 LLM
-    from apps.accounts.chat_context import build_pve_context
-    from apps.accounts.llm_service import build_llm, build_langchain_messages, stream_chat
+    # 构建 LLM（使用 Tool Calling 按需查询数据）
+    from apps.accounts.llm_service import build_llm, build_langchain_messages, stream_chat_with_tools
 
-    pve_context = await sync_to_async(build_pve_context, thread_sensitive=True)(cluster_id, user_message) if cluster_id else ""
-    langchain_msgs = build_langchain_messages(messages, pve_context)
+    langchain_msgs = build_langchain_messages(messages)
     llm = build_llm(config)
 
     # 发送 HTTP 响应头（SSE）
@@ -124,7 +122,7 @@ async def sse_chat_stream(scope, receive, send):
     async def _stream():
         nonlocal token_count, stream_error
         try:
-            async for token in stream_chat(llm, langchain_msgs):
+            async for token in stream_chat_with_tools(llm, langchain_msgs, cluster_id):
                 if disconnected:
                     break
                 token_count += 1
