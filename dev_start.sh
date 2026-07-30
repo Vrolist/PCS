@@ -56,4 +56,4 @@ echo ""
 echo "   访问地址:  http://<本机IP>:8066"
 echo "========================================="
 
-python manage.py runserver 0.0.0.0:8066
+uvicorn config.asgi:application --host 0.0.0.0 --port 8066 --reload

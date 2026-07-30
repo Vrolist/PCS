@@ -1,3 +1,5 @@
+from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import path, include, re_path
 from rest_framework_simplejwt.views import TokenRefreshView
@@ -13,6 +15,11 @@ urlpatterns = [
     path('api/dashboard/', include('apps.dashboard.urls')),
     path('api/scanner/', include('apps.scanner.urls')),
 ]
+
+# 开发模式：Django 直接 serve 静态文件（ASGI 需要显式配置）
+if settings.DEBUG:
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
 # 所有非 API 路径都指向 Vue SPA
 urlpatterns += [

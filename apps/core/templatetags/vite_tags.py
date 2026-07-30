@@ -36,10 +36,10 @@ def vite_asset(source):
     tags = []
     # CSS（可能有多个）
     for css in entry.get("css", []):
-        tags.append(f'<link rel="stylesheet" href="/static/{css}">')
+        tags.append(f'<link rel="stylesheet" href="/static/frontend/{css}">')
     # JS
     js_file = entry.get("file")
     if js_file:
-        tags.append(f'<script type="module" src="/static/{js_file}"></script>')
+        tags.append(f'<script type="module" src="/static/frontend/{js_file}"></script>')
 
     return mark_safe("\n  ".join(tags))

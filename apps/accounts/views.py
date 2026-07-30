@@ -555,24 +555,15 @@ def chat_stream_view(request):
             status=llm_response.status_code,
         )
 
-    # 流式透传 — 字节缓冲 + 按行解码，避免多字节字符截断
+    # 流式透传 — iter_lines 按行读取，每行立即 yield
     def generate():
         try:
-            byte_buffer = b''
-            for chunk in llm_response.iter_content(chunk_size=1024):
-                if not chunk:
-                    continue
-                byte_buffer += chunk
-                # 按换行符分割，只解码完整行
-                while b'\n' in byte_buffer:
-                    line_bytes, byte_buffer = byte_buffer.split(b'\n', 1)
-                    line = line_bytes.decode('utf-8', errors='ignore').strip()
-                    if line:
-                        yield f"{line}\n\n"
-            # 处理缓冲区剩余数据
-            if byte_buffer.strip():
-                yield f"{byte_buffer.decode('utf-8', errors='ignore').strip()}\n\n"
+            for line in llm_response.iter_lines():
+                if line:
+                    yield f"{line.decode('utf-8', errors='ignore')}\n\n"
             yield "data: [DONE]\n\n"
+        except GeneratorExit:
+            pass
         except Exception:
             yield "data: [DONE]\n\n"
 
