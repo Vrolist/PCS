@@ -1,7 +1,9 @@
 <template>
   <!-- 侧边栏模式（固定右侧，始终显示） -->
   <teleport to="body">
-    <div v-if="chatStore.layoutMode === 'sidebar' && chatStore.visible" class="chat-panel sidebar">
+    <div v-if="chatStore.layoutMode === 'sidebar' && chatStore.visible" class="chat-panel sidebar"
+      :style="{ width: chatStore.sidebarWidth + 'px' }">
+      <div class="sidebar-resize-handle" @mousedown.prevent="onSidebarDragStart" />
       <div class="chat-container">
         <!-- 头部 -->
         <div class="chat-header">
@@ -158,7 +160,11 @@
   </div>
   <teleport to="body">
     <transition name="chat-slide">
-      <div v-if="chatStore.visible && chatStore.layoutMode === 'float'" class="chat-panel float">
+      <div v-if="chatStore.visible && chatStore.layoutMode === 'float'" class="chat-panel float"
+        :style="{ width: chatStore.floatWidth + 'px', height: chatStore.floatHeight + 'px' }">
+        <div class="float-resize-handle" @mousedown.prevent="onFloatResizeStart" />
+        <div class="float-resize-tl" @mousedown.prevent="onFloatResizeTLStart" />
+        <div class="float-resize-left" @mousedown.prevent="onFloatResizeLeftStart" />
         <div class="chat-container">
           <!-- 头部 -->
           <div class="chat-header">
@@ -396,6 +402,111 @@ async function handleRemoveConversation(id: number) {
 
 function onModelChange(id: number) {
   chatStore.saveChatSelectedConfigId(id)
+}
+
+// ---- 拖拽调整尺寸 ----
+const MIN_W = 320
+const MIN_H = 400
+const MAX_W = 800
+const MAX_H = 900
+let resizing = false
+let resizeMode: 'br' | 'tl' | 'left' | 'sidebar' = 'br' // br=bottom-right, tl=top-left
+let resizeStartX = 0
+let resizeStartY = 0
+let resizeStartW = 0
+let resizeStartH = 0
+
+function onFloatResizeStart(e: MouseEvent) {
+  resizing = true
+  resizeMode = 'br'
+  resizeStartX = e.clientX
+  resizeStartY = e.clientY
+  resizeStartW = chatStore.floatWidth
+  resizeStartH = chatStore.floatHeight
+  document.body.style.cursor = 'nwse-resize'
+  document.body.style.userSelect = 'none'
+  document.addEventListener('mousemove', onFloatResizeMove)
+  document.addEventListener('mouseup', onFloatResizeEnd)
+}
+
+function onFloatResizeTLStart(e: MouseEvent) {
+  resizing = true
+  resizeMode = 'tl'
+  resizeStartX = e.clientX
+  resizeStartY = e.clientY
+  resizeStartW = chatStore.floatWidth
+  resizeStartH = chatStore.floatHeight
+  document.body.style.cursor = 'nwse-resize'
+  document.body.style.userSelect = 'none'
+  document.addEventListener('mousemove', onFloatResizeMove)
+  document.addEventListener('mouseup', onFloatResizeEnd)
+}
+
+function onFloatResizeLeftStart(e: MouseEvent) {
+  resizing = true
+  resizeMode = 'left'
+  resizeStartX = e.clientX
+  resizeStartY = e.clientY
+  resizeStartW = chatStore.floatWidth
+  resizeStartH = chatStore.floatHeight
+  document.body.style.cursor = 'ew-resize'
+  document.body.style.userSelect = 'none'
+  document.addEventListener('mousemove', onFloatResizeMove)
+  document.addEventListener('mouseup', onFloatResizeEnd)
+}
+
+function onFloatResizeMove(e: MouseEvent) {
+  if (!resizing) return
+  let w: number, h: number
+  if (resizeMode === 'br') {
+    w = Math.min(MAX_W, Math.max(MIN_W, resizeStartW + (e.clientX - resizeStartX)))
+    h = Math.min(MAX_H, Math.max(MIN_H, resizeStartH + (e.clientY - resizeStartY)))
+  } else if (resizeMode === 'tl') {
+    w = Math.min(MAX_W, Math.max(MIN_W, resizeStartW - (e.clientX - resizeStartX)))
+    h = Math.min(MAX_H, Math.max(MIN_H, resizeStartH - (e.clientY - resizeStartY)))
+  } else {
+    // left edge — only width
+    w = Math.min(MAX_W, Math.max(MIN_W, resizeStartW - (e.clientX - resizeStartX)))
+    h = chatStore.floatHeight
+  }
+  chatStore.floatWidth = w
+  chatStore.floatHeight = h
+}
+
+function onFloatResizeEnd() {
+  resizing = false
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+  document.removeEventListener('mousemove', onFloatResizeMove)
+  document.removeEventListener('mouseup', onFloatResizeEnd)
+  chatStore.saveFloatWidth(chatStore.floatWidth)
+  chatStore.saveFloatHeight(chatStore.floatHeight)
+}
+
+function onSidebarDragStart(e: MouseEvent) {
+  resizing = true
+  resizeMode = 'sidebar'
+  resizeStartX = e.clientX
+  resizeStartW = chatStore.sidebarWidth
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+  document.addEventListener('mousemove', onSidebarDragMove)
+  document.addEventListener('mouseup', onSidebarDragEnd)
+}
+
+function onSidebarDragMove(e: MouseEvent) {
+  if (!resizing) return
+  const w = Math.min(MAX_W, Math.max(MIN_W, resizeStartW - (e.clientX - resizeStartX)))
+  chatStore.sidebarWidth = w
+}
+
+function onSidebarDragEnd() {
+  resizing = false
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+  document.removeEventListener('mousemove', onSidebarDragMove)
+  document.removeEventListener('mouseup', onSidebarDragEnd)
+  chatStore.saveSidebarWidth(chatStore.sidebarWidth)
 }
 
 function copyMessage(content: string) {
@@ -1038,5 +1149,97 @@ function renderMarkdown(text: string): string {
 }
 :global(.dark) .history-item-del:hover {
   background: rgba(245, 108, 108, 0.15);
+}
+
+/* ===== 拖拽调整尺寸手柄 ===== */
+.float-resize-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+  z-index: 10;
+}
+.float-resize-handle::after {
+  content: '';
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--text-muted);
+  border-bottom: 2px solid var(--text-muted);
+  opacity: 0.4;
+}
+.chat-panel.float:hover .float-resize-handle::after {
+  opacity: 0.7;
+}
+
+/* 浮动左上角拖拽 */
+.float-resize-tl {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+  z-index: 10;
+}
+.float-resize-tl::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 8px;
+  height: 8px;
+  border-left: 2px solid var(--text-muted);
+  border-top: 2px solid var(--text-muted);
+  opacity: 0.4;
+}
+.chat-panel.float:hover .float-resize-tl::after {
+  opacity: 0.7;
+}
+
+/* 浮动左侧边拖拽 */
+.float-resize-left {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  cursor: ew-resize;
+  z-index: 10;
+  background: transparent;
+  transition: background 0.2s;
+}
+.chat-panel.float .float-resize-left:hover {
+  background: var(--primary-color, #409eff);
+}
+
+.sidebar-resize-handle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  cursor: col-resize;
+  z-index: 10;
+  background: transparent;
+  transition: background 0.2s;
+}
+.sidebar-resize-handle:hover {
+  background: var(--primary-color, #409eff);
+}
+.chat-panel.sidebar .sidebar-resize-handle {
+  left: -2px;
+}
+.chat-panel.sidebar .sidebar-resize-handle::after {
+  content: '';
+  position: absolute;
+  left: -3px;
+  right: -3px;
+  top: 0;
+  bottom: 0;
 }
 </style>

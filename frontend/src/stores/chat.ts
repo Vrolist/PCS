@@ -62,6 +62,24 @@ function saveLayoutMode(mode: 'float' | 'sidebar') {
   localStorage.setItem(LAYOUT_KEY, mode)
 }
 
+// 用户自定义聊天面板尺寸
+const FLOAT_W_KEY = 'pcs_chat_float_w'
+const FLOAT_H_KEY = 'pcs_chat_float_h'
+const SIDEBAR_W_KEY = 'pcs_chat_sidebar_w'
+
+function loadFloatWidth(): number {
+  try { const v = localStorage.getItem(FLOAT_W_KEY); return v ? Number(v) : 420 } catch { return 420 }
+}
+function saveFloatWidth(v: number) { localStorage.setItem(FLOAT_W_KEY, String(v)) }
+function loadFloatHeight(): number {
+  try { const v = localStorage.getItem(FLOAT_H_KEY); return v ? Number(v) : 600 } catch { return 600 }
+}
+function saveFloatHeight(v: number) { localStorage.setItem(FLOAT_H_KEY, String(v)) }
+function loadSidebarWidth(): number {
+  try { const v = localStorage.getItem(SIDEBAR_W_KEY); return v ? Number(v) : 420 } catch { return 420 }
+}
+function saveSidebarWidth(v: number) { localStorage.setItem(SIDEBAR_W_KEY, String(v)) }
+
 const BASE_URL_MAP: Record<string, string> = {
   deepseek: 'https://api.deepseek.com',
   kimi: 'https://api.moonshot.cn',
@@ -94,6 +112,9 @@ export const useChatStore = defineStore('chat', () => {
   const configs = ref<LLMConfig[]>([])
   const currentController = ref<AbortController | null>(null)
   const layoutMode = ref<'float' | 'sidebar'>(loadLayoutMode())
+  const floatWidth = ref(loadFloatWidth())
+  const floatHeight = ref(loadFloatHeight())
+  const sidebarWidth = ref(loadSidebarWidth())
   const configLoading = ref(false)
   const configLoaded = ref(false)
 
@@ -547,6 +568,12 @@ export const useChatStore = defineStore('chat', () => {
     loading,
     configs,
     layoutMode,
+    floatWidth,
+    floatHeight,
+    sidebarWidth,
+    saveFloatWidth,
+    saveFloatHeight,
+    saveSidebarWidth,
     configLoading,
     configLoaded,
     conversations,

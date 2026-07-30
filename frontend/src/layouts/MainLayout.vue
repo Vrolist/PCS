@@ -12,7 +12,8 @@
       class="sidebar-resize-handle"
       @mousedown="onDragStart"
     />
-    <div class="layout-main" :class="{ 'has-chat-sidebar': chatStore.layoutMode === 'sidebar' && chatStore.visible }">
+    <div class="layout-main" :class="{ 'has-chat-sidebar': chatStore.layoutMode === 'sidebar' && chatStore.visible }"
+      :style="chatStore.layoutMode === 'sidebar' && chatStore.visible ? { marginRight: chatStore.sidebarWidth + 'px' } : {}">
       <AppHeader />
       <main class="main-content">
         <router-view />
@@ -110,9 +111,6 @@ onUnmounted(() => {
   min-width: 0;
   overflow: hidden;
   transition: margin-right 0.3s;
-}
-.layout-main.has-chat-sidebar {
-  margin-right: 420px;
 }
 .main-content {
   flex: 1;

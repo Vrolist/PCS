@@ -2,13 +2,15 @@ import logging
 import json
 
 import requests as http_requests
-from django.http import StreamingHttpResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+from django.http import StreamingHttpResponse, JsonResponse
 from django.shortcuts import render
 from rest_framework import status, generics
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
 
 from .models import User, PasswordResetCode, UserLog, SystemConfig, UserLLMConfig, ChatConversation, ChatMessage, UserSystemPrompt, DEFAULT_SYSTEM_PROMPT
 from .serializers import (
@@ -486,31 +488,47 @@ def system_prompt_detail_view(request, pk):
 # LLM 流式代理
 # ============================================================
 
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
+@csrf_exempt
+@require_http_methods(["POST"])
 def chat_stream_view(request):
     """
     POST /api/auth/chat/stream/
+    纯 Django 视图（无 DRF 装饰器），避免 DRF + ASGI 下的 StreamingHttpResponse 兼容问题。
     后端代理 LLM 请求，注入 PVE 数据上下文，流式返回响应。
     """
-    data = request.data
+    # 手动解析 JSON 请求体
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"detail": "无效的 JSON"}, status=400)
+
+    # 手动 JWT 鉴权
+    auth = request.META.get('HTTP_AUTHORIZATION', '')
+    if not auth.startswith('Bearer '):
+        return JsonResponse({"detail": "未授权"}, status=401)
+    try:
+        token = AccessToken(auth[7:])
+        user = User.objects.get(id=token['user_id'])
+    except Exception:
+        return JsonResponse({"detail": "token 无效"}, status=401)
+
     config_id = data.get('config_id')
     messages = data.get('messages', [])
     cluster_id = data.get('cluster_id')
     user_message = data.get('user_message', '')
 
     if not config_id or not messages:
-        return Response({"detail": "缺少必要参数"}, status=status.HTTP_400_BAD_REQUEST)
+        return JsonResponse({"detail": "缺少必要参数"}, status=400)
 
     # 获取 LLM 配置
     try:
-        config = UserLLMConfig.objects.get(pk=config_id, user=request.user)
+        config = UserLLMConfig.objects.get(pk=config_id, user=user)
     except UserLLMConfig.DoesNotExist:
-        return Response({"detail": "配置不存在"}, status=status.HTTP_404_NOT_FOUND)
+        return JsonResponse({"detail": "配置不存在"}, status=404)
 
     api_key = config.api_key
     if not api_key:
-        return Response({"detail": "未配置 API Key"}, status=status.HTTP_400_BAD_REQUEST)
+        return JsonResponse({"detail": "未配置 API Key"}, status=400)
 
     # 注入 PVE 数据上下文到 system prompt
     from .chat_context import build_pve_context
@@ -543,34 +561,46 @@ def chat_stream_view(request):
             timeout=120,
         )
     except http_requests.exceptions.RequestException as e:
-        return Response(
-            {"detail": f"连接 LLM 失败: {str(e)}"},
-            status=status.HTTP_502_BAD_GATEWAY,
-        )
+        logger.warning(f"chat stream: LLM 连接失败 (user {user.id}): {e}")
+        return JsonResponse({"detail": f"连接 LLM 失败: {str(e)}"}, status=502)
 
     if llm_response.status_code != 200:
         err_body = llm_response.text[:500]
-        return Response(
+        logger.warning(f"chat stream: LLM 返回错误 (user {user.id}): {llm_response.status_code}")
+        return JsonResponse(
             {"detail": f"LLM 返回错误 ({llm_response.status_code}): {err_body}"},
             status=llm_response.status_code,
         )
 
-    # 流式透传 — iter_lines 按行读取，每行立即 yield
+    # 流式透传 — 逐字节读取 + 字节级行缓冲
     def generate():
         try:
-            for line in llm_response.iter_lines():
-                if line:
-                    yield f"{line.decode('utf-8', errors='ignore')}\n\n"
+            # 立即 yield → 发送 HTTP 200 + 建立 SSE 连接
+            yield ": connected\n\n"
+
+            remainder = b''
+            for chunk in llm_response.iter_content(chunk_size=1):
+                if not chunk:
+                    continue
+                remainder += chunk
+                while b'\n' in remainder:
+                    line, remainder = remainder.split(b'\n', 1)
+                    line = line.strip()
+                    if line:
+                        yield f"{line.decode('utf-8', errors='ignore')}\n\n"
+            if remainder.strip():
+                yield f"{remainder.strip().decode('utf-8', errors='ignore')}\n\n"
             yield "data: [DONE]\n\n"
+            logger.info(f"chat stream: 完成 (user {user.id})")
         except GeneratorExit:
+            # 客户端断开连接 → 正常终止
+            logger.warning(f"chat stream: 客户端断开 (user {user.id})")
             pass
         except Exception:
+            logger.exception(f"chat stream: 流式处理异常 (user {user.id})")
             yield "data: [DONE]\n\n"
 
-    response = StreamingHttpResponse(
-        generate(),
-        content_type='text/event-stream',
-    )
+    response = StreamingHttpResponse(generate(), content_type='text/event-stream')
     response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     response['X-Accel-Buffering'] = 'no'
     response['Access-Control-Allow-Origin'] = '*'
