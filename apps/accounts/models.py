@@ -136,7 +136,7 @@ class UserLLMConfig(models.Model):
         ('plan', 'Token Plan（套餐）'),
     ]
 
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='llm_configs')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='llm_configs', null=True, blank=True, help_text='留空表示全局通用配置')
     name = models.CharField('配置名称', max_length=64, default='')
     provider = models.CharField('服务提供商', max_length=16, choices=PROVIDER_CHOICES, default='deepseek')
     billing_mode = models.CharField('计费方式', max_length=8, choices=BILLING_MODE_CHOICES, blank=True, default='')

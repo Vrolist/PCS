@@ -73,7 +73,7 @@ async def sse_chat_stream(scope, receive, send):
         return
 
     try:
-        config = await sync_to_async(UserLLMConfig.objects.get, thread_sensitive=True)(pk=config_id, user=user)
+        config = await sync_to_async(UserLLMConfig.objects.get, thread_sensitive=True)(pk=config_id)
     except UserLLMConfig.DoesNotExist:
         await _send_json(send, 404, {"detail": "配置不存在"})
         return

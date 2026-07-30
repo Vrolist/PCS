@@ -324,14 +324,14 @@ def toggle_registration_view(request):
 def llm_config_list_view(request):
     """GET/POST /api/auth/llm-configs/"""
     if request.method == "GET":
-        qs = UserLLMConfig.objects.filter(user=request.user)
+        qs = UserLLMConfig.objects.all()
         serializer = UserLLMConfigSerializer(qs, many=True)
         return Response(serializer.data)
 
-    # POST
+    # POST（全局通用配置，无需关联用户）
     serializer = UserLLMConfigSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
-    serializer.save(user=request.user)
+    serializer.save()
     log_user_action(request.user, "create", "llm_config", "", f"新增 LLM 配置: {serializer.data.get('name')}", request)
     return Response(serializer.data, status=status.HTTP_201_CREATED)
 
@@ -341,7 +341,7 @@ def llm_config_list_view(request):
 def llm_config_detail_view(request, pk):
     """PATCH/DELETE /api/auth/llm-configs/:id/"""
     try:
-        config = UserLLMConfig.objects.get(pk=pk, user=request.user)
+        config = UserLLMConfig.objects.get(pk=pk)
     except UserLLMConfig.DoesNotExist:
         return Response({"detail": "配置不存在"}, status=status.HTTP_404_NOT_FOUND)
 
@@ -363,12 +363,12 @@ def llm_config_detail_view(request, pk):
 def llm_config_set_active_view(request, pk):
     """POST /api/auth/llm-configs/:id/set-active/ - 设为当前选中"""
     try:
-        config = UserLLMConfig.objects.get(pk=pk, user=request.user)
+        config = UserLLMConfig.objects.get(pk=pk)
     except UserLLMConfig.DoesNotExist:
         return Response({"detail": "配置不存在"}, status=status.HTTP_404_NOT_FOUND)
 
-    # 该用户所有配置 is_active 设为 False
-    UserLLMConfig.objects.filter(user=request.user).update(is_active=False)
+    # 所有配置 is_active 设为 False
+    UserLLMConfig.objects.all().update(is_active=False)
     config.is_active = True
     config.save(update_fields=["is_active"])
     return Response({"detail": "已设为当前配置", "id": config.pk})
@@ -526,7 +526,7 @@ async def chat_stream_view(request):
 
     # 获取 LLM 配置
     try:
-        config = await sync_to_async(UserLLMConfig.objects.get)(pk=config_id, user=user)
+        config = await sync_to_async(UserLLMConfig.objects.get)(pk=config_id)
     except UserLLMConfig.DoesNotExist:
         return JsonResponse({"detail": "配置不存在"}, status=404)
 
