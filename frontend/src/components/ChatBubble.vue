@@ -170,6 +170,7 @@
       <div v-if="chatStore.visible && chatStore.layoutMode === 'float'" class="chat-panel float"
         :style="{ width: chatStore.floatWidth + 'px', height: chatStore.floatHeight + 'px' }">
         <div class="float-resize-tl" @mousedown.prevent="onFloatResizeTLStart" />
+        <div class="float-resize-top" @mousedown.prevent="onFloatResizeTopStart" />
         <div class="float-resize-left" @mousedown.prevent="onFloatResizeLeftStart" />
         <div class="chat-container">
           <!-- 头部 -->
@@ -424,7 +425,7 @@ const MIN_H = 400
 const MAX_W = 800
 const MAX_H = 900
 let resizing = false
-let resizeMode: 'tl' | 'left' | 'sidebar' = 'tl'
+let resizeMode: 'tl' | 'top' | 'left' | 'sidebar' = 'tl'
 let resizeStartX = 0
 let resizeStartY = 0
 let resizeStartW = 0
@@ -438,6 +439,19 @@ function onFloatResizeTLStart(e: MouseEvent) {
   resizeStartW = chatStore.floatWidth
   resizeStartH = chatStore.floatHeight
   document.body.style.cursor = 'nwse-resize'
+  document.body.style.userSelect = 'none'
+  document.addEventListener('mousemove', onFloatResizeMove)
+  document.addEventListener('mouseup', onFloatResizeEnd)
+}
+
+function onFloatResizeTopStart(e: MouseEvent) {
+  resizing = true
+  resizeMode = 'top'
+  resizeStartX = e.clientX
+  resizeStartY = e.clientY
+  resizeStartW = chatStore.floatWidth
+  resizeStartH = chatStore.floatHeight
+  document.body.style.cursor = 'ns-resize'
   document.body.style.userSelect = 'none'
   document.addEventListener('mousemove', onFloatResizeMove)
   document.addEventListener('mouseup', onFloatResizeEnd)
@@ -461,6 +475,10 @@ function onFloatResizeMove(e: MouseEvent) {
   let w: number, h: number
   if (resizeMode === 'tl') {
     w = Math.min(MAX_W, Math.max(MIN_W, resizeStartW - (e.clientX - resizeStartX)))
+    h = Math.min(MAX_H, Math.max(MIN_H, resizeStartH - (e.clientY - resizeStartY)))
+  } else if (resizeMode === 'top') {
+    // top edge — only height
+    w = chatStore.floatWidth
     h = Math.min(MAX_H, Math.max(MIN_H, resizeStartH - (e.clientY - resizeStartY)))
   } else {
     // left edge — only width
@@ -1277,21 +1295,23 @@ function renderMarkdown(text: string): string {
   width: 16px;
   height: 16px;
   cursor: nwse-resize;
-  z-index: 10;
+  z-index: 11;
 }
-.float-resize-tl::after {
-  content: '';
+
+/* 浮动上方边框拖拽 */
+.float-resize-top {
   position: absolute;
-  left: 3px;
-  top: 3px;
-  width: 8px;
-  height: 8px;
-  border-left: 2px solid var(--text-muted);
-  border-top: 2px solid var(--text-muted);
-  opacity: 0.4;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 4px;
+  cursor: ns-resize;
+  z-index: 10;
+  background: transparent;
+  transition: background 0.2s;
 }
-.chat-panel.float:hover .float-resize-tl::after {
-  opacity: 0.7;
+.chat-panel.float .float-resize-top:hover {
+  background: var(--primary-color, #409eff);
 }
 
 /* 浮动左侧边拖拽 */
