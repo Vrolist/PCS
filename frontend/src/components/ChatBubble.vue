@@ -514,10 +514,67 @@ function copyMessage(content: string) {
   )
 }
 
-/** 简易 Markdown → HTML（粗体、行内代码、列表、代码块、标题、思考过程） */
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
+function splitTableCells(row: string): string[] {
+  return row.slice(1, -1).split('|').map(s => s.trim())
+}
+
+function renderTables(text: string): string {
+  const lines = text.split('\n')
+  const result: string[] = []
+  let i = 0
+  while (i < lines.length) {
+    const trimmed = lines[i].trim()
+    if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+      const block: string[] = [trimmed]
+      let j = i + 1
+      while (j < lines.length) {
+        const next = lines[j].trim()
+        if (next.startsWith('|') && next.endsWith('|')) {
+          block.push(next)
+          j++
+        } else {
+          break
+        }
+      }
+      if (block.length >= 2 && /^\|[-:\|\s]+\|$/.test(block[1])) {
+        const headerCells = splitTableCells(block[0])
+        const bodyRows = block.slice(2).map(row => splitTableCells(row))
+        let tableHtml = '<table class="md-table"><thead><tr>'
+        headerCells.forEach(cell => {
+          tableHtml += `<th>${escapeHtml(cell)}</th>`
+        })
+        tableHtml += '</tr></thead><tbody>'
+        bodyRows.forEach(row => {
+          tableHtml += '<tr>'
+          row.forEach((cell, idx) => {
+            const display = headerCells[idx] === '' ? '' : escapeHtml(cell)
+            tableHtml += `<td>${display}</td>`
+          })
+          tableHtml += '</tr>'
+        })
+        tableHtml += '</tbody></table>'
+        result.push(tableHtml)
+        i = j
+        continue
+      }
+    }
+    result.push(lines[i])
+    i++
+  }
+  return result.join('\n')
+}
+
+/** 简易 Markdown → HTML（粗体、行内代码、列表、代码块、标题、思考过程、表格） */
 function renderMarkdown(text: string): string {
   if (!text) return ''
-  let html = text
+  let html = renderTables(text)
     // 思考过程 <think>...</think>：可折叠灰色块
     .replace(/<think>([\s\S]*?)<\/think>/g, '<details class="md-think"><summary>💭 思考过程</summary><div class="md-think-content">$1</div></details>')
     // 未闭合的 <think>：显示"思考中..."，流式过程中使用
@@ -968,6 +1025,28 @@ function renderMarkdown(text: string): string {
   font-weight: 600;
   margin: 8px 0 4px;
   color: var(--text-heading);
+}
+.msg-content :deep(.md-table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.msg-content :deep(.md-table th),
+.msg-content :deep(.md-table td) {
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  text-align: left;
+  vertical-align: top;
+}
+.msg-content :deep(.md-table th) {
+  background: var(--bg-secondary);
+  font-weight: 600;
+  color: var(--text-heading);
+}
+.msg-content :deep(.md-table tr:nth-child(even)) {
+  background: var(--bg-card);
 }
 
 /* 暗色代码块 */
