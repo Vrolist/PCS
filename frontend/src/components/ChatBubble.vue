@@ -952,8 +952,11 @@ function renderMarkdown(text: string): string {
   background: var(--primary-color);
 }
 .msg-body {
-  max-width: 80%;
+  max-width: 100%;
   min-width: 0;
+}
+.chat-msg.user .msg-body {
+  max-width: 80%;
 }
 .msg-content {
   padding: 10px 14px;
