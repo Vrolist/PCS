@@ -92,12 +92,20 @@ def make_pve_tools(cluster_id: int):
             disk = f"{n.rootfs_total_gb}GB" if n.rootfs_total_gb else "N/A"
             uptime = f"{n.uptime_seconds // 3600}h" if n.uptime_seconds else "N/A"
             cores = f"{n.cpu_cores}核" if n.cpu_cores else "N/A"
+            sockets = f"{n.cpu_sockets}路" if n.cpu_sockets else "N/A"
+            freq = f"{n.cpu_mhz:.0f}MHz" if n.cpu_mhz else "N/A"
+            hvm = "已启用" if n.cpu_hvm else "未启用"
 
-            lines.append(
-                f"- {n.node_name}: 状态={n.status}, CPU={cpu}({cores}), "
-                f"内存={mem_pct}({mem_total}), 磁盘={disk}, "
-                f"运行={uptime}, IP={n.ip_address or 'N/A'}"
+            line = (
+                f"- {n.node_name}: 状态={n.status}\n"
+                f"  CPU: 负载={cpu}, 型号={n.cpu_model or '未知'}, "
+                f"厂商={n.cpu_vendor or '未知'}, {sockets}×{cores}, 频率={freq}\n"
+                f"  虚拟化: VT-x/AMD-V={hvm}, CPU特性={n.cpu_flags or '未知'}\n"
+                f"  内核: {n.kernel_version or '未知'}\n"
+                f"  内存: {mem_pct}({mem_total}), 磁盘: {disk}, "
+                f"运行: {uptime}, IP: {n.ip_address or 'N/A'}"
             )
+            lines.append(line)
 
         return "\n".join(lines) if lines else "未找到节点数据"
 
