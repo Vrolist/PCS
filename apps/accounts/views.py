@@ -1,5 +1,8 @@
 import logging
+import json
 
+import requests as http_requests
+from django.http import StreamingHttpResponse
 from django.shortcuts import render
 from rest_framework import status, generics
 from rest_framework.decorators import api_view, permission_classes
@@ -477,3 +480,131 @@ def system_prompt_detail_view(request, pk):
     serializer.is_valid(raise_exception=True)
     serializer.save()
     return Response(serializer.data)
+
+
+# ============================================================
+# LLM 流式代理
+# ============================================================
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def chat_stream_view(request):
+    """
+    POST /api/auth/chat/stream/
+    后端代理 LLM 请求，注入 PVE 数据上下文，流式返回响应。
+    """
+    data = request.data
+    config_id = data.get('config_id')
+    messages = data.get('messages', [])
+    cluster_id = data.get('cluster_id')
+    user_message = data.get('user_message', '')
+
+    if not config_id or not messages:
+        return Response({"detail": "缺少必要参数"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # 获取 LLM 配置
+    try:
+        config = UserLLMConfig.objects.get(pk=config_id, user=request.user)
+    except UserLLMConfig.DoesNotExist:
+        return Response({"detail": "配置不存在"}, status=status.HTTP_404_NOT_FOUND)
+
+    api_key = config.api_key
+    if not api_key:
+        return Response({"detail": "未配置 API Key"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # 注入 PVE 数据上下文到 system prompt
+    from .chat_context import build_pve_context
+    pve_context = build_pve_context(cluster_id, user_message) if cluster_id else ''
+
+    if pve_context:
+        enhanced_messages = _inject_context(messages, pve_context)
+    else:
+        enhanced_messages = messages
+
+    # 构建 LLM API URL
+    base_url = config.base_url.rstrip('/')
+    api_path = '/chat/completions' if base_url.endswith('/v1') else '/v1/chat/completions'
+    llm_url = f"{base_url}{api_path}"
+
+    # 转发请求到 LLM API（流式）
+    try:
+        llm_response = http_requests.post(
+            llm_url,
+            json={
+                "model": config.model,
+                "messages": enhanced_messages,
+                "stream": True,
+            },
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}",
+            },
+            stream=True,
+            timeout=120,
+        )
+    except http_requests.exceptions.RequestException as e:
+        return Response(
+            {"detail": f"连接 LLM 失败: {str(e)}"},
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
+
+    if llm_response.status_code != 200:
+        err_body = llm_response.text[:500]
+        return Response(
+            {"detail": f"LLM 返回错误 ({llm_response.status_code}): {err_body}"},
+            status=llm_response.status_code,
+        )
+
+    # 流式透传 — 字节缓冲 + 按行解码，避免多字节字符截断
+    def generate():
+        try:
+            byte_buffer = b''
+            for chunk in llm_response.iter_content(chunk_size=1024):
+                if not chunk:
+                    continue
+                byte_buffer += chunk
+                # 按换行符分割，只解码完整行
+                while b'\n' in byte_buffer:
+                    line_bytes, byte_buffer = byte_buffer.split(b'\n', 1)
+                    line = line_bytes.decode('utf-8', errors='ignore').strip()
+                    if line:
+                        yield f"{line}\n\n"
+            # 处理缓冲区剩余数据
+            if byte_buffer.strip():
+                yield f"{byte_buffer.decode('utf-8', errors='ignore').strip()}\n\n"
+            yield "data: [DONE]\n\n"
+        except Exception:
+            yield "data: [DONE]\n\n"
+
+    response = StreamingHttpResponse(
+        generate(),
+        content_type='text/event-stream',
+    )
+    response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response['X-Accel-Buffering'] = 'no'
+    response['Access-Control-Allow-Origin'] = '*'
+    return response
+
+
+def _inject_context(messages, pve_context):
+    """将 PVE 数据上下文注入到 system prompt 中"""
+    enhanced = []
+    context_block = f"\n\n--- 当前集群实时数据 ---\n{pve_context}\n--- 数据结束 ---\n"
+
+    for msg in messages:
+        if msg.get('role') == 'system':
+            enhanced.append({
+                'role': 'system',
+                'content': msg['content'] + context_block,
+            })
+        else:
+            enhanced.append(msg)
+
+    # 如果没有 system message，在最前面插入
+    if not any(m.get('role') == 'system' for m in enhanced):
+        enhanced.insert(0, {
+            'role': 'system',
+            'content': f"你是 PCS 平台的 AI 运维助手。{context_block}",
+        })
+
+    return enhanced

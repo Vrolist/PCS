@@ -1,4 +1,5 @@
 from django.conf import settings
+import socket
 
 
 def vite_context(request):
@@ -7,15 +8,26 @@ def vite_context(request):
 
     - vite_host: 根据请求 Host 自动提取主机名
     - vite_port: Vite dev server 端口
-    - is_debug: 替代 Django 内置的 {{ debug }}（Django 5.0 起仅在
-      INTERNAL_IPS 匹配时才注入 debug 变量，开发环境不可靠）
+    - is_debug: 仅在 Vite dev server 运行时为 True（自动检测）
     """
     host = request.get_host()
     hostname = host.split(":")[0]
     vite_port = getattr(settings, "VITE_PORT", 5173)
 
+    # 检测 Vite dev server 是否在运行
+    vite_running = False
+    if settings.DEBUG:
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(0.3)
+            result = sock.connect_ex(('127.0.0.1', vite_port))
+            vite_running = result == 0
+            sock.close()
+        except Exception:
+            pass
+
     return {
         "vite_host": hostname,
         "vite_port": vite_port,
-        "is_debug": settings.DEBUG,
+        "is_debug": vite_running,
     }

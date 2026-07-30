@@ -365,7 +365,7 @@ export const useChatStore = defineStore('chat', () => {
   async function sendMessage(content: string, clusterId?: number) {
     if (!content.trim() || loading.value) return
     const cfg = activeConfig.value
-    if (!cfg || !cfg.apiKey) return
+    if (!cfg) return
 
     // 如果没有对话，自动创建
     let convId = currentConversationId.value
@@ -415,21 +415,23 @@ export const useChatStore = defineStore('chat', () => {
     let assistantMsg: ChatMessage | null = null
 
     try {
-      const apiPath = cfg.baseUrl.endsWith('/v1') ? '/chat/completions' : '/v1/chat/completions'
-      const response = await fetch(`${cfg.baseUrl}${apiPath}`, {
+      // 通过后端代理调用 LLM（注入 PVE 数据 + 流式返回）
+      const token = localStorage.getItem('token') || ''
+      const response = await fetch('/api/auth/chat/stream/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${cfg.apiKey}`,
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
-          model: cfg.model,
+          config_id: cfg.id,
+          cluster_id: clusterId,
+          user_message: content.trim(),
           messages: [
             { role: 'system', content: systemPrompt },
             ...history,
             { role: 'user', content: content.trim() },
           ],
-          stream: true,
         }),
         signal: controller.signal,
       })
