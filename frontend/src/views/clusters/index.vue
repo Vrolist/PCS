@@ -38,6 +38,7 @@
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="detail"><el-icon><View /></el-icon>{{ t('common.detail') }}</el-dropdown-item>
+                <el-dropdown-item command="edit"><el-icon><Edit /></el-icon>{{ t('clusters.edit') }}</el-dropdown-item>
                 <template v-if="cluster.is_active">
                   <el-dropdown-item command="stop" divided><el-icon><VideoPause /></el-icon>{{ t('clusters.stop') }}</el-dropdown-item>
                 </template>
@@ -103,6 +104,22 @@
       <template #footer>
         <el-button @click="showCreate = false">{{ t('common.cancel') }}</el-button>
         <el-button type="primary" :loading="creating" @click="handleCreate">{{ t('clusters.create') }}</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 编辑集群弹窗 -->
+    <el-dialog v-model="showEdit" :title="t('clusters.editTitle')" width="480px" :close-on-click-modal="false">
+      <el-form ref="editFormRef" :model="editForm" :rules="editRules" label-width="100px">
+        <el-form-item :label="t('clusters.nameLabel')" prop="name">
+          <el-input v-model="editForm.name" :placeholder="t('clusters.clusterNamePlaceholder')" maxlength="128" />
+        </el-form-item>
+        <el-form-item :label="t('clusters.description')">
+          <el-input v-model="editForm.description" type="textarea" :rows="3" :placeholder="t('clusters.descPlaceholder')" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showEdit = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="editing" @click="handleEditSave">{{ t('common.save') }}</el-button>
       </template>
     </el-dialog>
 
@@ -291,7 +308,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 
 const { t } = useI18n()
 import type { FormInstance } from 'element-plus'
-import { Loading, View, Delete, CopyDocument, VideoPause, CircleCheck, CircleCheckFilled, Upload, RefreshRight, InfoFilled } from '@element-plus/icons-vue'
+import { Loading, View, Edit, Delete, CopyDocument, VideoPause, CircleCheck, CircleCheckFilled, Upload, RefreshRight, InfoFilled } from '@element-plus/icons-vue'
 import { getClusters, getCluster, createCluster, updateCluster, deleteCluster, getLatestAgentVersion, triggerSync } from '@/api/clusters'
 import type { Cluster, ClusterDetail } from '@/api/clusters'
 
@@ -304,6 +321,16 @@ const detail = ref<ClusterDetail | null>(null)
 const createFormRef = ref<FormInstance>()
 const latestAgentVersion = ref('')
 const detailTab = ref('info')
+
+// 编辑集群
+const showEdit = ref(false)
+const editing = ref(false)
+const editFormRef = ref<FormInstance>()
+const editClusterId = ref(0)
+const editForm = ref({ name: '', description: '' })
+const editRules = {
+  name: [{ required: true, message: t('clusters.nameRequired'), trigger: 'blur' }],
+}
 
 // 同步相关状态
 const syncing = ref(false)
@@ -427,8 +454,31 @@ async function confirmDelete(cluster: Cluster) {
   }
 }
 
+function handleEdit(cluster: Cluster) {
+  editClusterId.value = cluster.id
+  editForm.value = { name: cluster.name, description: (cluster as any).description || '' }
+  showEdit.value = true
+}
+
+async function handleEditSave() {
+  const valid = await editFormRef.value?.validate().catch(() => false)
+  if (!valid) return
+  editing.value = true
+  try {
+    await updateCluster(editClusterId.value, editForm.value as any)
+    ElMessage.success(t('clusters.editSuccess'))
+    showEdit.value = false
+    await loadClusters()
+  } catch {
+    // error handled by interceptor
+  } finally {
+    editing.value = false
+  }
+}
+
 function handleCardCommand(cmd: string, cluster: Cluster) {
   if (cmd === 'detail') viewDetail(cluster)
+  else if (cmd === 'edit') handleEdit(cluster)
   else if (cmd === 'stop') handleToggleActive(cluster, false)
   else if (cmd === 'restore') handleToggleActive(cluster, true)
   else if (cmd === 'delete') confirmDelete(cluster)
