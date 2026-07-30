@@ -1,5 +1,6 @@
 import logging
 import json
+import time
 
 from asgiref.sync import sync_to_async
 from django.views.decorators.csrf import csrf_exempt
@@ -543,16 +544,23 @@ async def chat_stream_view(request):
     # 流式 SSE 响应
     async def generate():
         yield ": connected\n\n"
+        t0 = time.monotonic()
+        token_count = 0
         try:
             async for token in stream_chat(llm, langchain_msgs):
+                token_count += 1
+                elapsed = time.monotonic() - t0
+                logger.debug(f"chat stream: token#{token_count} +{elapsed:.2f}s len={len(token)}")
                 chunk = json.dumps({
                     "choices": [{"delta": {"content": token}}]
                 }, ensure_ascii=False)
                 yield f"data: {chunk}\n\n"
             yield "data: [DONE]\n\n"
-            logger.info(f"chat stream: 完成 (user {user.id})")
+            elapsed = time.monotonic() - t0
+            logger.info(f"chat stream: 完成 user={user.id} tokens={token_count} elapsed={elapsed:.2f}s")
         except Exception as e:
-            logger.warning(f"chat stream: LLM 调用失败 (user {user.id}): {e}")
+            elapsed = time.monotonic() - t0
+            logger.warning(f"chat stream: LLM 调用失败 user={user.id} tokens={token_count} elapsed={elapsed:.2f}s err={e}")
             err_chunk = json.dumps({
                 "choices": [{"delta": {"content": f"\n\n[错误: {e}]"}}]
             }, ensure_ascii=False)

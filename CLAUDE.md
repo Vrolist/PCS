@@ -8,18 +8,21 @@ PVE 集群扫描与管理平台 — Django 5 + Vue 3 全栈项目。
 pve-cluster-scan/
 ├── config/                 # Django 项目配置
 │   ├── settings.py         #   - DRF / JWT / CORS / Vite 端口配置
-│   └── urls.py             #   - auth 路由 + catch-all → Vue SPA
+│   ├── urls.py             #   - auth 路由 + catch-all → Vue SPA
+│   └── asgi.py             #   - ASGI 入口（uvicorn）
 ├── apps/
 │   ├── core/               # 通用工具（Vite 模板标签 / 上下文处理器）
 │   │   ├── context_processors.py  # - vite_context（注入 vite_host/vite_port）
 │   │   ├── templatetags/
 │   │   │   └── vite_tags.py       # - vite_asset（生产模式 manifest 查找）
 │   │   └── views.py
-│   ├── accounts/           # 用户认证 & 操作日志
-│   │   ├── models.py       #   - User / PasswordResetCode / UserLog
+│   ├── accounts/           # 用户认证 & 操作日志 & AI 助手
+│   │   ├── models.py       #   - User / PasswordResetCode / UserLog / UserLLMConfig / ChatConversation / ChatMessage
 │   │   ├── serializers.py  #   - Login / Register / User / PasswordReset
-│   │   ├── views.py        #   - 登录 / 注册 / 用户信息 / 密码重置 / 操作日志列表
-│   │   ├── urls.py         #   - /api/auth/ 路由（含 logs/）
+│   │   ├── views.py        #   - 登录 / 注册 / 用户信息 / 密码重置 / 操作日志 / AI 聊天流式端点
+│   │   ├── urls.py         #   - /api/auth/ 路由（含 logs/ + chat/ + llm-configs/ + system-prompts/）
+│   │   ├── llm_service.py  #   - LangChain LLM 封装（build_llm / stream_chat）
+│   │   ├── chat_context.py #   - PVE 数据上下文注入（关键词匹配 → 动态查询）
 │   │   └── admin.py
 │   ├── clusters/           # 集群管理（CRUD + Agent 列表）
 │   │   ├── models.py       #   - Cluster（含 agent_token）
@@ -105,7 +108,7 @@ pve-cluster-scan/
 ├── static/                           # Vite 构建输出
 ├── .venv/                            # Python 虚拟环境（Python 3.12）
 ├── manage.py
-├── dev_start.sh                      # 一键启动（.venv + 依赖 + Django + Vite）
+├── dev_start.sh                      # 一键启动（.venv + 依赖 + 前端构建 + uvicorn ASGI）
 ├── scripts/
 │   └── seed_test_data.py             # 模拟测试数据种子脚本（5 级架构 + SDN）
 ├── requirements.txt                  # 后端 Python 依赖
@@ -117,10 +120,11 @@ pve-cluster-scan/
 | 层 | 技术 |
 |----|------|
 | 后端 | Python 3.12 + Django 5.0 + DRF |
+| 服务器 | uvicorn（ASGI，原生支持 streaming） |
+| AI | LangChain + langchain-openai（LLM 流式调用） |
 | 前端 | Vue 3 + TypeScript + Vite |
 | UI | Element Plus + Pinia + Vue Router |
 | 图表 | ECharts + vue-echarts |
-| 集成 | Vite（模板自动适配 IP/端口，无需 django-vite） |
 | 认证 | SimpleJWT（access + refresh token） |
 | 主题 | CSS 变量 + Element Plus dark 模式 |
 
@@ -141,44 +145,42 @@ source .venv/bin/activate
 `dev_start.sh` 是项目开发服务器的统一启动入口，自动完成以下步骤：
 
 1. **虚拟环境** — 检测 `.venv` 目录，不存在则用 `python3.12 -m venv .venv` 创建并激活
-2. **后端依赖** — `pip install -r requirements.txt -q`
+2. **后端依赖** — `pip install -r requirements.txt -q`（含 langchain-openai）
 3. **数据库迁移** — `python manage.py migrate`
-4. **管理员账户** — 自动创建 `buladou` 超级用户（如不存在）
-5. **前端依赖** — `cd frontend && npm install`
-6. **启动服务** — 后台启动 Vite（热更新 :5173），前台启动 Django（:8066）
+4. **管理员账户** — 自动创建 `pcs` 超级用户（如不存在）
+5. **前端构建** — `cd frontend && npm install && npx vite build`
+6. **启动服务** — 前台启动 uvicorn ASGI（:8066）
 
 ```bash
 # 一键启动（推荐）
 ./dev_start.sh
 
 # 启动后访问
-#   Django 后端:  http://<本机IP>:8066
-#   Vite 热更新:  http://<本机IP>:5173（模板自动适配，浏览器访问 :8066 即可）
+#   http://<本机IP>:8066  → Django 直接 serve 前端 + API
 ```
 
-## Vite 集成工作流程
+> **注意**：生产模式和开发模式统一使用 uvicorn ASGI 服务器，前端构建到 `static/frontend/`。
+> 浏览器直接访问 `:8066`，无 Vite 代理，SSE 流式响应正常工作。
+
+## 服务器工作流程
 
 ```
-开发模式:
+统一模式（uvicorn ASGI）:
   方式一（推荐）: ./dev_start.sh
-    → .venv + 依赖 + 迁移 + Django :8066 + Vite :5173
+    → .venv + 依赖 + 迁移 + 前端构建 + uvicorn :8066
 
-  方式二（分别启动）:
+  方式二（手动启动）:
     source .venv/bin/activate
-    python manage.py runserver 0.0.0.0:8066    # Django
-    cd frontend && npm run dev                  # Vite :5173
+    uvicorn config.asgi:application --host 0.0.0.0 --port 8066 --reload
 
-  → 模板上下文处理器自动注入 vite_host/vite_port
-  → 浏览器根据当前访问 IP 自动加载 Vite 资源
-  → 热更新正常工作（支持 localhost / 内网 IP 远程访问）
+  → 浏览器直接访问 http://IP:8066
+  → Django serve 前端静态文件（static/frontend/）+ API
+  → 无 Vite 代理，SSE 流式响应正常工作
 
-生产模式:
+前端构建:
   cd frontend && npm run build
   # 构建产物输出到 static/frontend/（含 manifest.json）
-  source .venv/bin/activate
-  python manage.py collectstatic
   → vite_asset 模板标签从 manifest 查找构建后的 JS/CSS
-  → Django 直接 serve 构建产物
 ```
 
 ## 开发命令
@@ -186,16 +188,15 @@ source .venv/bin/activate
 以下命令均在项目根目录执行，需先激活虚拟环境（`source .venv/bin/activate` 或使用 `.venv/bin/python`）：
 
 ```bash
-# 一键启动（后端 + 前端）
+# 一键启动（推荐）
 ./dev_start.sh
 
-# 或分别启动
+# 手动启动 uvicorn ASGI
 source .venv/bin/activate
-python manage.py runserver 0.0.0.0:8066    # Django（dev_start.sh 默认端口）
-cd frontend && npm run dev                  # Vite
+uvicorn config.asgi:application --host 0.0.0.0 --port 8066 --reload
 
 # 前端构建
-cd frontend && npx vite build          # 跳过 vue-tsc 类型检查（项目中存在预置类型错误）
+cd frontend && npm install && npx vite build   # 跳过 vue-tsc 类型检查
 
 # 创建迁移
 .venv/bin/python manage.py makemigrations <app_name>
@@ -777,71 +778,83 @@ VM、LXC、VMConfig、LXCConfig、SDNZone、SDNVNet、SDNSubnet 使用 **原地�
 14. ~~SDN 数据采集与展示~~ ✅ 已完成（SDNZone/VNet/Subnet 模型 + Agent 采集 v0.6.0 + 前端 Tab 页面）
 15. ~~网络拓扑可视化~~ ✅ 已完成（SVG 节点-网络连接图 + 图例筛选 + IP 网段图层）
 16. ~~依赖链路可视化~~ ✅ 已完成（SVG 节点内嵌依赖图 + 拖拽/缩放/自动扩充 + 布局居中）
-17. ~~LLM 流式对话（AI 助手）~~ ✅ 已完成（Thread+Queue 非阻塞流式传输 + 心跳保活 + SSE 行缓冲）
+17. ~~LLM 流式对话（AI 助手）~~ ✅ 已完成（LangChain async streaming + uvicorn ASGI + SSE）
 18. 自动检测引擎
 19. 仪表盘真实数据进一步接入（告警、趋势数据源）
 
 ## AI 助手流式对话
 
-AI 助手聊天面板（ChatBubble）通过 `/api/auth/chat/stream/` 端点实现 LLM 流式输出。
+AI 助手聊天面板（ChatBubble）通过 `/api/auth/chat/stream/` 端点实现 LLM 流式输出，使用 LangChain 统一接入。
 
 ### 架构
 
 ```
-前端 (ChatBubble)           后端 (Django)                   LLM Provider
+前端 (ChatBubble)           后端 (Django + LangChain)        LLM Provider
   │                           │                              │
   │── POST /chat/stream/ ────→│                              │
   │   {config_id, messages,   │                              │
-  │    cluster_id,            │                              │
-  │    user_message}          │                              │
-  │                           │── POST /v1/chat/completions ─→│
-  │                           │   {stream: true, ...}        │
+  │    cluster_id,            │── build_llm(config) ────────→│ ChatOpenAI
+  │    user_message}          │   → llm.astream(messages) ──→│   .astream()
   │                           │                              │
-  │  ← SSE text/event-stream  │  ← iter_content() chunked   │
-  │  data: {delta:...}        │  data: {delta:...}           │
-  │  : keepalive              │                              │
+  │  ← SSE text/event-stream  │  ← async for chunk: yield   │
+  │  data: {delta:...}        │     token → SSE 格式         │
   │  data: [DONE]             │                              │
 ```
 
-### 后端流式传输（Thread + Queue 非阻塞模式）
+### 核心模块
 
-`apps/accounts/views.py` — `chat_stream_view()` 函数：
-
-```
-后台读取线程（daemon）:
-  iter_content(chunk_size=4096) 逐块读取 LLM 原始响应
-  → 手动按 \n 拆行 → put() 到线程安全队列
-
-主生成器线程:
-  queue.get(timeout=15) 非阻塞轮询
-  → 有数据 → yield 透传 SSE 行
-  → 超时  → yield ": keepalive\n\n" 心跳保活
-  → 完成  → yield "data: [DONE]\n\n"
-```
-
-| 组件 | 作用 |
+| 文件 | 职责 |
 |------|------|
-| `queue.Queue(maxsize=200)` | 有界缓冲，防止 LLM 突吐大量数据撑爆内存 |
-| `threading.Event` (done_event) | 读取完成 / 出错时通知主线程 |
-| `threading.Thread(daemon=True)` | 守护线程，客户端断连时自动退出 |
-| `queue.get(timeout=15)` | 非阻塞读取核心，超时后发送心跳 |
+| `apps/accounts/llm_service.py` | LangChain LLM 封装（`build_llm` / `build_langchain_messages` / `stream_chat`） |
+| `apps/accounts/views.py` | `chat_stream_view` — async 视图，SSE 流式返回 |
+| `apps/accounts/chat_context.py` | `build_pve_context` — PVE 数据动态注入 |
+| `frontend/src/stores/chat.ts` | `sendMessage` — fetch + ReadableStream 读取 SSE |
 
-关键流程：
+### 后端流式传输（LangChain async generator）
 
-1. **建立连接**：`yield ": connected\n\n"` 立即发送 HTTP 200 + SSE 头部
-2. **后台读取**：daemon 线程用 `iter_content(chunk_size=4096)` 高效读取 LLM 响应，手动拆行后 `put()` 入队列
-3. **非阻塞轮询**：主生成器 `get(timeout=15)` 等待数据：
-   - 收到数据 → `yield "{line}\n\n"` 透传 SSE 事件
-   - 超时 → `yield ": keepalive\n\n"` 心跳保活连接
-4. **完成**：LLM 流结束 → `yield "data: [DONE]\n\n"`
-5. **客户端断开**：`GeneratorExit` → `done_event.set()` 通知后台线程退出 → `join(timeout=3)` 安全回收
+`apps/accounts/llm_service.py`：
+
+```python
+# 构建 LLM 实例（所有 OpenAI 兼容 API 统一接入）
+llm = ChatOpenAI(api_key=..., base_url=..., model=..., streaming=True)
+
+# 流式生成，yield 每个 token
+async for token in llm.astream(messages):
+    yield token
+```
+
+`apps/accounts/views.py` — `chat_stream_view()`（async 视图）：
+
+```python
+async def chat_stream_view(request):
+    # ... JWT 鉴权（sync_to_async 包装 ORM）...
+
+    llm = build_llm(config)
+    langchain_msgs = build_langchain_messages(messages, pve_context)
+
+    async def generate():
+        yield ": connected\n\n"
+        async for token in stream_chat(llm, langchain_msgs):
+            chunk = json.dumps({"choices": [{"delta": {"content": token}}]})
+            yield f"data: {chunk}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingHttpResponse(generate(), content_type='text/event-stream')
+```
+
+关键设计：
+- **async 视图**：`chat_stream_view` 是 `async def`，ORM 调用通过 `sync_to_async` 包装
+- **LangChain streaming**：`ChatOpenAI(streaming=True)` + `llm.astream()` 原生异步流式
+- **SSE 格式兼容**：前端无需改动，格式与之前一致
 
 ### 前端 SSE 解析
 
 `frontend/src/stores/chat.ts` — `sendMessage()`：
 
 ```typescript
-let lineBuffer = ''  // 跨 chunk 行缓冲，防止 SSE 行被截断
+const reader = response.body!.getReader()
+const decoder = new TextDecoder()
+let lineBuffer = ''
 
 while (true) {
   const { done, value } = await reader.read()
@@ -849,16 +862,16 @@ while (true) {
 
   lineBuffer += decoder.decode(value, { stream: true })
   const lines = lineBuffer.split('\n')
-  lineBuffer = lines.pop() || ''  // 不完整行保留到下一次
+  lineBuffer = lines.pop() || ''
 
   for (const line of lines) {
-    // 解析 data: {...} 格式
-    const parsed = JSON.parse(line.slice(6))
+    const trimmed = line.trim()
+    if (!trimmed || !trimmed.startsWith('data: ')) continue
+    const data = trimmed.slice(6)
+    if (data === '[DONE]') break
+    const parsed = JSON.parse(data)
     const delta = parsed.choices?.[0]?.delta?.content
-    if (delta) {
-      fullReply += delta
-      // 响应式更新 UI
-    }
+    if (delta) fullReply += delta
   }
 }
 ```
@@ -871,6 +884,7 @@ while (true) {
 - 始终注入集群摘要（节点数/VM数/容器数）
 - 无关键词匹配时默认加载节点/VM/容器层
 - 注入格式：`--- 当前集群实时数据 ---\n{数据}\n--- 数据结束 ---`
+- 由 `build_langchain_messages()` 在构建 LangChain 消息时自动注入
 
 ## 依赖链路可视化（dependency-mapping）
 

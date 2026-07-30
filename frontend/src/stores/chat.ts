@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
+import axios from 'axios'
 import { fetchLLMConfigs, createLLMConfig, updateLLMConfig, deleteLLMConfig } from '@/api/llm'
 import {
   fetchConversations,
@@ -383,6 +384,40 @@ export const useChatStore = defineStore('chat', () => {
     visible.value = true
   }
 
+  /**
+   * 带自动 token 刷新的 fetch 封装。
+   * fetch 不走 axios 拦截器，所以需要手动处理 401 → refresh → retry。
+   */
+  async function fetchWithAuth(url: string, init: RequestInit, retryOnce = true): Promise<Response> {
+    const token = localStorage.getItem('token') || ''
+    const headers = new Headers(init.headers)
+    headers.set('Authorization', `Bearer ${token}`)
+
+    const response = await fetch(url, { ...init, headers })
+
+    if (response.status === 401 && retryOnce) {
+      const refreshToken = localStorage.getItem('refreshToken')
+      if (refreshToken) {
+        try {
+          const res = await axios.post('/api/auth/token/refresh/', { refresh: refreshToken })
+          const { access, refresh: newRefresh } = res.data
+          localStorage.setItem('token', access)
+          if (newRefresh) localStorage.setItem('refreshToken', newRefresh)
+          // 用新 token 重试
+          headers.set('Authorization', `Bearer ${access}`)
+          return fetch(url, { ...init, headers })
+        } catch {
+          // refresh token 也过期 → 跳登录
+          localStorage.removeItem('token')
+          localStorage.removeItem('refreshToken')
+          window.location.href = '/login'
+          return response
+        }
+      }
+    }
+    return response
+  }
+
   async function sendMessage(content: string, clusterId?: number) {
     if (!content.trim() || loading.value) return
     const cfg = activeConfig.value
@@ -437,12 +472,10 @@ export const useChatStore = defineStore('chat', () => {
 
     try {
       // 通过后端代理调用 LLM（注入 PVE 数据 + 流式返回）
-      const token = localStorage.getItem('token') || ''
-      const response = await fetch('/api/auth/chat/stream/', {
+      const response = await fetchWithAuth('/api/auth/chat/stream/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
           config_id: cfg.id,
