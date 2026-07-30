@@ -4,6 +4,8 @@ LangChain LLM 服务封装
 """
 
 import logging
+import time
+
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langchain_openai import ChatOpenAI
 
@@ -68,10 +70,37 @@ async def stream_chat(llm, messages):
     """
     异步流式调用 LLM，yield 每个 token 字符串。
 
+    支持 DeepSeek 等推理模型的 reasoning_content，实时透传思考过程，
+    避免用户在前 N 秒看不到任何输出而产生"卡住"错觉。
+
     用法：
         async for token in stream_chat(llm, messages):
             print(token)
     """
-    async for chunk in llm.astream(messages):
-        if chunk.content:
-            yield chunk.content
+    _t0 = time.monotonic()
+    chunk_index = 0
+    try:
+        async for chunk in llm.astream(messages):
+            chunk_index += 1
+            elapsed = time.monotonic() - _t0
+            content = getattr(chunk, "content", "") or ""
+
+            # DeepSeek / 部分 OpenAI 兼容接口会在 additional_kwargs 或
+            # response_metadata 中返回 reasoning_content。
+            reasoning_content = ""
+            additional_kwargs = getattr(chunk, "additional_kwargs", None)
+            if isinstance(additional_kwargs, dict):
+                reasoning_content = additional_kwargs.get("reasoning_content", "") or ""
+            if not reasoning_content:
+                response_metadata = getattr(chunk, "response_metadata", None)
+                if isinstance(response_metadata, dict):
+                    reasoning_content = response_metadata.get("reasoning_content", "") or ""
+
+
+            if reasoning_content:
+                # 用 <think> 标记包裹思考过程，前端会渲染为可折叠区块
+                yield f"<think>{reasoning_content}</think>"
+            if content:
+                yield content
+    except Exception as e:
+        raise

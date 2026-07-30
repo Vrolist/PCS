@@ -531,10 +531,16 @@ function copyMessage(content: string) {
   )
 }
 
-/** 简易 Markdown → HTML（粗体、行内代码、列表、代码块、标题） */
+/** 简易 Markdown → HTML（粗体、行内代码、列表、代码块、标题、思考过程） */
 function renderMarkdown(text: string): string {
   if (!text) return ''
   let html = text
+    // 思考过程 <think>...</think>：可折叠灰色块
+    .replace(/<think>([\s\S]*?)<\/think>/g, '<details class="md-think"><summary>💭 思考过程</summary><div class="md-think-content">$1</div></details>')
+    // 未闭合的 <think>：显示"思考中..."，流式过程中使用
+    .replace(/<think>([\s\S]*)$/g, '<details class="md-think" open><summary>💭 思考中...</summary><div class="md-think-content">$1</div></details>')
+    // 清理孤立的 </think>
+    .replace(/<\/think>/g, '')
     // 代码块
     .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre class="md-code-block"><code>$2</code></pre>')
     // 行内代码
@@ -931,6 +937,25 @@ function renderMarkdown(text: string): string {
 .msg-action-btn:hover {
   background: rgba(64, 158, 255, 0.1);
   color: var(--primary-color);
+}
+.md-think {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  border: 1px dashed var(--border-color);
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.md-think summary {
+  cursor: pointer;
+  font-weight: 500;
+  user-select: none;
+}
+.md-think-content {
+  margin-top: 6px;
+  line-height: 1.5;
+  white-space: pre-wrap;
 }
 
 /* ===== Markdown 样式 ===== */

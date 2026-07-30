@@ -21,6 +21,7 @@ async def sse_chat_stream(scope, receive, send):
 
     直接写入 transport，绕过 Django 和 uvicorn 的所有缓冲层。
     """
+
     # 只处理 POST
     if scope.get("method") != "POST":
         await _send_json(send, 405, {"detail": "Method not allowed"})
@@ -43,6 +44,7 @@ async def sse_chat_stream(scope, receive, send):
         await _send_json(send, 400, {"detail": "无效的 JSON"})
         return
 
+
     # JWT 鉴权
     headers = dict(scope.get("headers", []))
     auth = headers.get(b"authorization", b"").decode()
@@ -54,11 +56,12 @@ async def sse_chat_stream(scope, receive, send):
         from rest_framework_simplejwt.tokens import AccessToken
         from apps.accounts.models import User, UserLLMConfig
         token = AccessToken(auth[7:])
-        user = await sync_to_async(User.objects.get)(id=token["user_id"])
+        user = await sync_to_async(User.objects.get, thread_sensitive=True)(id=token["user_id"])
     except Exception as e:
         logger.warning(f"sse: token 解析失败: {e}")
         await _send_json(send, 401, {"detail": "token 无效"})
         return
+
 
     config_id = data.get("config_id")
     messages = data.get("messages", [])
@@ -70,7 +73,7 @@ async def sse_chat_stream(scope, receive, send):
         return
 
     try:
-        config = await sync_to_async(UserLLMConfig.objects.get)(pk=config_id, user=user)
+        config = await sync_to_async(UserLLMConfig.objects.get, thread_sensitive=True)(pk=config_id, user=user)
     except UserLLMConfig.DoesNotExist:
         await _send_json(send, 404, {"detail": "配置不存在"})
         return
@@ -83,7 +86,7 @@ async def sse_chat_stream(scope, receive, send):
     from apps.accounts.chat_context import build_pve_context
     from apps.accounts.llm_service import build_llm, build_langchain_messages, stream_chat
 
-    pve_context = await sync_to_async(build_pve_context)(cluster_id, user_message) if cluster_id else ""
+    pve_context = await sync_to_async(build_pve_context, thread_sensitive=True)(cluster_id, user_message) if cluster_id else ""
     langchain_msgs = build_langchain_messages(messages, pve_context)
     llm = build_llm(config)
 
@@ -99,6 +102,7 @@ async def sse_chat_stream(scope, receive, send):
             [b"connection", b"keep-alive"],
         ],
     })
+
 
     # 发送初始连接消息
     await _send_sse(send, ": connected\n\n")
@@ -168,10 +172,10 @@ async def sse_chat_stream(scope, receive, send):
         except Exception:
             pass
 
+        elapsed = time.monotonic() - t0
         if disconnected:
             logger.info(f"sse: 客户端断连 user={user.id} tokens={token_count}")
         else:
-            elapsed = time.monotonic() - t0
             if stream_error:
                 logger.warning(f"sse: 完成(有错误) user={user.id} tokens={token_count} elapsed={elapsed:.2f}s")
             else:

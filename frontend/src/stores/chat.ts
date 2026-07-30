@@ -51,6 +51,7 @@ export interface SystemPromptItem {
 
 const LAYOUT_KEY = 'pcs_chat_layout'
 
+
 function loadLayoutMode(): 'float' | 'sidebar' {
   try {
     const v = localStorage.getItem(LAYOUT_KEY)
@@ -507,8 +508,10 @@ export const useChatStore = defineStore('chat', () => {
       const decoder = new TextDecoder()
       let lineBuffer = ''  // 跨 chunk 行缓冲，防止 SSE 行被截断
 
+      let chunkCount = 0
       while (true) {
         const { done, value } = await reader.read()
+        chunkCount += 1
         if (done) break
 
         lineBuffer += decoder.decode(value, { stream: true })
@@ -528,13 +531,15 @@ export const useChatStore = defineStore('chat', () => {
               fullReply += delta
               // 首次收到内容时创建 assistant 消息
               if (!assistantMsg) {
-                assistantMsg = {
+                const newMsg: ChatMessage = {
                   id: (Date.now() + 1).toString(),
                   role: 'assistant',
                   content: '',
                   timestamp: Date.now(),
                 }
-                messages.value.push(assistantMsg)
+                messages.value.push(newMsg)
+                // 必须引用数组中的响应式代理，修改 content 才能触发 UI 更新
+                assistantMsg = messages.value[messages.value.length - 1]
               }
               assistantMsg.content = fullReply
             }
