@@ -1,16 +1,19 @@
 # PVE Cluster Scan
 
-[English](README.en.md) | [Deutsch](README.de.md)
+**中文** | [English](README.en.md) | [Deutsch](README.de.md)
 
 PVE 集群扫描与管理平台 — 基于 Django 5 + Vue 3 的全栈解决方案，支持多集群、多 Agent 部署，实时监控 Proxmox VE 环境。
 
 ## 功能特性
 
 - **多集群管理**：一个账号管理多个 PVE 集群，统一监控
-- **Agent 自动采集**：单文件零依赖 Python Agent，curl 一键安装，自动扫描节点/VM/容器/存储/网络/Ceph 状态
+- **Agent 自动采集**：单文件零依赖 Python Agent，curl 一键安装，自动扫描节点/VM/容器/存储/网络/Ceph/SDN 状态
 - **实时仪表盘**：统计卡片、告警列表、资源趋势图（ECharts）、节点状态表格
-- **资源管理**：节点、虚拟机（QEMU）、LXC 容器、存储、网络接口、Ceph 存储集群、HA 高可用
+- **资源管理**：节点、虚拟机（QEMU）、LXC 容器、存储、网络接口、Ceph 存储集群、HA 高可用、SDN 虚拟网络
+- **AI 助手（Tool Calling）**：基于 LangChain 的 AI 助手，通过 Tool Calling 自主按需查询集群数据，无需将全部数据塞入 prompt
 - **Agent 自动更新**：平台下发更新指令，Agent 自动升级并重启
+- **网络拓扑可视化**：SVG 交互式节点-网络连接图
+- **依赖链路可视化**：SVG 可拖拽缩放的依赖图（VM/LXC → 节点 → 存储 → 网络）
 - **用户认证**：JWT 登录/注册/密码重置，操作日志审计
 - **亮暗主题**：默认暗色，支持一键切换，偏好持久化
 
@@ -21,6 +24,7 @@ PVE 集群扫描与管理平台 — 基于 Django 5 + Vue 3 的全栈解决方�
 | 后端 | Python 3.12 + Django 5.0 + DRF + SimpleJWT |
 | 前端 | Vue 3 + TypeScript + Vite + Element Plus + Pinia |
 | 图表 | ECharts + vue-echarts |
+| AI | LangChain + LangChain-OpenAI（LLM 流式 + Tool Calling） |
 | Agent | Python stdlib（零依赖） |
 
 ## 快速开始
@@ -35,18 +39,19 @@ cd frontend && npm install && cd ..
 # 数据库迁移
 python manage.py migrate
 
-# 启动（后端 + Vite 前端）
+# 启动（后端 + 前端构建 + uvicorn）
 ./dev_start.sh
 ```
 
 ### 分别启动
 
 ```bash
-python manage.py runserver 0.0.0.0:8066    # Django
-cd frontend && npm run dev                  # Vite (:5173)
+source .venv/bin/activate
+uvicorn config.asgi:application --host 0.0.0.0 --port 8066 --reload
+cd frontend && npm run dev   # Vite 开发服务器
 ```
 
-访问 `http://localhost:8066` 即可。
+访问 `http://localhost:8066`。
 
 ### Agent 安装
 
@@ -68,18 +73,53 @@ python3 agent.py install     # 交互式配置 + 注册 + 安装 systemd
 ```
 pve-cluster-scan/
 ├── config/                 # Django 项目配置
+│   ├── asgi.py             #   ASGI 入口（uvicorn）
+│   └── sse_handler.py      #   SSE 流式处理器（绕过 Django 中间件）
 ├── apps/
-│   ├── accounts/           # 用户认证 & 操作日志
+│   ├── accounts/           # 用户认证 & 操作日志 & AI 助手
+│   │   ├── llm_service.py  #   LangChain LLM 封装（build_llm / stream_chat / stream_chat_with_tools）
+│   │   ├── llm_tools.py    #   Tool Calling：8 个 PVE 数据查询工具
+│   │   └── chat_context.py #   PVE 上下文注入（降级方案）
 │   ├── clusters/           # 集群管理（CRUD + Agent 列表）
 │   ├── agent_api/          # Agent 通信（注册/心跳/扫描上传/任务下发）
 │   ├── dashboard/          # 仪表盘查询 API
 │   └── scanner/            # 扫描数据 & 自动检测
 ├── frontend/               # Vue 3 + Vite 前端
-│   └── src/views/          # 页面（仪表盘/集群/节点/VM/容器/设置等）
+│   └── src/views/          # 页面（仪表盘/集群/节点/VM/容器/SDN/设置等）
 ├── agent/                  # Agent 单文件（零依赖 Python 脚本）
 ├── data-structure/         # PVE 数据结构分析文档
 └── dev_start.sh            # 一键启动脚本
 ```
+
+## AI 助手（Tool Calling）
+
+AI 助手使用 **LangChain Tool Calling** 按需查询数据，而非静态注入全部数据：
+
+```
+用户提问："pve-1 节点 CPU 情况？"
+  → LLM 自主决定调用 get_node_status(node_name="pve-1")
+  → 工具执行，查询数据库
+  → LLM 基于真实数据生成回答
+```
+
+**相比静态注入的优势：**
+- 按需取数，大幅节省 token（~200 vs 数千）
+- LLM 自主决定查询内容，无关数据不再浪费
+- 支持多轮追问，Agent 可记住前一轮结果
+- LLM 不支持 Tool Calling 时自动降级
+
+**8 个数据工具：**
+
+| 工具 | 说明 |
+|------|------|
+| `get_cluster_summary` | 集群概览（PVE 版本、节点/VM/容器数） |
+| `get_node_status` | 节点 CPU、内存、磁盘、运行时长 |
+| `get_vm_list` | 虚拟机列表或指定 VM 详情 |
+| `get_container_list` | LXC 容器列表或指定容器详情 |
+| `get_storage_list` | 存储容量与使用情况 |
+| `get_ceph_status` | Ceph 健康状态、OSD、存储池 |
+| `get_network_info` | 网络接口 + SDN 区域/VNet/子网 |
+| `get_ha_resources` | HA 高可用资源配置与状态 |
 
 ## API 概览
 
@@ -89,14 +129,18 @@ pve-cluster-scan/
 | Agent | `/api/agent/` | 注册/心跳/扫描上传/任务/版本/安装脚本 |
 | 仪表盘 | `/api/dashboard/` | 统计/告警/趋势/节点状态 |
 | 集群 | `/api/clusters/` | 集群 CRUD + Agent 列表 |
-| 扫描 | `/api/scanner/` | 节点/VM/容器/存储/网络/Ceph/HA 查询 |
+| 扫描 | `/api/scanner/` | 节点/VM/容器/存储/网络/Ceph/HA/SDN 查询 |
 
 详细 API 文档见 `data-structure/api-interfaces.md`。
 
 ## 测试
 
 ```bash
+# 运行全部测试（211+ 测试用例）
 python manage.py test apps.agent_api apps.clusters apps.dashboard --verbosity=2
+
+# 仅运行 LLM/Tool Calling 测试
+python manage.py test apps.accounts.tests_llm --verbosity=1
 ```
 
 ## 许可证
