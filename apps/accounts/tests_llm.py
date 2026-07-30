@@ -38,18 +38,19 @@ class LLMServiceBuildLLMTest(TestCase):
         )
 
     def test_build_llm_basic(self):
-        """基础构建：正确传递 api_key / base_url / model"""
+        """基础构建：正确传递 api_key / base_url / model，自动补全 /v1"""
         llm = build_llm(self.config)
         # ChatOpenAI 内部字段通过 pydantic 管理，不直接暴露 .api_key
         # 验证 openai_api_base 和 model_name
         self.assertEqual(llm.model_name, "deepseek-v4-pro")
         self.assertIn("api.deepseek.com", llm.openai_api_base)
+        self.assertTrue(llm.openai_api_base.endswith("/v1"))
 
     def test_build_llm_base_url_with_v1_suffix(self):
-        """base_url 末尾有 /v1 时自动去除"""
+        """base_url 末尾有 /v1 时保持原样（OpenAI 客户端在其后拼接 /chat/completions）"""
         self.config.base_url = "https://api.deepseek.com/v1"
         llm = build_llm(self.config)
-        self.assertNotIn("/v1", llm.openai_api_base)
+        self.assertIn("/v1", llm.openai_api_base)
         self.assertIn("api.deepseek.com", llm.openai_api_base)
 
     def test_build_llm_streaming_enabled(self):
@@ -58,10 +59,11 @@ class LLMServiceBuildLLMTest(TestCase):
         self.assertTrue(llm.streaming)
 
     def test_build_llm_custom_base_url(self):
-        """自定义 base_url 透传"""
+        """自定义 base_url 自动补全 /v1"""
         self.config.base_url = "https://custom-gateway.example.com"
         llm = build_llm(self.config)
         self.assertIn("custom-gateway.example.com", llm.openai_api_base)
+        self.assertTrue(llm.openai_api_base.endswith("/v1"))
 
     def test_build_llm_config_combinations(self):
         """多种配置参数组合"""
@@ -83,15 +85,15 @@ class LLMServiceBuildLLMTest(TestCase):
             self.assertIn(keyword, llm.openai_api_base)
             self.assertEqual(llm.model_name, model_name)
 
-    def test_build_llm_v1_normalized_for_moonshot(self):
-        """/v1 后缀被正确移除"""
+    def test_build_llm_v1_preserved_for_moonshot(self):
+        """/v1 后缀保持原样"""
         config = UserLLMConfig(
             api_key="sk-key",
             base_url="https://api.moonshot.cn/v1",
             model="kimi-k3",
         )
         llm = build_llm(config)
-        self.assertNotIn("/v1", llm.openai_api_base)
+        self.assertIn("/v1", llm.openai_api_base)
 
     # ---- 边界条件 ----
 

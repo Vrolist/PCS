@@ -16,15 +16,16 @@ def build_llm(config):
     """
     从 UserLLMConfig 构建 LangChain ChatOpenAI 实例。
 
-    所有 OpenAI 兼容 API（DeepSeek / Kimi / GLM / Ollama 等）均通过
+    所有 OpenAI 兼容 API（DeepSeek / Kimi / GLM / Ollama / MiMo 等）均通过
     ChatOpenAI 统一接入，只需配置 base_url + api_key + model。
+
+    OpenAI 客户端会在 base_url 后拼接 /chat/completions，因此 base_url
+    需要以 /v1 结尾（例如 https://api.xxx.com/v1）。如果用户只填了域名，
+    自动补全 /v1，与前端的连接测试保持一致。
     """
     base_url = config.base_url.rstrip('/')
-    # ChatOpenAI 自动拼接 /v1/chat/completions，所以传入的 base_url
-    # 应该是域名根路径（如 https://api.deepseek.com）。
-    # 如果用户配置了 https://xxx/v1，去掉末尾的 /v1。
-    if base_url.endswith('/v1'):
-        base_url = base_url[:-3]
+    if base_url and not base_url.endswith('/v1'):
+        base_url = base_url + '/v1'
 
     return ChatOpenAI(
         api_key=config.api_key,
