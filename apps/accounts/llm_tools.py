@@ -320,6 +320,314 @@ def make_pve_tools(cluster_id: int):
 
         return "\n".join(lines)
 
+    # ── 工具 9: VM 详细配置 ──
+
+    @tool
+    def get_vm_config(vmid: int) -> str:
+        """查询指定虚拟机的详细配置，包括CPU类型、磁盘、网卡、启动顺序、QEMU Agent等。vmid为必填参数"""
+        from apps.scanner.models import VMConfig
+
+        cutoff = _cutoff()
+        cfg = VMConfig.objects.filter(
+            vm__node__cluster_id=cluster_id,
+            vm__vmid=vmid,
+            scanned_at__gte=cutoff,
+        ).select_related('vm__node').order_by('-scanned_at').first()
+
+        if not cfg:
+            return f"未找到 VMID={vmid} 的配置数据"
+
+        v = cfg.vm
+        disks = "\n    ".join(
+            f"{d.get('slot','?')}: {d.get('storage','?')} {d.get('size','?')}"
+            for d in (cfg.scsi_disks or [])
+        ) or "无"
+        nets = "\n    ".join(
+            f"{n.get('slot','?')}: {n.get('model','?')} → {n.get('bridge','?')}"
+            for n in (cfg.net_devices or [])
+        ) or "无"
+        ide = "\n    ".join(
+            f"{d.get('slot','?')}: {d.get('storage','?')} {d.get('file','?')}"
+            for d in (cfg.ide_disks or [])
+        ) or "无"
+
+        return (
+            f"VM [{v.vmid}] {v.name} @ {v.node.node_name}\n"
+            f"  CPU: 类型={cfg.cpu_type or '未知'}, {cfg.cpu_sockets or '?'}路×{cfg.cpu_cores or '?'}核\n"
+            f"  内存: {cfg.memory_mb or '?'}MB (Balloon下限: {cfg.balloon_min_mb or 'N/A'}MB)\n"
+            f"  系统: {cfg.os_type or '未知'}, 启动顺序: {cfg.boot_order or '未知'}\n"
+            f"  SCSI 磁盘:\n    {disks}\n"
+            f"  IDE 设备:\n    {ide}\n"
+            f"  网卡:\n    {nets}\n"
+            f"  QEMU Agent: {'启用' if cfg.agent_enabled else '未启用'}\n"
+            f"  HA: {'启用' if cfg.ha_enabled else '未启用'}"
+        )
+
+    # ── 工具 10: LXC 容器配置 ──
+
+    @tool
+    def get_container_config(vmid: int) -> str:
+        """查询指定LXC容器的详细配置，包括IP地址、挂载点、根文件系统、特权模式等。vmid为必填参数"""
+        from apps.scanner.models import LXCConfig
+
+        cutoff = _cutoff()
+        cfg = LXCConfig.objects.filter(
+            container__node__cluster_id=cluster_id,
+            container__vmid=vmid,
+            scanned_at__gte=cutoff,
+        ).select_related('container__node').order_by('-scanned_at').first()
+
+        if not cfg:
+            return f"未找到 VMID={vmid} 的容器配置数据"
+
+        c = cfg.container
+        mounts = "\n    ".join(
+            f"{m.get('mp','?')}: {m.get('storage','?')} {m.get('size','?')}"
+            for m in (cfg.mount_points or [])
+        ) or "无"
+        nets = "\n    ".join(
+            f"{n.get('slot','?')}: {n.get('name','?')} → {n.get('bridge','?')} ({n.get('ip','dhcp')})"
+            for n in (cfg.net_devices or [])
+        ) or "无"
+        rootfs = cfg.rootfs or {}
+        rootfs_str = f"{rootfs.get('storage','?')} {rootfs.get('size','?')}" if rootfs else "未知"
+
+        return (
+            f"LXC [{c.vmid}] {c.name} @ {c.node.node_name}\n"
+            f"  主机名: {cfg.hostname or '未知'}\n"
+            f"  CPU: {cfg.cpu_cores or '?'}核, 内存: {cfg.memory_mb or '?'}MB, Swap: {cfg.swap_mb or '?'}MB\n"
+            f"  系统: {cfg.os_type or '未知'}\n"
+            f"  根文件系统: {rootfs_str}\n"
+            f"  挂载点:\n    {mounts}\n"
+            f"  网卡:\n    {nets}\n"
+            f"  HA: {'启用(' + cfg.ha_group + ')' if cfg.ha_enabled else '未启用'}\n"
+            f"  描述: {cfg.description or '无'}"
+        )
+
+    # ── 工具 11: 扫描历史趋势 ──
+
+    @tool
+    def get_scan_history(days: int = 7) -> str:
+        """查询集群扫描历史趋势数据，用于分析资源使用变化趋势。days参数指定天数（默认7天，最大30天）"""
+        from apps.scanner.models import ScanHistory
+
+        days = min(max(days, 1), 30)
+        cutoff = timezone.now() - timedelta(days=days)
+        history = ScanHistory.objects.filter(
+            cluster_id=cluster_id, scanned_at__gte=cutoff
+        ).order_by('scanned_at')[:200]
+
+        if not history:
+            return "未找到扫描历史数据"
+
+        lines = []
+        for h in history:
+            d = h.snapshot_data or {}
+            ts = h.scanned_at.strftime("%m-%d %H:%M")
+            parts = [f"时间={ts}"]
+            for k, v in d.items():
+                if isinstance(v, (int, float)):
+                    parts.append(f"{k}={v}")
+                elif isinstance(v, str):
+                    parts.append(f"{k}={v}")
+            lines.append("  " + ", ".join(parts))
+
+        return f"最近 {days} 天扫描历史（共 {len(lines)} 条，每条代表一次扫描快照）:\n" + "\n".join(lines)
+
+    # ── 工具 12: 检测规则与结果 ──
+
+    @tool
+    def get_detection_results(severity: str = "") -> str:
+        """查询自动检测规则的执行结果，包括告警、性能问题、安全问题等。可按严重级别筛选（info/warning/critical）"""
+        from apps.scanner.models import DetectionResult
+
+        cutoff = _cutoff()
+        qs = DetectionResult.objects.filter(
+            cluster_id=cluster_id, created_at__gte=cutoff
+        ).order_by('-created_at')
+
+        if severity:
+            qs = qs.filter(severity=severity)
+
+        results = qs[:30]
+
+        if not results:
+            return "未找到检测结果"
+
+        lines = []
+        for r in results:
+            resolved = "已解决" if r.is_resolved else "未解决"
+            lines.append(
+                f"- [{r.severity}] {r.title}\n"
+                f"  分类={r.category}, 影响资源={r.affected_resource or 'N/A'}, "
+                f"状态={resolved}\n"
+                f"  详情: {r.detail[:200]}"
+                + (f"\n  建议: {r.suggestion[:200]}" if r.suggestion else "")
+            )
+
+        return f"检测结果（共 {len(lines)} 条）:\n" + "\n".join(lines)
+
+    # ── 工具 13: 备份历史 ──
+
+    @tool
+    def get_backup_history() -> str:
+        """查询备份执行历史，包括备份状态、开始/完成时间、存储位置等"""
+        from apps.scanner.models import BackupHistory
+
+        cutoff = _cutoff()
+        backups = BackupHistory.objects.filter(
+            cluster_id=cluster_id, scanned_at__gte=cutoff
+        ).order_by('-started_at')[:30]
+
+        if not backups:
+            return "未找到备份历史数据"
+
+        lines = []
+        for b in backups:
+            start = b.started_at.strftime("%m-%d %H:%M") if b.started_at else "N/A"
+            end = b.finished_at.strftime("%m-%d %H:%M") if b.finished_at else "N/A"
+            lines.append(
+                f"- [{b.status}] {b.resource_type or ''}:{b.vmid or '?'} "
+                f"节点={b.node_name or 'N/A'}, 存储={b.storage_name or 'N/A'}\n"
+                f"  模式={b.mode or 'N/A'}, 开始={start}, 完成={end}"
+            )
+
+        return f"备份历史（共 {len(lines)} 条）:\n" + "\n".join(lines)
+
+    # ── 工具 14: 复制任务 ──
+
+    @tool
+    def get_replication_jobs() -> str:
+        """查询存储复制任务的配置和状态，包括源/目标节点、调度规则、速率限制等"""
+        from apps.scanner.models import ReplicationJob
+
+        cutoff = _cutoff()
+        jobs = ReplicationJob.objects.filter(
+            cluster_id=cluster_id, scanned_at__gte=cutoff
+        ).order_by('-scanned_at')[:20]
+
+        if not jobs:
+            return "未找到复制任务数据"
+
+        lines = []
+        for j in jobs:
+            enabled = "启用" if j.enabled else "禁用"
+            lines.append(
+                f"- [{j.status}] {j.job_id}: {j.resource_type or ''}:{j.vmid or '?'}\n"
+                f"  {j.source_node or '?'} → {j.target_node or '?'}, "
+                f"调度={j.schedule or 'N/A'}, 速率限制={j.rate_limit or 'N/A'}MB/s, {enabled}"
+                + (f"\n  备注: {j.comment}" if j.comment else "")
+            )
+
+        return f"复制任务（共 {len(lines)} 条）:\n" + "\n".join(lines)
+
+    # ── 工具 15: 防火墙规则 ──
+
+    @tool
+    def get_firewall_rules(scope: str = "") -> str:
+        """查询防火墙规则，包括动作、方向、协议、端口、源/目标地址等。可按作用域筛选（cluster/node/vm/ct）"""
+        from apps.scanner.models import FirewallRule
+
+        cutoff = _cutoff()
+        qs = FirewallRule.objects.filter(
+            cluster_id=cluster_id, scanned_at__gte=cutoff
+        ).order_by('scope', 'pos')
+
+        if scope:
+            qs = qs.filter(scope=scope)
+
+        rules = qs[:50]
+
+        if not rules:
+            return "未找到防火墙规则数据"
+
+        lines = []
+        for r in rules:
+            target = ""
+            if r.scope == "vm" and r.vmid:
+                target = f" VM:{r.vmid}"
+            elif r.scope == "ct" and r.vmid:
+                target = f" CT:{r.vmid}"
+            elif r.node_name:
+                target = f" 节点:{r.node_name}"
+
+            lines.append(
+                f"[{r.pos}] {r.action} {r.direction} {r.proto or 'any'} "
+                f"{r.source or '*'}:{r.sport or '*'} → {r.dest or '*'}:{r.dport or '*'}"
+                f"  作用域={r.scope}{target}"
+                + (f"  ({r.comment})" if r.comment else "")
+            )
+
+        return f"防火墙规则（共 {len(lines)} 条）:\n" + "\n".join(lines)
+
+    # ── 工具 16: 集群任务日志 ──
+
+    @tool
+    def get_cluster_tasks() -> str:
+        """查询集群任务和日志，包括迁移、HA切换、备份、存储操作等任务的执行状态"""
+        from apps.scanner.models import ClusterTask, ClusterLog
+
+        cutoff = _cutoff()
+        parts = []
+
+        # 集群任务
+        tasks = ClusterTask.objects.filter(
+            cluster_id=cluster_id, scanned_at__gte=cutoff
+        ).order_by('-started_at')[:20]
+
+        if tasks:
+            lines = ["-- 集群任务 --"]
+            for t in tasks:
+                start = t.started_at.strftime("%m-%d %H:%M") if t.started_at else "N/A"
+                lines.append(
+                    f"  [{t.status}] {t.task_type}: {t.node_name or 'N/A'} "
+                    f"退出={t.exit_status or 'N/A'}, 开始={start}"
+                    + (f"\n    UPID: {t.upid}" if t.upid else "")
+                )
+            parts.append("\n".join(lines))
+
+        # 集群日志
+        logs = ClusterLog.objects.filter(
+            cluster_id=cluster_id, scanned_at__gte=cutoff
+        ).order_by('-scanned_at')[:20]
+
+        if logs:
+            lines = ["-- 集群日志 --"]
+            for lg in logs:
+                ts = lg.scanned_at.strftime("%m-%d %H:%M") if lg.scanned_at else "N/A"
+                lines.append(
+                    f"  [{lg.level}] {lg.message[:120]}  (来源={lg.source or 'N/A'}, 时间={ts})"
+                )
+            parts.append("\n".join(lines))
+
+        return "\n\n".join(parts) if parts else "未找到集群任务/日志数据"
+
+    # ── 工具 17: Agent 运行状态 ──
+
+    @tool
+    def get_agent_status() -> str:
+        """查询所有Agent进程的运行状态，包括版本、IP、扫描间隔、心跳时间、总扫描次数等"""
+        from apps.agent_api.models import AgentInstance
+
+        agents = AgentInstance.objects.filter(
+            cluster_id=cluster_id
+        ).order_by('-last_heartbeat')
+
+        if not agents:
+            return "未找到Agent数据"
+
+        lines = []
+        for a in agents:
+            hb = a.last_heartbeat.strftime("%m-%d %H:%M") if a.last_heartbeat else "从未"
+            lines.append(
+                f"- {a.hostname} [{a.status}]: 版本={a.version}, IP={a.ip_address or 'N/A'}, "
+                f"平台={a.platform or 'N/A'}, Python={a.python_version or 'N/A'}\n"
+                f"  扫描间隔={a.scan_interval}s, 总扫描={a.total_scans}次, "
+                f"最后心跳={hb}, PVE={a.pve_api_endpoint or 'N/A'}"
+            )
+
+        return f"Agent 状态（共 {len(lines)} 个）:\n" + "\n".join(lines)
+
     return [
         get_cluster_summary,
         get_node_status,
@@ -329,4 +637,13 @@ def make_pve_tools(cluster_id: int):
         get_ceph_status,
         get_network_info,
         get_ha_resources,
+        get_vm_config,
+        get_container_config,
+        get_scan_history,
+        get_detection_results,
+        get_backup_history,
+        get_replication_jobs,
+        get_firewall_rules,
+        get_cluster_tasks,
+        get_agent_status,
     ]

@@ -1584,10 +1584,10 @@ class FullLLMIntegrationTest(TransactionTestCase):
         self.assertIsNotNone(llm)
         self.assertEqual(llm.model_name, "deepseek-v4-pro")
 
-        # 3) make_pve_tools 正确创建 8 个工具
+        # 3) make_pve_tools 正确创建 17 个工具
         from apps.accounts.llm_tools import make_pve_tools
         tools = make_pve_tools(self.cluster.id)
-        self.assertEqual(len(tools), 8)
+        self.assertEqual(len(tools), 17)
         tool_names = [t.name for t in tools]
         self.assertIn("get_cluster_summary", tool_names)
         self.assertIn("get_node_status", tool_names)
@@ -1597,6 +1597,15 @@ class FullLLMIntegrationTest(TransactionTestCase):
         self.assertIn("get_ceph_status", tool_names)
         self.assertIn("get_network_info", tool_names)
         self.assertIn("get_ha_resources", tool_names)
+        self.assertIn("get_vm_config", tool_names)
+        self.assertIn("get_container_config", tool_names)
+        self.assertIn("get_scan_history", tool_names)
+        self.assertIn("get_detection_results", tool_names)
+        self.assertIn("get_backup_history", tool_names)
+        self.assertIn("get_replication_jobs", tool_names)
+        self.assertIn("get_firewall_rules", tool_names)
+        self.assertIn("get_cluster_tasks", tool_names)
+        self.assertIn("get_agent_status", tool_names)
 
         # 4) 工具可执行，返回正确格式
         summary = tools[0].invoke({})
