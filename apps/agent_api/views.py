@@ -298,19 +298,15 @@ class ScanUploadView(APIView):
         cluster_tasks_data = d.get("cluster_tasks", [])
         cluster_log_data = d.get("cluster_log", [])
 
-        # 创建扫描任务记录
-        # raw_data 需要序列化为 JSON 兼容格式（datetime → str）
+        # 创建扫描任务记录（只保留元数据，不存 raw_data 以节省存储）
         import json
-        raw_data_serializable = json.loads(json.dumps(d, default=str))
-
         scan_task = ScanTask.objects.create(
             agent=agent,
             cluster=cluster,
             task_type="full_scan",
             status=ScanTask.Status.RUNNING,
             total_nodes=len(nodes_data),
-            raw_data_size_kb=len(str(d)) // 1024,
-            raw_data=raw_data_serializable,
+            raw_data_size_kb=len(json.dumps(d, default=str)) // 1024,
         )
 
         try:
@@ -423,16 +419,21 @@ class ScanUploadView(APIView):
             count, _ = qs.delete()
             total += count
 
-        # 30 天保留：扫描历史/任务记录/备份历史/集群任务/集群日志
+        # 30 天保留：扫描历史/备份历史/集群任务/集群日志
         for qs in [
             ScanHistory.objects.filter(cluster=cluster, scanned_at__lt=cutoff_30d),
-            ScanTask.objects.filter(cluster=cluster, started_at__lt=cutoff_30d),
             BackupHistory.objects.filter(cluster=cluster, scanned_at__lt=cutoff_30d),
             ClusterTask.objects.filter(cluster=cluster, scanned_at__lt=cutoff_30d),
             ClusterLog.objects.filter(cluster=cluster, scanned_at__lt=cutoff_30d),
         ]:
             count, _ = qs.delete()
             total += count
+
+        # 7 天保留：扫描任务记录（含 raw_data，体积大，缩短保留期）
+        count, _ = ScanTask.objects.filter(
+            cluster=cluster, started_at__lt=cutoff_7d
+        ).delete()
+        total += count
 
         if total > 0:
             logger.info(f"集群 {cluster.name} 清理了 {total} 条过期历史数据")

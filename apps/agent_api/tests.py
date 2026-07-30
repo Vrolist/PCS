@@ -591,7 +591,7 @@ class ExpiredDataCleanupTest(TestCase):
         self.assertEqual(ScanTask.objects.count(), 1)     # 只有上传新增的那条
 
     def test_cleanup_keeps_recent_scan_history(self):
-        """20天的ScanHistory不会被清理（未到30天阈值）"""
+        """20天的ScanHistory不会被清理（未到30天阈值），但ScanTask已过7天会被清理"""
         old_ts = self.now - timedelta(days=20)
         ScanHistory.objects.create(
             cluster=self.cluster,
@@ -607,9 +607,10 @@ class ExpiredDataCleanupTest(TestCase):
         payload = _scan_payload(str(self.cluster.id), "test-agent-id-001")
         self.client.post(self.url, payload, format="json")
 
-        # 20天的数据保留 + 上传新增1条
+        # ScanHistory 保留30天 → 20天的保留 + 新增1条 = 2
         self.assertEqual(ScanHistory.objects.count(), 2)
-        self.assertEqual(ScanTask.objects.count(), 2)
+        # ScanTask 保留7天 → 20天的被清理 + 新增1条 = 1
+        self.assertEqual(ScanTask.objects.count(), 1)
 
     def test_cleanup_failure_does_not_break_upload(self):
         """清理失败不影响上传结果"""
@@ -788,12 +789,17 @@ class AgentScanIntegrationTest(TestCase):
         }, format="json")
         agent_id = reg.data["agent_id"]
 
+        # 使用最近的日期，避免被清理逻辑删除
+        from django.utils import timezone as tz
+        from datetime import timedelta
+        now = tz.now()
+
         payload1 = _scan_payload(str(self.cluster.id), agent_id)
-        payload1["scanned_at"] = "2026-06-29T10:00:00Z"
+        payload1["scanned_at"] = (now - timedelta(minutes=10)).isoformat()
         self.client.post("/api/agent/scan/upload/", payload1, format="json")
 
         payload2 = _scan_payload(str(self.cluster.id), agent_id)
-        payload2["scanned_at"] = "2026-06-29T11:00:00Z"
+        payload2["scanned_at"] = (now - timedelta(minutes=5)).isoformat()
         self.client.post("/api/agent/scan/upload/", payload2, format="json")
 
         agent = AgentInstance.objects.get(agent_id=agent_id)
