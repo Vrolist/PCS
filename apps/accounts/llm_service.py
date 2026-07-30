@@ -144,6 +144,9 @@ async def stream_chat_with_tools(llm, messages, cluster_id):
             yield response.content
         return
 
+    # 将包含 tool_calls 的 assistant 回复加入消息历史
+    messages.append(response)
+
     # 执行工具调用
     for tc in response.tool_calls:
         tool_fn = next((t for t in tools if t.name == tc["name"]), None)
