@@ -169,7 +169,6 @@
     <transition name="chat-slide">
       <div v-if="chatStore.visible && chatStore.layoutMode === 'float'" class="chat-panel float"
         :style="{ width: chatStore.floatWidth + 'px', height: chatStore.floatHeight + 'px' }">
-        <div class="float-resize-handle" @mousedown.prevent="onFloatResizeStart" />
         <div class="float-resize-tl" @mousedown.prevent="onFloatResizeTLStart" />
         <div class="float-resize-left" @mousedown.prevent="onFloatResizeLeftStart" />
         <div class="chat-container">
@@ -425,24 +424,11 @@ const MIN_H = 400
 const MAX_W = 800
 const MAX_H = 900
 let resizing = false
-let resizeMode: 'br' | 'tl' | 'left' | 'sidebar' = 'br' // br=bottom-right, tl=top-left
+let resizeMode: 'tl' | 'left' | 'sidebar' = 'tl'
 let resizeStartX = 0
 let resizeStartY = 0
 let resizeStartW = 0
 let resizeStartH = 0
-
-function onFloatResizeStart(e: MouseEvent) {
-  resizing = true
-  resizeMode = 'br'
-  resizeStartX = e.clientX
-  resizeStartY = e.clientY
-  resizeStartW = chatStore.floatWidth
-  resizeStartH = chatStore.floatHeight
-  document.body.style.cursor = 'nwse-resize'
-  document.body.style.userSelect = 'none'
-  document.addEventListener('mousemove', onFloatResizeMove)
-  document.addEventListener('mouseup', onFloatResizeEnd)
-}
 
 function onFloatResizeTLStart(e: MouseEvent) {
   resizing = true
@@ -473,10 +459,7 @@ function onFloatResizeLeftStart(e: MouseEvent) {
 function onFloatResizeMove(e: MouseEvent) {
   if (!resizing) return
   let w: number, h: number
-  if (resizeMode === 'br') {
-    w = Math.min(MAX_W, Math.max(MIN_W, resizeStartW + (e.clientX - resizeStartX)))
-    h = Math.min(MAX_H, Math.max(MIN_H, resizeStartH + (e.clientY - resizeStartY)))
-  } else if (resizeMode === 'tl') {
+  if (resizeMode === 'tl') {
     w = Math.min(MAX_W, Math.max(MIN_W, resizeStartW - (e.clientX - resizeStartX)))
     h = Math.min(MAX_H, Math.max(MIN_H, resizeStartH - (e.clientY - resizeStartY)))
   } else {
@@ -1206,29 +1189,6 @@ function renderMarkdown(text: string): string {
 }
 
 /* ===== 拖拽调整尺寸手柄 ===== */
-.float-resize-handle {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 16px;
-  height: 16px;
-  cursor: nwse-resize;
-  z-index: 10;
-}
-.float-resize-handle::after {
-  content: '';
-  position: absolute;
-  right: 3px;
-  bottom: 3px;
-  width: 8px;
-  height: 8px;
-  border-right: 2px solid var(--text-muted);
-  border-bottom: 2px solid var(--text-muted);
-  opacity: 0.4;
-}
-.chat-panel.float:hover .float-resize-handle::after {
-  opacity: 0.7;
-}
 
 /* 浮动左上角拖拽 */
 .float-resize-tl {
