@@ -17,6 +17,14 @@ PVE Cluster Scanning & Management Platform — A full-stack solution built with 
 - **User Authentication**: JWT login/register/password reset, operation log audit
 - **Light/Dark Theme**: Default dark mode, one-click switch, preference persistence
 
+## Screenshots
+
+### Dark Theme
+![Dark Theme](screenshots/image_black.png)
+
+### Light Theme
+![Light Theme](screenshots/image_white.png)
+
 ## Tech Stack
 
 | Layer | Technology |

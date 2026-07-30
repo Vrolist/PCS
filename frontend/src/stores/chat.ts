@@ -50,7 +50,13 @@ export interface SystemPromptItem {
 }
 
 const LAYOUT_KEY = 'pcs_chat_layout'
+const VISIBLE_KEY = 'pcs_chat_visible'
 
+
+function loadVisible(): boolean {
+  try { return localStorage.getItem(VISIBLE_KEY) === 'true' } catch { return false }
+}
+function saveVisible(v: boolean) { localStorage.setItem(VISIBLE_KEY, String(v)) }
 
 function loadLayoutMode(): 'float' | 'sidebar' {
   try {
@@ -108,7 +114,7 @@ export function createDefaultConfig(provider: LLMConfig['provider'] = 'deepseek'
 }
 
 export const useChatStore = defineStore('chat', () => {
-  const visible = ref(false)
+  const visible = ref(loadVisible())
   const messages = ref<ChatMessage[]>([])
   const loading = ref(false)
   const configs = ref<LLMConfig[]>([])
@@ -161,6 +167,9 @@ export const useChatStore = defineStore('chat', () => {
       saveChatSelectedPromptId(list[0].id)
     }
   })
+
+  // 持久化 AI 助手面板打开/关闭状态
+  watch(visible, (v) => saveVisible(v))
 
   /** 加载角色约束列表 */
   async function loadPrompts() {

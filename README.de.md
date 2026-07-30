@@ -17,6 +17,14 @@ PVE-Cluster-Scanning- und Managementplattform — Eine Full-Stack-Lösung mit Dj
 - **Benutzerauthentifizierung**: JWT Login/Registrierung/Passwort-Zurücksetzung, Betriebsprotokoll-Audit
 - **Hell/Dunkel-Theme**: Standard Dunkelmodus, Ein-Klick-Umschaltung, Einstellungspersistenz
 
+## Screenshots
+
+### Dunkles Theme
+![Dunkles Theme](screenshots/image_black.png)
+
+### Helles Theme
+![Helles Theme](screenshots/image_white.png)
+
 ## Technologie-Stack
 
 | Schicht | Technologie |
