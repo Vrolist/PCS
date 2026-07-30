@@ -96,19 +96,26 @@
           <!-- 消息 -->
           <template v-for="msg in chatStore.messages" :key="msg.id">
             <div :class="['chat-msg', msg.role]">
-              <div v-if="msg.role === 'assistant'" class="msg-avatar"><el-icon :size="16"><Monitor /></el-icon></div>
+              <div class="msg-header">
+                <div :class="['msg-avatar', msg.role === 'user' ? 'user-avatar' : '']">
+                  <el-icon :size="14"><template v-if="msg.role === 'assistant'"><Monitor /></template><template v-else><User /></template></el-icon>
+                </div>
+                <span class="msg-name">{{ msg.role === 'assistant' ? 'AI 助手' : '我' }}</span>
+              </div>
               <div class="msg-body">
                 <div class="msg-content" v-html="renderMarkdown(msg.content)" />
                 <div v-if="msg.role === 'assistant' && msg.content && !chatStore.loading" class="msg-actions">
                   <button class="msg-action-btn" @click="copyMessage(msg.content)" title="复制"><el-icon :size="12"><CopyDocument /></el-icon></button>
                 </div>
               </div>
-              <div v-if="msg.role === 'user'" class="msg-avatar user-avatar"><el-icon :size="16"><User /></el-icon></div>
             </div>
           </template>
           <!-- 加载中 -->
           <div v-if="chatStore.loading && !streamingContent" class="chat-msg assistant">
-            <div class="msg-avatar"><el-icon :size="16"><Monitor /></el-icon></div>
+            <div class="msg-header">
+              <div class="msg-avatar"><el-icon :size="14"><Monitor /></el-icon></div>
+              <span class="msg-name">AI 助手</span>
+            </div>
             <div class="msg-body">
               <div class="typing-indicator"><span></span><span></span><span></span></div>
             </div>
@@ -135,7 +142,7 @@
             </div>
           </div>
           <div class="chat-input-wrap">
-            <textarea ref="inputRef" v-model="inputText" class="chat-textarea" :placeholder="hasApiKey ? '输入消息，Shift+Enter 换行...' : '请先配置 API Key'" :disabled="!hasApiKey" @keydown.enter.exact.prevent="handleSend" @input="autoResize" />
+            <textarea ref="inputRef" v-model="inputText" class="chat-textarea" :placeholder="hasApiKey ? '输入消息，Shift+Enter 换行...' : '请先配置 API Key'" :disabled="!hasApiKey" @keydown.enter.exact.prevent="handleSend" @compositionstart="isComposing = true" @compositionend="isComposing = false" @input="autoResize" />
             <div class="chat-input-actions">
               <button v-if="chatStore.loading" class="input-btn stop-btn" @click="chatStore.stopGeneration" title="停止生成"><el-icon :size="16"><VideoPause /></el-icon></button>
               <button v-else class="input-btn send-btn" :class="{ active: inputText.trim() }" :disabled="!inputText.trim() || !hasApiKey" @click="handleSend" title="发送"><el-icon :size="16"><Promotion /></el-icon></button>
@@ -245,19 +252,26 @@
             <!-- 消息 -->
             <template v-for="msg in chatStore.messages" :key="msg.id">
               <div :class="['chat-msg', msg.role]">
-                <div v-if="msg.role === 'assistant'" class="msg-avatar"><el-icon :size="16"><Monitor /></el-icon></div>
+                <div class="msg-header">
+                  <div :class="['msg-avatar', msg.role === 'user' ? 'user-avatar' : '']">
+                    <el-icon :size="14"><template v-if="msg.role === 'assistant'"><Monitor /></template><template v-else><User /></template></el-icon>
+                  </div>
+                  <span class="msg-name">{{ msg.role === 'assistant' ? 'AI 助手' : '我' }}</span>
+                </div>
                 <div class="msg-body">
                   <div class="msg-content" v-html="renderMarkdown(msg.content)" />
                   <div v-if="msg.role === 'assistant' && msg.content && !chatStore.loading" class="msg-actions">
                     <button class="msg-action-btn" @click="copyMessage(msg.content)" title="复制"><el-icon :size="12"><CopyDocument /></el-icon></button>
                   </div>
                 </div>
-                <div v-if="msg.role === 'user'" class="msg-avatar user-avatar"><el-icon :size="16"><User /></el-icon></div>
               </div>
             </template>
             <!-- 加载中 -->
             <div v-if="chatStore.loading && !streamingContent" class="chat-msg assistant">
-              <div class="msg-avatar"><el-icon :size="16"><Monitor /></el-icon></div>
+              <div class="msg-header">
+                <div class="msg-avatar"><el-icon :size="14"><Monitor /></el-icon></div>
+                <span class="msg-name">AI 助手</span>
+              </div>
               <div class="msg-body">
                 <div class="typing-indicator"><span></span><span></span><span></span></div>
               </div>
@@ -283,7 +297,7 @@
               </div>
             </div>
             <div class="chat-input-wrap">
-              <textarea ref="inputRef" v-model="inputText" class="chat-textarea" :placeholder="hasApiKey ? '输入消息，Shift+Enter 换行...' : '请先配置 API Key'" :disabled="!hasApiKey" @keydown.enter.exact.prevent="handleSend" @input="autoResize" />
+              <textarea ref="inputRef" v-model="inputText" class="chat-textarea" :placeholder="hasApiKey ? '输入消息，Shift+Enter 换行...' : '请先配置 API Key'" :disabled="!hasApiKey" @keydown.enter.exact.prevent="handleSend" @compositionstart="isComposing = true" @compositionend="isComposing = false" @input="autoResize" />
               <div class="chat-input-actions">
                 <button v-if="chatStore.loading" class="input-btn stop-btn" @click="chatStore.stopGeneration" title="停止生成"><el-icon :size="16"><VideoPause /></el-icon></button>
                 <button v-else class="input-btn send-btn" :class="{ active: inputText.trim() }" :disabled="!inputText.trim() || !hasApiKey" @click="handleSend" title="发送"><el-icon :size="16"><Promotion /></el-icon></button>
@@ -315,6 +329,7 @@ const clusterStore = useClusterStore()
 const inputText = ref('')
 const inputRef = ref<HTMLTextAreaElement>()
 const messagesRef = ref<HTMLDivElement>()
+const isComposing = ref(false)
 
 const hasApiKey = computed(() => chatStore.hasApiKey)
 
@@ -361,7 +376,7 @@ function autoResize() {
 
 async function handleSend() {
   const text = inputText.value.trim()
-  if (!text || !hasApiKey.value) return
+  if (!text || !hasApiKey.value || isComposing.value) return
   inputText.value = ''
   nextTick(() => autoResize())
   await chatStore.sendMessage(text, clusterStore.currentClusterId || undefined)
@@ -837,17 +852,31 @@ function renderMarkdown(text: string): string {
 /* ===== 消息气泡 ===== */
 .chat-msg {
   display: flex;
-  gap: 8px;
-  align-items: flex-start;
+  flex-direction: column;
   max-width: 100%;
 }
 .chat-msg.user {
+  align-items: flex-end;
+}
+.msg-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  padding: 0 2px;
+}
+.msg-name {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.chat-msg.user .msg-header {
   flex-direction: row-reverse;
 }
 .msg-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
   background: linear-gradient(135deg, #409eff, #8b5cf6);
   display: flex;
   align-items: center;
@@ -859,7 +888,7 @@ function renderMarkdown(text: string): string {
   background: var(--primary-color);
 }
 .msg-body {
-  max-width: calc(100% - 40px);
+  max-width: 80%;
   min-width: 0;
 }
 .msg-content {

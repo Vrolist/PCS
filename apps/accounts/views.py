@@ -600,7 +600,7 @@ def chat_stream_view(request):
                         line, buf = buf.split(b'\n', 1)
                         line = line.strip()
                         if line:
-                            line_queue.put(line)
+                            line_queue.put(line.decode('utf-8', errors='ignore'))
                 if buf.strip():
                     line_queue.put(buf.strip().decode('utf-8', errors='ignore'))
             except Exception as e:
