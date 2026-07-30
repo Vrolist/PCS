@@ -778,7 +778,7 @@ VM、LXC、VMConfig、LXCConfig、SDNZone、SDNVNet、SDNSubnet 使用 **原地�
 14. ~~SDN 数据采集与展示~~ ✅ 已完成（SDNZone/VNet/Subnet 模型 + Agent 采集 v0.6.0 + 前端 Tab 页面）
 15. ~~网络拓扑可视化~~ ✅ 已完成（SVG 节点-网络连接图 + 图例筛选 + IP 网段图层）
 16. ~~依赖链路可视化~~ ✅ 已完成（SVG 节点内嵌依赖图 + 拖拽/缩放/自动扩充 + 布局居中）
-17. ~~LLM 流式对话（AI 助手）~~ ✅ 已完成（LangChain async streaming + uvicorn ASGI + SSE）
+17. ~~LLM 流式对话（AI 助手）~~ ✅ 已完成（LangChain async streaming + uvicorn ASGI + SSE；已修复流式 UI 不刷新问题；已补充 85 个 LLM/SSE 测试用例）
 18. 自动检测引擎
 19. 仪表盘真实数据进一步接入（告警、趋势数据源）
 
@@ -805,10 +805,12 @@ AI 助手聊天面板（ChatBubble）通过 `/api/auth/chat/stream/` 端点实�
 
 | 文件 | 职责 |
 |------|------|
-| `apps/accounts/llm_service.py` | LangChain LLM 封装（`build_llm` / `build_langchain_messages` / `stream_chat`） |
-| `apps/accounts/views.py` | `chat_stream_view` — async 视图，SSE 流式返回 |
+| `apps/accounts/llm_service.py` | LangChain LLM 封装（`build_llm` / `build_langchain_messages` / `stream_chat`），支持 DeepSeek 等模型的 `reasoning_content` 透传 |
+| `config/asgi.py` | ASGI 入口，将 `/api/auth/chat/stream/` 路由到独立 SSE handler，绕过 Django 中间件缓冲 |
+| `config/sse_handler.py` | 独立 ASGI SSE handler，直接通过 transport 写入并 flush，保证逐 token 推送 |
 | `apps/accounts/chat_context.py` | `build_pve_context` — PVE 数据动态注入 |
-| `frontend/src/stores/chat.ts` | `sendMessage` — fetch + ReadableStream 读取 SSE |
+| `frontend/src/stores/chat.ts` | `sendMessage` — fetch + ReadableStream 读取 SSE，注意引用数组中的响应式代理以触发 UI 更新 |
+| `frontend/src/components/ChatBubble.vue` | 渲染消息Markdown，将 `<think>` 思考过程渲染为可折叠灰色块 |
 
 ### 后端流式传输（LangChain async generator）
 
@@ -819,31 +821,56 @@ AI 助手聊天面板（ChatBubble）通过 `/api/auth/chat/stream/` 端点实�
 llm = ChatOpenAI(api_key=..., base_url=..., model=..., streaming=True)
 
 # 流式生成，yield 每个 token
-async for token in llm.astream(messages):
-    yield token
+async for chunk in llm.astream(messages):
+    # DeepSeek 等推理模型可能返回 reasoning_content
+    reasoning = (
+        getattr(chunk, "additional_kwargs", {}).get("reasoning_content", "")
+        or getattr(chunk, "response_metadata", {}).get("reasoning_content", "")
+        or ""
+    )
+    if reasoning:
+        yield f"<think>{reasoning}</think>"
+    if chunk.content:
+        yield chunk.content
 ```
 
-`apps/accounts/views.py` — `chat_stream_view()`（async 视图）：
+`config/sse_handler.py` — `sse_chat_stream()`（独立 ASGI handler，绕过 Django 中间件）：
 
 ```python
-async def chat_stream_view(request):
-    # ... JWT 鉴权（sync_to_async 包装 ORM）...
+async def sse_chat_stream(scope, receive, send):
+    # ... 读取 body、JWT 鉴权、加载配置 ...
 
-    llm = build_llm(config)
-    langchain_msgs = build_langchain_messages(messages, pve_context)
+    await send({
+        "type": "http.response.start",
+        "status": 200,
+        "headers": [
+            [b"content-type", b"text/event-stream"],
+            [b"cache-control", b"no-cache, no-store, must-revalidate"],
+            [b"x-accel-buffering", b"no"],
+        ],
+    })
 
-    async def generate():
-        yield ": connected\n\n"
+    async def _stream():
         async for token in stream_chat(llm, langchain_msgs):
             chunk = json.dumps({"choices": [{"delta": {"content": token}}]})
-            yield f"data: {chunk}\n\n"
-        yield "data: [DONE]\n\n"
+            await _send_sse(send, f"data: {chunk}\n\n")
 
-    return StreamingHttpResponse(generate(), content_type='text/event-stream')
+    async def _listen_disconnect():
+        while True:
+            msg = await receive()
+            if msg.get("type") == "http.disconnect":
+                return
+
+    # 并发：流式输出 + 监听断连
+    stream_task = asyncio.ensure_future(_stream())
+    disconnect_task = asyncio.ensure_future(_listen_disconnect())
+    await asyncio.wait([stream_task, disconnect_task], return_when=asyncio.FIRST_COMPLETED)
 ```
 
 关键设计：
-- **async 视图**：`chat_stream_view` 是 `async def`，ORM 调用通过 `sync_to_async` 包装
+- **独立 ASGI handler**：`config/asgi.py` 将 SSE 请求直接路由到 `sse_chat_stream`，绕过 Django 与 uvicorn 的 StreamingHttpResponse 缓冲
+- **直接写 transport**：每个 token 通过 `send({"type": "http.response.body", ...})` 直接 push，无中间缓冲
+- **并发监听断连**：`_stream()` 与 `_listen_disconnect()` 并发，用户停止或刷新页面时立即中止流
 - **LangChain streaming**：`ChatOpenAI(streaming=True)` + `llm.astream()` 原生异步流式
 - **SSE 格式兼容**：前端无需改动，格式与之前一致
 
@@ -871,9 +898,40 @@ while (true) {
     if (data === '[DONE]') break
     const parsed = JSON.parse(data)
     const delta = parsed.choices?.[0]?.delta?.content
-    if (delta) fullReply += delta
+    if (delta) {
+      fullReply += delta
+      if (!assistantMsg) {
+        const newMsg: ChatMessage = { id: ..., role: 'assistant', content: '', timestamp: ... }
+        messages.value.push(newMsg)
+        // 必须引用数组中的响应式代理，否则修改 content 不会触发 UI 刷新
+        assistantMsg = messages.value[messages.value.length - 1]
+      }
+      assistantMsg.content = fullReply
+    }
   }
 }
+```
+
+> ⚠️ **重要**：`messages.value.push(newMsg)` 后，数组内部会创建响应式代理。如果直接持有 `newMsg` 引用并修改 `newMsg.content`，Vue 无法感知变化，导致流式过程中 UI 不刷新。务必通过 `messages.value[index]` 引用代理对象再赋值。
+
+### 测试覆盖
+
+`apps/accounts/tests_llm.py` 提供 85 个测试用例，覆盖 LLM 沟通全流程：
+
+| 测试类 | 用例数 | 覆盖范围 |
+|--------|--------|----------|
+| `LLMConfigTest` | 11 | `build_llm` 配置解析、base_url 规范化、模型参数 |
+| `LangChainMessageTest` | 12 | `build_langchain_messages` 角色转换、PVE 上下文注入、边界值 |
+| `StreamChatTest` | 8 | 流式 token yield、中文 Unicode、空 chunk、异常传播 |
+| `ChatContextTest` | 25 | 关键词匹配、无数据集群、空消息、大小写混写 |
+| `SSEHandlerAuthTest` | 10 | 方法限制、JWT 鉴权、参数校验、配置不存在 |
+| `SSEHandlerStreamingTest` | 15 | 多 token 流式、SSE 帧格式、顺序、断连、异常、空流 |
+| `FullLLMIntegrationTest` | 6 | 配置→SSE handler→流式输出的全链路组合测试 |
+
+运行命令：
+
+```bash
+.venv/bin/python manage.py test apps.accounts.tests_llm --verbosity=1
 ```
 
 ### PVE 数据上下文注入
