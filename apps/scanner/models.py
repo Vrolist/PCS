@@ -24,7 +24,7 @@ class ClusterNode(models.Model):
     cpu_family = models.IntegerField("CPU代号", null=True, blank=True)
     cpu_cores = models.IntegerField("CPU核心数", null=True, blank=True)
     cpu_sockets = models.IntegerField("CPU插槽数", null=True, blank=True)
-    cpu_load = models.FloatField("CPU负载(0~1)", null=True, blank=True)
+    cpu_load = models.FloatField("CPU负载(%)", null=True, blank=True)
     cpu_mhz = models.FloatField("CPU频率(MHz)", null=True, blank=True)
     cpu_hvm = models.BooleanField("硬件虚拟化", default=False,
         help_text="VT-x (Intel) 或 AMD-V")
@@ -87,7 +87,7 @@ class VM(models.Model):
     # CPU
     cpu_cores = models.IntegerField("CPU核心数", null=True, blank=True)
     cpu_sockets = models.IntegerField("CPU插槽数", null=True, blank=True)
-    cpu_usage = models.FloatField("CPU使用率", null=True, blank=True)
+    cpu_usage = models.FloatField("CPU使用率(%)", null=True, blank=True)
 
     # 内存
     memory_mb = models.BigIntegerField("内存(MB)", null=True, blank=True)
@@ -137,7 +137,7 @@ class LXC(models.Model):
     status = models.CharField("状态", max_length=32, help_text="running / stopped")
 
     cpu_cores = models.FloatField("CPU核心数", null=True, blank=True)
-    cpu_usage = models.FloatField("CPU使用率", null=True, blank=True)
+    cpu_usage = models.FloatField("CPU使用率(%)", null=True, blank=True)
 
     memory_mb = models.BigIntegerField("内存(MB)", null=True, blank=True)
     memory_used_mb = models.BigIntegerField("内存已用(MB)", null=True, blank=True)

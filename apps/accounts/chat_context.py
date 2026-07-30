@@ -74,7 +74,8 @@ def build_pve_context(cluster_id: int, user_message: str) -> str:
         f"## 集群概览: {cluster.name}\n"
         f"- PVE 版本: {cluster.pve_version or '未知'}\n"
         f"- 节点数: {node_count}, 虚拟机: {vm_count}, 容器: {lxc_count}\n"
-        f"- 集群状态: {cluster.status}"
+        f"- 集群状态: {cluster.status}\n"
+        f"- 数据说明: 以下为最近 7 天内最新一次扫描结果，非累计值"
     )
 
     # ===== 节点数据 =====
@@ -83,13 +84,14 @@ def build_pve_context(cluster_id: int, user_message: str) -> str:
         if latest_nodes:
             lines = ["## 节点状态"]
             for n in latest_nodes:
-                cpu_pct = f"{n.cpu_load * 100:.1f}%" if n.cpu_load is not None else "N/A"
+                cpu_pct = f"{n.cpu_load:.1f}%" if n.cpu_load is not None else "N/A"
                 mem_pct = f"{n.memory_usage_pct:.1f}%" if n.memory_usage_pct is not None else "N/A"
                 mem_total = f"{n.memory_total_mb}MB" if n.memory_total_mb else "N/A"
                 disk_total = f"{n.rootfs_total_gb}GB" if n.rootfs_total_gb else "N/A"
                 uptime_h = f"{n.uptime_seconds // 3600}h" if n.uptime_seconds else "N/A"
+                cores = f"{n.cpu_cores}核" if n.cpu_cores else "N/A"
                 lines.append(
-                    f"- {n.node_name}: 状态={n.status}, CPU={cpu_pct}, "
+                    f"- {n.node_name}: 状态={n.status}, CPU={cpu_pct}({cores}), "
                     f"内存={mem_pct}({mem_total}), 磁盘={disk_total}, "
                     f"运行={uptime_h}, IP={n.ip_address or 'N/A'}"
                 )
@@ -105,11 +107,12 @@ def build_pve_context(cluster_id: int, user_message: str) -> str:
             if vms:
                 lines = ["## 虚拟机列表"]
                 for v in vms:
-                    cpu_pct = f"{v.cpu_usage * 100:.1f}%" if v.cpu_usage is not None else "N/A"
+                    cpu_pct = f"{v.cpu_usage:.1f}%" if v.cpu_usage is not None else "N/A"
                     mem = f"{v.memory_mb}MB" if v.memory_mb else "N/A"
+                    cores = f"{v.cpu_cores}核" if v.cpu_cores else "N/A"
                     lines.append(
                         f"- [{v.vmid}] {v.name}: 状态={v.status}, "
-                        f"CPU={cpu_pct}, 内存={mem}, 节点={v.node.node_name}"
+                        f"CPU={cpu_pct}({cores}), 内存={mem}, 节点={v.node.node_name}"
                     )
                 context_parts.append("\n".join(lines))
 
@@ -121,11 +124,12 @@ def build_pve_context(cluster_id: int, user_message: str) -> str:
         if lxcs:
             lines = ["## LXC 容器列表"]
             for c in lxcs:
-                cpu_pct = f"{c.cpu_usage * 100:.1f}%" if c.cpu_usage is not None else "N/A"
+                cpu_pct = f"{c.cpu_usage:.1f}%" if c.cpu_usage is not None else "N/A"
                 mem = f"{c.memory_mb}MB" if c.memory_mb else "N/A"
+                cores = f"{c.cpu_cores}核" if c.cpu_cores else "N/A"
                 lines.append(
                     f"- [{c.vmid}] {c.name}: 状态={c.status}, "
-                    f"CPU={cpu_pct}, 内存={mem}, 节点={c.node.node_name}"
+                    f"CPU={cpu_pct}({cores}), 内存={mem}, 节点={c.node.node_name}"
                 )
             context_parts.append("\n".join(lines))
 

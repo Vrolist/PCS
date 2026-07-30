@@ -456,7 +456,7 @@ class ChatContextKeywordTest(TestCase):
 
         self.node_cpu = ClusterNode.objects.create(
             cluster=self.cluster, node_name="pve-1",
-            status="online", cpu_load=0.35,
+            status="online", cpu_load=35.0,
             memory_total_mb=32000, memory_usage_pct=45.0,
             rootfs_total_gb=500, rootfs_used_gb=200,
             uptime_seconds=86400, ip_address="192.168.1.1",
@@ -464,7 +464,7 @@ class ChatContextKeywordTest(TestCase):
         )
         self.node_io = ClusterNode.objects.create(
             cluster=self.cluster, node_name="pve-2",
-            status="online", cpu_load=0.10,
+            status="online", cpu_load=10.0,
             memory_total_mb=64000, memory_usage_pct=30.0,
             rootfs_total_gb=1000, rootfs_used_gb=500,
             uptime_seconds=172800, ip_address="192.168.1.2",
@@ -473,13 +473,13 @@ class ChatContextKeywordTest(TestCase):
 
         self.vm = VM.objects.create(
             node=self.node_cpu, vmid=100, name="ubuntu",
-            status="running", cpu_usage=0.5, memory_mb=4096,
+            status="running", cpu_usage=50.0, memory_mb=4096,
             scanned_at=now,
         )
 
         self.lxc = LXC.objects.create(
             node=self.node_io, vmid=200, name="nginx",
-            status="running", cpu_usage=0.3, memory_mb=1024,
+            status="running", cpu_usage=30.0, memory_mb=1024,
             scanned_at=now,
         )
 
@@ -591,7 +591,7 @@ class ChatContextKeywordTest(TestCase):
     # ---- 数据格式化 ----
 
     def test_build_pve_context_formats_cpu_percent(self):
-        """CPU 0~1 被格式化为百分比"""
+        """CPU 百分比直接格式化输出"""
         result = build_pve_context(self.cluster.id, "节点")
         self.assertIn("35.0%", result)
         self.assertIn("10.0%", result)
