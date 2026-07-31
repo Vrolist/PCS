@@ -76,7 +76,7 @@ const FLOAT_H_KEY = 'pcs_chat_float_h'
 const SIDEBAR_W_KEY = 'pcs_chat_sidebar_w'
 
 function loadFloatWidth(): number {
-  try { const v = localStorage.getItem(FLOAT_W_KEY); return v ? Number(v) : 420 } catch { return 420 }
+  try { const v = localStorage.getItem(FLOAT_W_KEY); return v ? Number(v) : 520 } catch { return 520 }
 }
 function saveFloatWidth(v: number) { localStorage.setItem(FLOAT_W_KEY, String(v)) }
 function loadFloatHeight(): number {
@@ -84,7 +84,7 @@ function loadFloatHeight(): number {
 }
 function saveFloatHeight(v: number) { localStorage.setItem(FLOAT_H_KEY, String(v)) }
 function loadSidebarWidth(): number {
-  try { const v = localStorage.getItem(SIDEBAR_W_KEY); return v ? Number(v) : 420 } catch { return 420 }
+  try { const v = localStorage.getItem(SIDEBAR_W_KEY); return v ? Number(v) : 520 } catch { return 520 }
 }
 function saveSidebarWidth(v: number) { localStorage.setItem(SIDEBAR_W_KEY, String(v)) }
 

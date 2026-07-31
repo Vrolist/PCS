@@ -141,13 +141,13 @@
           <div v-if="chatStore.prompts.length > 0 || chatStore.configs.length > 0" class="chat-selectors-row">
             <div v-if="chatStore.prompts.length > 0" class="chat-selector-item">
               <span class="model-label">约束</span>
-              <el-select v-model="chatStore.chatSelectedPromptId" size="small" class="model-selector-input" popper-class="model-selector-popper" @change="(val: number) => chatStore.saveChatSelectedPromptId(val)">
+              <el-select v-model="chatStore.chatSelectedPromptId" size="small" class="model-selector-input" popper-class="model-selector-popper" :disabled="chatStore.loading" @change="(val: number) => chatStore.saveChatSelectedPromptId(val)">
                 <el-option v-for="p in chatStore.prompts" :key="p.id" :label="p.name" :value="p.id" />
               </el-select>
             </div>
             <div v-if="chatStore.configs.length > 0" class="chat-selector-item">
               <span class="model-label">模型</span>
-              <el-select v-model="chatStore.chatSelectedConfigId" size="small" class="model-selector-input" popper-class="model-selector-popper" @change="onModelChange">
+              <el-select v-model="chatStore.chatSelectedConfigId" size="small" class="model-selector-input" popper-class="model-selector-popper" :disabled="chatStore.loading" @change="onModelChange">
                 <el-option v-for="cfg in chatStore.configs" :key="cfg.id" :label="cfg.name" :value="cfg.id">
                   <span>{{ cfg.name }}</span>
                   <span class="model-selector-detail">{{ cfg.model }}</span>
@@ -310,13 +310,13 @@
             <div v-if="chatStore.prompts.length > 0 || chatStore.configs.length > 0" class="chat-selectors-row">
               <div v-if="chatStore.prompts.length > 0" class="chat-selector-item">
                 <span class="model-label">约束</span>
-                <el-select v-model="chatStore.chatSelectedPromptId" size="small" class="model-selector-input" popper-class="model-selector-popper" @change="(val: number) => chatStore.saveChatSelectedPromptId(val)">
+                <el-select v-model="chatStore.chatSelectedPromptId" size="small" class="model-selector-input" popper-class="model-selector-popper" :disabled="chatStore.loading" @change="(val: number) => chatStore.saveChatSelectedPromptId(val)">
                   <el-option v-for="p in chatStore.prompts" :key="p.id" :label="p.name" :value="p.id" />
                 </el-select>
               </div>
               <div v-if="chatStore.configs.length > 0" class="chat-selector-item">
                 <span class="model-label">模型</span>
-                <el-select v-model="chatStore.chatSelectedConfigId" size="small" class="model-selector-input" popper-class="model-selector-popper" @change="onModelChange">
+                <el-select v-model="chatStore.chatSelectedConfigId" size="small" class="model-selector-input" popper-class="model-selector-popper" :disabled="chatStore.loading" @change="onModelChange">
                   <el-option v-for="cfg in chatStore.configs" :key="cfg.id" :label="cfg.name" :value="cfg.id">
                     <span>{{ cfg.name }}</span>
                     <span class="model-selector-detail">{{ cfg.model }}</span>
@@ -456,7 +456,7 @@ function onModelChange(id: number) {
 // ---- 拖拽调整尺寸 ----
 const MIN_W = 320
 const MIN_H = 400
-const MAX_W = 800
+const MAX_W = 1000
 const MAX_H = 900
 let resizing = false
 let resizeMode: 'tl' | 'top' | 'left' | 'sidebar' = 'tl'
@@ -560,10 +560,21 @@ function onSidebarDragEnd() {
 }
 
 function copyMessage(content: string) {
-  navigator.clipboard.writeText(content).then(
-    () => ElMessage.success('已复制'),
-    () => ElMessage.error('复制失败'),
-  )
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(content).then(
+      () => ElMessage.success('已复制'),
+      () => ElMessage.error('复制失败'),
+    )
+  } else {
+    const ta = document.createElement('textarea')
+    ta.value = content
+    ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px'
+    document.body.appendChild(ta)
+    ta.select()
+    const ok = document.execCommand('copy')
+    document.body.removeChild(ta)
+    ok ? ElMessage.success('已复制') : ElMessage.error('复制失败')
+  }
 }
 
 function escapeHtml(text: string): string {
@@ -727,7 +738,7 @@ function renderMarkdown(text: string): string {
   bottom: 92px;
   right: 28px;
   z-index: 9998;
-  width: 420px;
+  width: 520px;
   height: 600px;
   border-radius: 16px;
   overflow: hidden;
@@ -741,7 +752,7 @@ function renderMarkdown(text: string): string {
   right: 0;
   bottom: 0;
   z-index: 100;
-  width: 420px;
+  width: 520px;
   height: 100vh;
   border-radius: 0;
   box-shadow: -4px 0 24px rgba(0, 0, 0, 0.1), 0 0 0 1px var(--border-color);
@@ -1018,6 +1029,8 @@ function renderMarkdown(text: string): string {
   line-height: 1.6;
   color: var(--text-primary);
   word-break: break-word;
+  user-select: text;
+  -webkit-user-select: text;
 }
 .chat-msg.user .msg-content {
   background: var(--primary-color);
