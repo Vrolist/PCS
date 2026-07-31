@@ -13,6 +13,38 @@ from langchain_openai import ChatOpenAI
 
 logger = logging.getLogger(__name__)
 
+# ── Token 限制常量 ──
+TOKEN_SOFT_LIMIT = 300_000   # 警告阈值（300K）
+TOKEN_HARD_LIMIT = 500_000   # 阻断阈值（500K）
+
+
+def count_tokens(llm, messages):
+    """
+    计算消息列表的 token 数。
+    优先用模型 API 精确计算，失败时用字符估算。
+    """
+    try:
+        return llm.get_num_tokens_from_messages(messages)
+    except Exception:
+        total_chars = 0
+        for m in messages:
+            content = getattr(m, "content", "") or ""
+            total_chars += len(content)
+        return int(total_chars * 0.7)
+
+
+def check_token_limit(llm, messages):
+    """
+    检查 token 限制，返回 (token_count, status)。
+    status: "ok" | "warning" | "exceeded"
+    """
+    token_count = count_tokens(llm, messages)
+    if token_count >= TOKEN_HARD_LIMIT:
+        return token_count, "exceeded"
+    if token_count >= TOKEN_SOFT_LIMIT:
+        return token_count, "warning"
+    return token_count, "ok"
+
 
 def build_llm(config):
     """

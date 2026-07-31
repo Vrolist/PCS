@@ -67,6 +67,20 @@
 
         <!-- 消息列表 -->
         <div class="chat-messages" ref="messagesRef">
+          <!-- Token 限制提示条 -->
+          <div v-if="chatStore.tokenStatus !== 'ok'" class="token-status-bar" :class="chatStore.tokenStatus">
+            <el-icon :size="14">
+              <template v-if="chatStore.tokenStatus === 'warning'"><WarningFilled /></template>
+              <template v-else><CircleCloseFilled /></template>
+            </el-icon>
+            <span v-if="chatStore.tokenStatus === 'warning'">
+              对话已较长 (约 {{ formatTokens(chatStore.tokenInfo?.used || 0) }} tokens)，响应可能变慢，建议开启新会话
+            </span>
+            <span v-else>
+              对话已达上限 (约 {{ formatTokens(chatStore.tokenInfo?.used || 0) }} tokens)，请开启新会话
+            </span>
+          </div>
+
           <!-- 空状态 -->
           <div v-if="chatStore.messages.length === 0" class="chat-empty">
             <div class="chat-empty-icon">
@@ -223,6 +237,20 @@
           </div>
           <!-- 消息列表 -->
           <div class="chat-messages" ref="messagesRef">
+            <!-- Token 限制提示条 -->
+            <div v-if="chatStore.tokenStatus !== 'ok'" class="token-status-bar" :class="chatStore.tokenStatus">
+              <el-icon :size="14">
+                <template v-if="chatStore.tokenStatus === 'warning'"><WarningFilled /></template>
+                <template v-else><CircleCloseFilled /></template>
+              </el-icon>
+              <span v-if="chatStore.tokenStatus === 'warning'">
+                对话已较长 (约 {{ formatTokens(chatStore.tokenInfo?.used || 0) }} tokens)，响应可能变慢，建议开启新会话
+              </span>
+              <span v-else>
+                对话已达上限 (约 {{ formatTokens(chatStore.tokenInfo?.used || 0) }} tokens)，请开启新会话
+              </span>
+            </div>
+
             <!-- 空状态 -->
             <div v-if="chatStore.messages.length === 0" class="chat-empty">
               <div class="chat-empty-icon">
@@ -318,7 +346,7 @@ import { useClusterStore } from '@/stores/cluster'
 import {
   ChatDotRound, Close, Setting, Monitor, User, Promotion,
   DataAnalysis, Warning, MagicStick, CopyDocument, WarningFilled,
-  CircleClose, CircleCheck, DCaret, FullScreen, Plus, Clock,
+  CircleClose, CircleCheck, CircleCloseFilled, DCaret, FullScreen, Plus, Clock,
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 
@@ -404,6 +432,12 @@ function formatDate(dateStr: string) {
   const d = new Date(dateStr)
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function formatTokens(count: number): string {
+  if (count >= 1_000_000) return (count / 1_000_000).toFixed(1) + 'M'
+  if (count >= 1_000) return (count / 1_000).toFixed(0) + 'K'
+  return String(count)
 }
 
 async function switchToConversation(id: number) {
@@ -849,6 +883,25 @@ function renderMarkdown(text: string): string {
   color: var(--warning-color, #e6a23c);
   font-size: 12px;
   flex-shrink: 0;
+}
+
+/* ===== Token 限制提示条 ===== */
+.token-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  flex-shrink: 0;
+  border-radius: 0;
+}
+.token-status-bar.warning {
+  background: rgba(230, 162, 60, 0.12);
+  color: #e6a23c;
+}
+.token-status-bar.exceeded {
+  background: rgba(245, 108, 108, 0.12);
+  color: #f56c6c;
 }
 
 /* ===== 消息列表 ===== */

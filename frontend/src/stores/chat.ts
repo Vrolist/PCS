@@ -134,6 +134,10 @@ export const useChatStore = defineStore('chat', () => {
   const prompts = ref<SystemPromptItem[]>([])
   const promptsLoaded = ref(false)
 
+  // Token 限制状态
+  const tokenStatus = ref<'ok' | 'warning' | 'exceeded'>('ok')
+  const tokenInfo = ref<{ used: number; limit: number; ratio?: number } | null>(null)
+
   // 本地暂存：AI 助手中用户选择的模型和约束（不保存到后端，仅存 localStorage）
   const CHAT_SELECTED_CONFIG_KEY = 'pcs_chat_selected_config'
   const CHAT_SELECTED_PROMPT_KEY = 'pcs_chat_selected_prompt'
@@ -461,6 +465,8 @@ export const useChatStore = defineStore('chat', () => {
     }
     messages.value.push(userMsg)
     loading.value = true
+    tokenStatus.value = 'ok'
+    tokenInfo.value = null
 
     // 保存用户消息到后端
     createMessage(convId, 'user', content.trim()).catch(() => {})
@@ -535,6 +541,19 @@ export const useChatStore = defineStore('chat', () => {
           if (data === '[DONE]') break
           try {
             const parsed = JSON.parse(data)
+
+            // 处理 token 限制事件
+            if (parsed.type === 'token_warning') {
+              tokenStatus.value = 'warning'
+              tokenInfo.value = { used: parsed.used, limit: parsed.limit, ratio: parsed.ratio }
+              continue
+            }
+            if (parsed.type === 'token_limit_exceeded') {
+              tokenStatus.value = 'exceeded'
+              tokenInfo.value = { used: parsed.used, limit: parsed.limit }
+              continue
+            }
+
             const delta = parsed.choices?.[0]?.delta?.content
             if (delta) {
               fullReply += delta
@@ -636,6 +655,8 @@ export const useChatStore = defineStore('chat', () => {
     chatSelectedPromptId,
     saveChatSelectedConfigId,
     saveChatSelectedPromptId,
+    tokenStatus,
+    tokenInfo,
     loadConfigsFromAPI,
     loadConversations,
     loadPrompts,

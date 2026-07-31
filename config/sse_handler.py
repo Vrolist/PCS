@@ -83,10 +83,13 @@ async def sse_chat_stream(scope, receive, send):
         return
 
     # 构建 LLM（使用 Tool Calling 按需查询数据）
-    from apps.accounts.llm_service import build_llm, build_langchain_messages, stream_chat_with_tools
+    from apps.accounts.llm_service import build_llm, build_langchain_messages, stream_chat_with_tools, check_token_limit
 
     langchain_msgs = build_langchain_messages(messages)
     llm = build_llm(config)
+
+    # ── Token 限制检查 ──
+    token_used, token_status = check_token_limit(llm, langchain_msgs)
 
     # 发送 HTTP 响应头（SSE）
     await send({
@@ -101,9 +104,29 @@ async def sse_chat_stream(scope, receive, send):
         ],
     })
 
-
     # 发送初始连接消息
     await _send_sse(send, ": connected\n\n")
+
+    # 如果 token 超限，发送阻断事件并结束
+    if token_status == "exceeded":
+        limit_event = json.dumps({
+            "type": "token_limit_exceeded",
+            "used": token_used,
+            "limit": 500_000,
+        }, ensure_ascii=False)
+        await _send_sse(send, f"data: {limit_event}\n\n")
+        await _send_sse_done(send, b"data: [DONE]\n\n")
+        return
+
+    # 如果 token 警告，发送警告事件（继续流式输出）
+    if token_status == "warning":
+        warn_event = json.dumps({
+            "type": "token_warning",
+            "used": token_used,
+            "limit": 500_000,
+            "ratio": round(token_used / 500_000, 2),
+        }, ensure_ascii=False)
+        await _send_sse(send, f"data: {warn_event}\n\n")
 
     # 流式输出 LLM 响应（并发监听客户端断连）
     t0 = time.monotonic()

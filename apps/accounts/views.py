@@ -534,14 +534,39 @@ async def chat_stream_view(request):
         return JsonResponse({"detail": "未配置 API Key"}, status=400)
 
     # 使用 Tool Calling 按需查询 PVE 数据
-    from .llm_service import build_llm, build_langchain_messages, stream_chat_with_tools
+    from .llm_service import build_llm, build_langchain_messages, stream_chat_with_tools, check_token_limit
 
     langchain_msgs = build_langchain_messages(messages)
     llm = build_llm(config)
 
+    # ── Token 限制检查 ──
+    token_used, token_status = check_token_limit(llm, langchain_msgs)
+
     # 流式 SSE 响应
     async def generate():
         yield ": connected\n\n"
+
+        # 如果 token 超限，发送阻断事件并结束
+        if token_status == "exceeded":
+            limit_event = json.dumps({
+                "type": "token_limit_exceeded",
+                "used": token_used,
+                "limit": 500_000,
+            }, ensure_ascii=False)
+            yield f"data: {limit_event}\n\n"
+            yield "data: [DONE]\n\n"
+            return
+
+        # 如果 token 警告，发送警告事件（继续流式输出）
+        if token_status == "warning":
+            warn_event = json.dumps({
+                "type": "token_warning",
+                "used": token_used,
+                "limit": 500_000,
+                "ratio": round(token_used / 500_000, 2),
+            }, ensure_ascii=False)
+            yield f"data: {warn_event}\n\n"
+
         t0 = time.monotonic()
         token_count = 0
         try:
