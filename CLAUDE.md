@@ -211,6 +211,30 @@ cd frontend && npm install && npx vite build   # 跳过 vue-tsc 类型检查
 .venv/bin/python manage.py test apps.agent_api apps.clusters apps.dashboard --verbosity=2
 ```
 
+## Git 推送工作流
+
+项目采用双 remote 推送架构：
+
+```
+本地开发机  ──push──→  Gitea (192.168.2.27:1022)  ──同步──→  GitHub (Vrolist/PCS)
+  origin               内网 Git 服务器                 自动镜像同步
+  github               GitHub 公开仓库
+```
+
+- **origin** (主 remote): `ssh://git@192.168.2.27:1022/buladou/pve-cluster-scan.git`
+- **github** (镜像 remote): `https://github.com/Vrolist/PCS.git`
+- 本地 push 到 origin 后，Gitea 自动同步到 GitHub
+- 如需手动推送到 GitHub：`git push github main`
+- GitHub Actions workflow (`.github/workflows/docker.yml`) 在 GitHub 侧触发，构建 Docker 镜像推送到 GHCR
+
+```bash
+# 推送到内网 Gitea（主仓库）
+git push origin main
+
+# 推送到 GitHub（如 Gitea 同步延迟或需要立即触发 Actions）
+git push github main
+```
+
 ## Agent
 
 单文件 Python 脚本（零依赖，纯 stdlib），安装在 PVE 节点上运行。
