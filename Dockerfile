@@ -37,7 +37,7 @@ WORKDIR /app
 COPY . .
 
 # 复制前端构建产物
-COPY --from=frontend-build /app/frontend/dist/ /app/static/frontend/
+COPY --from=frontend-build /app/static/frontend/ /app/static/frontend/
 
 # 数据目录（SQLite + media）
 RUN mkdir -p /app/data /app/media

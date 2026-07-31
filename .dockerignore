@@ -20,6 +20,9 @@ staticfiles/
 frontend/node_modules/
 frontend/dist/
 
+# Django build output (rebuilt in Docker)
+static/frontend/
+
 # IDE
 .idea/
 .vscode/
