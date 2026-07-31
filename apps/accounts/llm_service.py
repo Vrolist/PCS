@@ -3,8 +3,10 @@ LangChain LLM 服务封装
 统一管理 LLM 实例构建、消息转换、流式调用。
 """
 
+import json
 import logging
 import time
+import uuid
 
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langchain_openai import ChatOpenAI
@@ -138,18 +140,38 @@ async def stream_chat_with_tools(llm, messages, cluster_id):
             yield token
         return
 
-    if not response.tool_calls:
+    # 解析 tool_calls（兼容标准格式 + DeepSeek/MiMo 等 additional_kwargs 格式）
+    tool_calls = response.tool_calls or []
+    if not tool_calls:
+        maybe_tc = getattr(response, "additional_kwargs", {}).get("tool_calls", [])
+        for tc in maybe_tc:
+            func = tc.get("function", {})
+            args_raw = func.get("arguments", "{}")
+            if isinstance(args_raw, str):
+                try:
+                    args_raw = json.loads(args_raw)
+                except (json.JSONDecodeError, TypeError):
+                    args_raw = {}
+            tool_calls.append({
+                "name": func.get("name", ""),
+                "args": args_raw,
+                "id": tc.get("id", f"fallback_{uuid.uuid4().hex[:8]}"),
+            })
+
+    if not tool_calls:
         # 没有工具调用，直接输出 LLM 的回答
         if response.content:
             yield response.content
         return
+
+    logger.info(f"tool calling: 解析到 {len(tool_calls)} 个工具调用: {[tc['name'] for tc in tool_calls]}")
 
     # 将包含 tool_calls 的 assistant 回复加入消息历史
     messages.append(response)
 
     # 执行工具调用
     tool_names = [t.name for t in tools]
-    for tc in response.tool_calls:
+    for tc in tool_calls:
         tool_fn = next((t for t in tools if t.name == tc["name"]), None)
         if not tool_fn:
             logger.warning(f"tool calling: 未知工具 {tc['name']}，可用工具: {tool_names}")
