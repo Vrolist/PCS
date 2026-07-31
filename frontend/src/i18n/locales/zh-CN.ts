@@ -277,6 +277,7 @@ export default {
     nodeDetails: '节点详情',
     viewAll: '查看全部',
     nodeName: '节点名称',
+    cluster: '集群',
     memory: '内存',
     disk: '磁盘',
     ipAddr: 'IP地址',

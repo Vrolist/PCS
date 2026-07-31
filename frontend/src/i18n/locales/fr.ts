@@ -266,6 +266,7 @@ export default {
     nodeDetails: 'Détails des nœuds',
     viewAll: 'Voir tout',
     nodeName: 'Nom du nœud',
+    cluster: 'Cluster',
     memory: 'Mémoire',
     disk: 'Disque',
     ipAddr: 'Adresse IP',

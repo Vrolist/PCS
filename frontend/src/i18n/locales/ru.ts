@@ -266,6 +266,7 @@ export default {
     nodeDetails: 'Сведения об узле',
     viewAll: 'Показать все',
     nodeName: 'Имя узла',
+    cluster: 'Кластер',
     memory: 'Память',
     disk: 'Диск',
     ipAddr: 'IP-адрес',

@@ -266,6 +266,7 @@ export default {
     nodeDetails: 'ノード詳細',
     viewAll: 'すべて表示',
     nodeName: 'ノード名',
+    cluster: 'クラスター',
     memory: 'メモリ',
     disk: 'ディスク',
     ipAddr: 'IPアドレス',

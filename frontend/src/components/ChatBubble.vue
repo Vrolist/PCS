@@ -159,7 +159,7 @@
             </div>
           </div>
           <div class="chat-input-wrap">
-            <textarea ref="inputRef" v-model="inputText" class="chat-textarea" :placeholder="hasApiKey ? '输入消息，Shift+Enter 换行...' : '请先配置 API Key'" :disabled="!hasApiKey" @keydown.enter.exact.prevent="handleSend" @compositionstart="isComposing = true" @compositionend="isComposing = false" @input="autoResize" />
+            <textarea ref="inputRef" v-model="inputText" class="chat-textarea" :placeholder="hasApiKey ? '输入消息，Shift+Enter 换行...' : '请先配置 API Key'" :disabled="!hasApiKey" @keydown="onInputKeydown" @keydown.enter.exact.prevent="handleSend" @compositionstart="isComposing = true" @compositionend="isComposing = false" @input="autoResize" />
             <div class="chat-input-actions">
               <button v-if="chatStore.loading" class="input-btn stop-btn" @click="chatStore.stopGeneration" title="停止生成"><el-icon :size="16"><CircleClose /></el-icon></button>
               <button v-else class="input-btn send-btn" :class="{ active: inputText.trim() }" :disabled="!inputText.trim() || !hasApiKey" @click="handleSend" title="发送"><el-icon :size="16"><Promotion /></el-icon></button>
@@ -331,7 +331,7 @@
               </div>
             </div>
             <div class="chat-input-wrap">
-              <textarea ref="inputRef" v-model="inputText" class="chat-textarea" :placeholder="hasApiKey ? '输入消息，Shift+Enter 换行...' : '请先配置 API Key'" :disabled="!hasApiKey" @keydown.enter.exact.prevent="handleSend" @compositionstart="isComposing = true" @compositionend="isComposing = false" @input="autoResize" />
+              <textarea ref="inputRef" v-model="inputText" class="chat-textarea" :placeholder="hasApiKey ? '输入消息，Shift+Enter 换行...' : '请先配置 API Key'" :disabled="!hasApiKey" @keydown="onInputKeydown" @keydown.enter.exact.prevent="handleSend" @compositionstart="isComposing = true" @compositionend="isComposing = false" @input="autoResize" />
               <div class="chat-input-actions">
                 <button v-if="chatStore.loading" class="input-btn stop-btn" @click="chatStore.stopGeneration" title="停止生成"><el-icon :size="16"><CircleClose /></el-icon></button>
                 <button v-else class="input-btn send-btn" :class="{ active: inputText.trim() }" :disabled="!inputText.trim() || !hasApiKey" @click="handleSend" title="发送"><el-icon :size="16"><Promotion /></el-icon></button>
@@ -456,6 +456,28 @@ watch(
 function scrollToBottom() {
   if (messagesRef.value) {
     messagesRef.value.scrollTop = messagesRef.value.scrollHeight
+  }
+}
+
+function onInputKeydown(e: KeyboardEvent) {
+  const mod = e.metaKey || e.ctrlKey
+  if (mod && e.key === 'a') {
+    // 全选：选中所有文本
+    e.preventDefault()
+    inputRef.value?.select()
+  } else if (mod && e.key === 'z') {
+    // 撤销：浏览器原生支持，无需干预
+  } else if (mod && e.key === 'c') {
+    // 复制：如果有选中文本则复制
+    const el = inputRef.value
+    if (el && el.selectionStart !== el.selectionEnd) {
+      navigator.clipboard?.writeText(el.value.substring(el.selectionStart, el.selectionEnd))
+        .catch(() => document.execCommand('copy'))
+    }
+  } else if (mod && e.key === 'x') {
+    // 剪切
+  } else if (mod && e.key === 'v') {
+    // 粘贴：浏览器原生支持
   }
 }
 

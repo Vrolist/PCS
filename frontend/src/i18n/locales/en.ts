@@ -273,6 +273,7 @@ export default {
     nodeDetails: 'Node Details',
     viewAll: 'View All',
     nodeName: 'Node Name',
+    cluster: 'Cluster',
     memory: 'Memory',
     disk: 'Disk',
     ipAddr: 'IP Address',

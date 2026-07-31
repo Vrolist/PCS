@@ -266,6 +266,7 @@ export default {
     nodeDetails: 'Knotendetails',
     viewAll: 'Alle anzeigen',
     nodeName: 'Knotenname',
+    cluster: 'Cluster',
     memory: 'Arbeitsspeicher',
     disk: 'Festplatte',
     ipAddr: 'IP-Adresse',

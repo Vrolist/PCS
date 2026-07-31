@@ -266,6 +266,7 @@ export default {
     nodeDetails: '노드 상세 정보',
     viewAll: '전체 보기',
     nodeName: '노드 이름',
+    cluster: '클러스터',
     memory: '메모리',
     disk: '디스크',
     ipAddr: 'IP 주소',

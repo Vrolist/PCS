@@ -266,6 +266,7 @@ export default {
     nodeDetails: 'Detalhes dos nós',
     viewAll: 'Ver todos',
     nodeName: 'Nome do nó',
+    cluster: 'Cluster',
     memory: 'Memória',
     disk: 'Disco',
     ipAddr: 'Endereço IP',
