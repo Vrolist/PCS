@@ -15,7 +15,6 @@ env:
 
 jobs:
   build-and-push:
-    if: env.GITHUB_ACTIONS == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
