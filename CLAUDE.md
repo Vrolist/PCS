@@ -225,7 +225,7 @@ cd frontend && npm install && npx vite build   # 跳过 vue-tsc 类型检查
 - **github** (镜像 remote): `https://github.com/Vrolist/PCS.git`
 - 本地 push 到 origin 后，Gitea 自动同步到 GitHub
 - 如需手动推送到 GitHub：`git push github main`
-- GitHub Actions workflow (`.github/workflows/docker.yml`) 在 GitHub 侧触发，构建 Docker 镜像推送到 GHCR
+- GitHub Actions workflow (`.github/workflows/docker.yml`) 使用 `if: github.repository == 'Vrolist/PCS'` 条件，确保只在 GitHub 侧执行（Gitea 不会运行）
 
 ```bash
 # 推送到内网 Gitea（主仓库）

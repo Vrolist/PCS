@@ -15,6 +15,7 @@ env:
 
 jobs:
   build-and-push:
+    if: github.repository == 'Vrolist/PCS'
     runs-on: ubuntu-latest
     permissions:
       contents: read
