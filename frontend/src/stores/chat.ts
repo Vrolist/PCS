@@ -606,6 +606,17 @@ export const useChatStore = defineStore('chat', () => {
     loading.value = false
   }
 
+  function recallMessage(id: string) {
+    const idx = messages.value.findIndex(m => m.id === id)
+    if (idx === -1) return
+    // 撤回用户消息及其对应的 AI 回复
+    messages.value.splice(idx, 1)
+    // 如果下一条是 assistant，则一并删除
+    if (idx < messages.value.length && messages.value[idx].role === 'assistant') {
+      messages.value.splice(idx, 1)
+    }
+  }
+
   function buildSystemPrompt(clusterId?: number): string {
     const base = `你是 PCS (PveClusterScan) 平台的 AI 运维助手。你的职责是帮助用户分析 Proxmox VE 集群状态，提供运维建议。
 
@@ -674,5 +685,6 @@ export const useChatStore = defineStore('chat', () => {
     toggleLayoutMode,
     sendMessage,
     stopGeneration,
+    recallMessage,
   }
 })

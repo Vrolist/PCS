@@ -109,7 +109,7 @@
           </div>
           <!-- 消息 -->
           <template v-for="msg in chatStore.messages" :key="msg.id">
-            <div :class="['chat-msg', msg.role]">
+            <div :class="['chat-msg', msg.role]" @contextmenu="(e: MouseEvent) => msg.role === 'user' && onUserMsgContextMenu(e, msg)">
               <div class="msg-header">
                 <div :class="['msg-avatar', msg.role === 'user' ? 'user-avatar' : '']">
                   <el-icon :size="14"><template v-if="msg.role === 'assistant'"><Monitor /></template><template v-else><User /></template></el-icon>
@@ -117,7 +117,10 @@
                 <span class="msg-name">{{ msg.role === 'assistant' ? 'AI 助手' : '我' }}</span>
               </div>
               <div class="msg-body">
-                <div class="msg-content" v-html="renderMarkdown(msg.content)" />
+                <div class="msg-content-wrapper">
+                  <button v-if="msg.role === 'user'" class="msg-copy-left" @click="copyUserMessage(msg.content)" title="复制"><el-icon :size="12"><CopyDocument /></el-icon></button>
+                  <div class="msg-content" v-html="renderMarkdown(msg.content)" />
+                </div>
                 <div v-if="msg.role === 'assistant' && msg.content && !chatStore.loading" class="msg-actions">
                   <button class="msg-action-btn" @click="copyMessage(msg.content)" title="复制"><el-icon :size="12"><CopyDocument /></el-icon></button>
                 </div>
@@ -279,7 +282,7 @@
             </div>
             <!-- 消息 -->
             <template v-for="msg in chatStore.messages" :key="msg.id">
-              <div :class="['chat-msg', msg.role]">
+              <div :class="['chat-msg', msg.role]" @contextmenu="(e: MouseEvent) => msg.role === 'user' && onUserMsgContextMenu(e, msg)">
                 <div class="msg-header">
                   <div :class="['msg-avatar', msg.role === 'user' ? 'user-avatar' : '']">
                     <el-icon :size="14"><template v-if="msg.role === 'assistant'"><Monitor /></template><template v-else><User /></template></el-icon>
@@ -287,7 +290,10 @@
                   <span class="msg-name">{{ msg.role === 'assistant' ? 'AI 助手' : '我' }}</span>
                 </div>
                 <div class="msg-body">
-                  <div class="msg-content" v-html="renderMarkdown(msg.content)" />
+                  <div class="msg-content-wrapper">
+                    <button v-if="msg.role === 'user'" class="msg-copy-left" @click="copyUserMessage(msg.content)" title="复制"><el-icon :size="12"><CopyDocument /></el-icon></button>
+                    <div class="msg-content" v-html="renderMarkdown(msg.content)" />
+                  </div>
                   <div v-if="msg.role === 'assistant' && msg.content && !chatStore.loading" class="msg-actions">
                     <button class="msg-action-btn" @click="copyMessage(msg.content)" title="复制"><el-icon :size="12"><CopyDocument /></el-icon></button>
                   </div>
@@ -336,6 +342,15 @@
       </div>
     </transition>
   </teleport>
+
+  <!-- 用户消息右键菜单 -->
+  <teleport to="body">
+    <div v-if="contextMenu.visible" class="user-msg-context-menu" :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }" @click.stop>
+      <div class="ctx-menu-item" @click="handleEdit"><el-icon :size="14"><Edit /></el-icon>修改</div>
+      <div class="ctx-menu-item" @click="handleRecall"><el-icon :size="14"><RefreshLeft /></el-icon>撤回</div>
+    </div>
+  </teleport>
+  <div v-if="contextMenu.visible" class="ctx-menu-overlay" @click="closeContextMenu" @contextmenu.prevent="closeContextMenu" />
 </template>
 
 <script setup lang="ts">
@@ -347,6 +362,7 @@ import {
   ChatDotRound, Close, Setting, Monitor, User, Promotion,
   DataAnalysis, Warning, MagicStick, CopyDocument, WarningFilled,
   CircleClose, CircleCheck, CircleCloseFilled, DCaret, FullScreen, Plus, Clock,
+  Edit, RefreshLeft,
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 
@@ -358,6 +374,54 @@ const inputText = ref('')
 const inputRef = ref<HTMLTextAreaElement>()
 const messagesRef = ref<HTMLDivElement>()
 const isComposing = ref(false)
+
+// 右键菜单状态
+const contextMenu = ref<{ visible: boolean; x: number; y: number; msgId: string; content: string }>({
+  visible: false, x: 0, y: 0, msgId: '', content: '',
+})
+
+function onUserMsgContextMenu(e: MouseEvent, msg: { id: string; content: string }) {
+  e.preventDefault()
+  contextMenu.value = { visible: true, x: e.clientX, y: e.clientY, msgId: msg.id, content: msg.content }
+}
+
+function closeContextMenu() {
+  contextMenu.value.visible = false
+}
+
+function handleRecall() {
+  const { msgId } = contextMenu.value
+  closeContextMenu()
+  chatStore.recallMessage(msgId)
+}
+
+function handleEdit() {
+  const { content } = contextMenu.value
+  closeContextMenu()
+  inputText.value = content
+  nextTick(() => {
+    inputRef.value?.focus()
+    autoResize()
+  })
+}
+
+function copyUserMessage(content: string) {
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(content).then(
+      () => ElMessage.success('已复制'),
+      () => ElMessage.error('复制失败'),
+    )
+  } else {
+    const ta = document.createElement('textarea')
+    ta.value = content
+    ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px'
+    document.body.appendChild(ta)
+    ta.select()
+    const ok = document.execCommand('copy')
+    document.body.removeChild(ta)
+    ok ? ElMessage.success('已复制') : ElMessage.error('复制失败')
+  }
+}
 
 const hasApiKey = computed(() => chatStore.hasApiKey)
 
@@ -1022,6 +1086,36 @@ function renderMarkdown(text: string): string {
 .chat-msg.user .msg-body {
   max-width: 80%;
 }
+.msg-content-wrapper {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+}
+.chat-msg.user .msg-content-wrapper {
+  flex-direction: row-reverse;
+}
+.msg-copy-left {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  opacity: 0;
+  transition: all 0.15s;
+}
+.msg-content-wrapper:hover .msg-copy-left {
+  opacity: 1;
+}
+.msg-copy-left:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--primary-color);
+}
 .msg-content {
   padding: 10px 14px;
   border-radius: 12px;
@@ -1029,8 +1123,8 @@ function renderMarkdown(text: string): string {
   line-height: 1.6;
   color: var(--text-primary);
   word-break: break-word;
-  user-select: text;
-  -webkit-user-select: text;
+  user-select: text !important;
+  -webkit-user-select: text !important;
 }
 .chat-msg.user .msg-content {
   background: var(--primary-color);
@@ -1352,6 +1446,37 @@ function renderMarkdown(text: string): string {
 }
 :global(.dark) .history-item-del:hover {
   background: rgba(245, 108, 108, 0.15);
+}
+
+/* ===== 用户消息右键菜单 ===== */
+.user-msg-context-menu {
+  position: fixed;
+  z-index: 99999;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 4px 0;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.15);
+  min-width: 120px;
+}
+.ctx-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.ctx-menu-item:hover {
+  background: rgba(64, 158, 255, 0.1);
+  color: var(--primary-color);
+}
+.ctx-menu-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99998;
 }
 
 /* ===== 拖拽调整尺寸手柄 ===== */
