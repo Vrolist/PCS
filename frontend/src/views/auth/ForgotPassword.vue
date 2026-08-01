@@ -14,9 +14,12 @@
     </router-link>
 
     <!-- Theme toggle -->
-    <button class="theme-btn" @click="themeStore.toggle">
-      <el-icon :size="18"><Sunny v-if="themeStore.theme === 'dark'" /><Moon v-else /></el-icon>
-    </button>
+    <div class="top-actions">
+      <LangSwitcher />
+      <button class="theme-btn" @click="themeStore.toggle">
+        <el-icon :size="18"><Sunny v-if="themeStore.theme === 'dark'" /><Moon v-else /></el-icon>
+      </button>
+    </div>
 
     <div class="auth-container">
       <!-- Left: Brand -->
@@ -157,6 +160,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { Message, Key, Lock } from '@element-plus/icons-vue'
 import { useThemeStore } from '@/stores/theme'
+import LangSwitcher from '@/components/LangSwitcher.vue'
 import { passwordReset, passwordResetConfirm } from '@/api/auth'
 
 const { t } = useI18n()
@@ -316,11 +320,16 @@ async function handleReset() {
   color: #409eff;
   border-color: #409eff;
 }
-.theme-btn {
+.top-actions {
   position: fixed;
   top: 24px;
   right: 24px;
   z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.theme-btn {
   width: 38px;
   height: 38px;
   border-radius: 8px;

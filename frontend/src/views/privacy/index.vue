@@ -16,6 +16,7 @@
           <router-link to="/ai-assistant" class="nav-link">{{ t('nav.aiAssistant') }}</router-link>
         </nav>
         <nav class="nav-actions">
+          <LangSwitcher />
           <button class="theme-btn" @click="themeStore.toggle" :title="themeStore.theme === 'dark' ? t('header.switchToLight') : t('header.switchToDark')">
             <el-icon :size="20"><Sunny v-if="themeStore.theme === 'dark'" /><Moon v-else /></el-icon>
           </button>
@@ -96,6 +97,7 @@ import { useI18n } from 'vue-i18n'
 import { useThemeStore } from '@/stores/theme'
 import { useAuthStore } from '@/stores/auth'
 import AppFooter from '@/components/AppFooter.vue'
+import LangSwitcher from '@/components/LangSwitcher.vue'
 
 const { t } = useI18n()
 const themeStore = useThemeStore()

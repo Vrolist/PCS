@@ -22,7 +22,6 @@
           <div class="footer-col">
             <h4>{{ t('footer.contact') }}</h4>
             <a :href="`mailto:${contactEmail}`">{{ contactEmail }}</a>
-            <a href="#">{{ t('home.docs') }}</a>
           </div>
         </div>
       </div>
@@ -106,6 +105,9 @@ const year = new Date().getFullYear()
 .footer-links {
   display: flex;
   gap: 48px;
+}
+.footer-col {
+  min-width: 180px;
 }
 .footer-col h4 {
   font-size: 14px;
