@@ -36,6 +36,10 @@ WORKDIR /app
 # 复制后端代码
 COPY . .
 
+# 启动脚本
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
 # 复制前端构建产物
 COPY --from=frontend-build /app/static/frontend/ /app/static/frontend/
 
@@ -55,5 +59,5 @@ EXPOSE 8066
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
     CMD curl -f http://localhost:8066/api/auth/login/ || exit 1
 
-# 启动：migrate + uvicorn
-CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py collectstatic --noinput && uvicorn config.asgi:application --host 0.0.0.0 --port 8066 --workers 2"]
+# 启动：entrypoint 负责 migrate + 静态文件 + 超级管理员 + uvicorn
+CMD ["/app/entrypoint.sh"]

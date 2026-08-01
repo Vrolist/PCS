@@ -5,6 +5,9 @@ services:
     environment:
       DB_ENGINE: sqlite           # 默认 SQLite（数据存放在 /app/data/db.sqlite3）
       DB_PATH: /app/data/db.sqlite3
+      SUPERUSER_USERNAME: pcs     # 超级管理员用户名（可选覆盖）
+      SUPERUSER_EMAIL: 1121031509@qq.com
+      SUPERUSER_PASSWORD: "123456"
       PYTHONUNBUFFERED: "1"
     ports:
       - "8066:8066"
