@@ -1,5 +1,5 @@
 <template>
-  <div class="home-page">
+  <div class="ai-page">
     <!-- Navbar -->
     <header class="navbar" :class="{ 'nav-scrolled': scrolled }">
       <div class="container nav-container">
@@ -11,9 +11,9 @@
           </div>
         </router-link>
         <nav class="nav-links">
-          <router-link to="/" class="nav-link" exact-active-class="active">{{ t('nav.home') }}</router-link>
+          <router-link to="/" class="nav-link">{{ t('nav.home') }}</router-link>
           <router-link to="/features" class="nav-link">{{ t('nav.monitorData') }}</router-link>
-          <router-link to="/ai-assistant" class="nav-link">{{ t('nav.aiAssistant') }}</router-link>
+          <router-link to="/ai-assistant" class="nav-link active">{{ t('nav.aiAssistant') }}</router-link>
         </nav>
         <nav class="nav-actions">
           <button class="theme-btn" @click="themeStore.toggle" :title="themeStore.theme === 'dark' ? t('header.switchToLight') : t('header.switchToDark')">
@@ -47,50 +47,45 @@
       </div>
       <div class="container hero-content">
         <div class="hero-text">
-          <div class="badge">{{ t('home.badge') }}</div>
+          <div class="badge">{{ t('aiAssistant.badge') }}</div>
           <h1 class="hero-title">
-            <span class="title-line">{{ t('home.heroTitle1') }}</span>
-            <span class="title-line accent">{{ t('home.heroTitle2') }}</span>
+            <span class="title-line">{{ t('aiAssistant.heroTitle1') }}</span>
+            <span class="title-line accent">{{ t('aiAssistant.heroTitle2') }}</span>
           </h1>
-          <p class="hero-subtitle">
-            {{ t('home.heroDesc') }}
-          </p>
+          <p class="hero-subtitle">{{ t('aiAssistant.heroDesc') }}</p>
           <div class="hero-actions">
             <router-link to="/dashboard">
               <el-button type="primary" size="large" round class="cta-btn">
-                {{ t('home.getStarted') }}
+                {{ t('aiAssistant.tryNow') }}
                 <el-icon class="btn-arrow"><ArrowRight /></el-icon>
               </el-button>
             </router-link>
-            <router-link to="/login">
-              <el-button size="large" round plain class="login-btn">{{ t('home.hasAccount') }}</el-button>
+            <router-link to="/features">
+              <el-button size="large" round plain class="login-btn">{{ t('aiAssistant.viewData') }}</el-button>
             </router-link>
           </div>
           <div class="hero-stats">
-            <div class="stat-item"><span class="stat-num">{{ t('home.zeroConfig') }}</span><span class="stat-label">{{ t('home.deployAgent') }}</span></div>
+            <div class="stat-item"><span class="stat-num">{{ t('aiAssistant.statStream') }}</span><span class="stat-label">{{ t('aiAssistant.statStreamLabel') }}</span></div>
             <div class="stat-dot"></div>
-            <div class="stat-item"><span class="stat-num">{{ t('home.fullyAuto') }}</span><span class="stat-label">{{ t('home.dataCollection') }}</span></div>
+            <div class="stat-item"><span class="stat-num">{{ t('aiAssistant.statModel') }}</span><span class="stat-label">{{ t('aiAssistant.statModelLabel') }}</span></div>
             <div class="stat-dot"></div>
-            <div class="stat-item"><span class="stat-num">{{ t('home.intelligent') }}</span><span class="stat-label">{{ t('home.alertDetection') }}</span></div>
+            <div class="stat-item"><span class="stat-num">{{ t('aiAssistant.statContext') }}</span><span class="stat-label">{{ t('aiAssistant.statContextLabel') }}</span></div>
           </div>
         </div>
         <div class="hero-visual">
-          <div
-            class="visual-card"
-            ref="visualCardRef"
-            @mousemove="handleTilt"
-            @mouseleave="handleTiltLeave"
-            :style="tiltStyle"
-          >
-            <div class="vc-header">
-              <div class="vc-dots"><span></span><span></span><span></span></div>
-              <span class="vc-title">pve-cluster</span>
+          <div class="chat-card">
+            <div class="cc-header">
+              <div class="cc-dots"><span></span><span></span><span></span></div>
+              <span class="cc-title">PCS AI Assistant</span>
+              <span class="cc-live"><span class="live-dot"></span>{{ t('aiAssistant.live') }}</span>
             </div>
-            <div class="vc-body">
-              <div class="vc-row" v-for="(w, i) in barWidths" :key="i">
-                <div class="vc-dot" :class="i === 1 ? 'warn' : i === 3 ? 'ok' : ''"></div>
-                <div class="vc-bar" :style="{ width: w + '%' }"></div>
-                <span class="vc-label">{{ ['pve-1', 'pve-2', 'pve-3', 'pve-4'][i] }}</span>
+            <div class="cc-body">
+              <div class="msg msg-user">{{ t('aiAssistant.demoQuestion') }}</div>
+              <div class="msg msg-ai">
+                <div class="ai-bubble">
+                  <span class="token" v-for="(tk, i) in demoTokens" :key="i" :style="{ '--d': i * 0.08 }">{{ tk }}</span>
+                  <span class="typing-cursor"></span>
+                </div>
               </div>
             </div>
           </div>
@@ -98,75 +93,70 @@
       </div>
     </section>
 
-    <!-- Features -->
-    <section class="features" id="features">
+    <!-- 核心能力 -->
+    <section class="ability-section">
       <div class="container">
         <div class="section-header">
-          <span class="section-tag">{{ t('home.coreFeatures') }}</span>
-          <h2 class="section-title">{{ t('home.whyChoose') }}</h2>
-          <p class="section-desc">{{ t('home.whyChooseDesc') }}</p>
+          <span class="section-tag">{{ t('aiAssistant.abilityTag') }}</span>
+          <h2 class="section-title">{{ t('aiAssistant.abilityTitle') }}</h2>
+          <p class="section-desc">{{ t('aiAssistant.abilityDesc') }}</p>
         </div>
-        <div class="feature-grid">
-          <div v-for="(f, i) in features" :key="f.title" class="feature-card" :style="{ '--i': i }">
-            <div class="feature-icon" :style="{ background: f.bg, color: f.color }">
-              <el-icon :size="24"><component :is="f.icon" /></el-icon>
+        <div class="ability-grid">
+          <div v-for="(a, i) in abilities" :key="i" class="ability-card" :style="{ '--i': i }">
+            <div class="ab-icon" :style="{ background: a.bg, color: a.color }">
+              <el-icon :size="28"><component :is="a.icon" /></el-icon>
             </div>
-            <h3>{{ f.title }}</h3>
-            <p>{{ f.desc }}</p>
+            <h3>{{ t(a.title) }}</h3>
+            <p>{{ t(a.desc) }}</p>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- Remote Ops Service -->
-    <section class="remote-service">
+    <!-- 使用场景 -->
+    <section class="scene-section">
       <div class="container">
         <div class="section-header">
-          <span class="section-tag">{{ t('home.service') }}</span>
-          <h2 class="section-title">{{ t('home.remoteOps') }}</h2>
-          <p class="section-desc">{{ t('home.remoteOpsDesc') }}</p>
+          <span class="section-tag">{{ t('aiAssistant.sceneTag') }}</span>
+          <h2 class="section-title">{{ t('aiAssistant.sceneTitle') }}</h2>
+          <p class="section-desc">{{ t('aiAssistant.sceneDesc') }}</p>
         </div>
-        <div class="service-cards">
-          <div class="service-card">
-            <div class="service-icon"><el-icon :size="28"><Monitor /></el-icon></div>
-            <h3>{{ t('home.monitoring247') }}</h3>
-            <p>{{ t('home.monitoring247Desc') }}</p>
-          </div>
-          <div class="service-card">
-            <div class="service-icon"><el-icon :size="28"><WarningFilled /></el-icon></div>
-            <h3>{{ t('home.emergencyResponse') }}</h3>
-            <p>{{ t('home.emergencyResponseDesc') }}</p>
-          </div>
-          <div class="service-card">
-            <div class="service-icon"><el-icon :size="28"><Connection /></el-icon></div>
-            <h3>{{ t('home.securityPatch') }}</h3>
-            <p>{{ t('home.securityPatchDesc') }}</p>
-          </div>
-          <div class="service-card">
-            <div class="service-icon"><el-icon :size="28"><TrendCharts /></el-icon></div>
-            <h3>{{ t('home.healthReport') }}</h3>
-            <p>{{ t('home.healthReportDesc') }}</p>
+        <div class="scene-list">
+          <div v-for="(s, i) in scenes" :key="i" class="scene-card" :style="{ '--i': i }">
+            <div class="sc-number">0{{ i + 1 }}</div>
+            <div class="sc-body">
+              <h4>{{ t(s.title) }}</h4>
+              <p>{{ t(s.desc) }}</p>
+              <div class="sc-example">
+                <span class="sc-example-label">{{ t('aiAssistant.example') }}</span>
+                <span class="sc-example-text">{{ t(s.example) }}</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- How it works -->
-    <section class="how-it-works">
+    <!-- 技术流程 -->
+    <section class="tech-section">
       <div class="container">
         <div class="section-header">
-          <span class="section-tag">{{ t('home.workflow') }}</span>
-          <h2 class="section-title">{{ t('home.fourSteps') }}</h2>
-          <p class="section-desc">{{ t('home.fourStepsDesc') }}</p>
+          <span class="section-tag">{{ t('aiAssistant.techTag') }}</span>
+          <h2 class="section-title">{{ t('aiAssistant.techTitle') }}</h2>
+          <p class="section-desc">{{ t('aiAssistant.techDesc') }}</p>
         </div>
-        <div class="steps">
-          <div v-for="(step, i) in steps" :key="i" class="step-card">
-            <div class="step-badge">0{{ i + 1 }}</div>
-            <div class="step-content">
-              <h3>{{ step.title }}</h3>
-              <p>{{ step.desc }}</p>
+        <div class="tech-flow">
+          <div v-for="(step, i) in techSteps" :key="i" class="tech-step">
+            <div class="ts-icon" :style="{ background: step.bg }">
+              <el-icon :size="22"><component :is="step.icon" /></el-icon>
             </div>
-            <div v-if="i < steps.length - 1" class="step-connector"></div>
+            <div class="ts-content">
+              <h4>{{ t(step.title) }}</h4>
+              <p>{{ t(step.desc) }}</p>
+            </div>
+            <div class="ts-connector" v-if="i < techSteps.length - 1">
+              <el-icon :size="18"><ArrowRight /></el-icon>
+            </div>
           </div>
         </div>
       </div>
@@ -176,9 +166,9 @@
     <section class="cta-section">
       <div class="container cta-container">
         <div class="cta-card">
-          <h2>{{ t('home.ctaTitle') }}</h2>
-          <p>{{ t('home.ctaDesc') }}</p>
-          <router-link to="/dashboard">
+          <h2>{{ t('aiAssistant.ctaTitle') }}</h2>
+          <p>{{ t('aiAssistant.ctaDesc') }}</p>
+          <router-link to="/register">
             <el-button type="primary" size="large" round class="cta-btn">
               {{ t('home.startNow') }}
               <el-icon class="btn-arrow"><ArrowRight /></el-icon>
@@ -203,13 +193,11 @@
             <p class="footer-desc">{{ t('home.footerDesc') }}</p>
           </div>
           <div class="footer-links">
-          <div class="footer-col">
-            <h4>{{ t('home.product') }}</h4>
-            <router-link to="/features">{{ t('nav.monitorData') }}</router-link>
-            <router-link to="/ai-assistant">{{ t('nav.aiAssistant') }}</router-link>
-            <a href="#features">{{ t('home.features') }}</a>
-            <a href="#">{{ t('home.pricing') }}</a>
-          </div>
+            <div class="footer-col">
+              <h4>{{ t('home.product') }}</h4>
+              <router-link to="/features">{{ t('nav.monitorData') }}</router-link>
+              <router-link to="/ai-assistant">{{ t('nav.aiAssistant') }}</router-link>
+            </div>
             <div class="footer-col">
               <h4>{{ t('home.support') }}</h4>
               <a href="#">{{ t('home.docs') }}</a>
@@ -226,7 +214,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useThemeStore } from '@/stores/theme'
 import { useAuthStore } from '@/stores/auth'
@@ -247,121 +235,47 @@ onMounted(() => {
 })
 onUnmounted(() => window.removeEventListener('scroll', onScroll))
 
-  // Parallax tilt for visual console card
-const visualCardRef = ref<HTMLElement | null>(null)
-const tiltX = ref(0)
-const tiltY = ref(0)
-const tiltTransition = ref(true)
+const abilities = [
+  { title: 'aiAssistant.ability.dataQA.title', desc: 'aiAssistant.ability.dataQA.desc', icon: 'ChatDotRound', color: '#409eff', bg: 'rgba(64,158,255,0.12)' },
+  { title: 'aiAssistant.ability.stream.title', desc: 'aiAssistant.ability.stream.desc', icon: 'Connection', color: '#67c23a', bg: 'rgba(103,194,58,0.12)' },
+  { title: 'aiAssistant.ability.context.title', desc: 'aiAssistant.ability.context.desc', icon: 'Files', color: '#e6a23c', bg: 'rgba(230,162,60,0.12)' },
+  { title: 'aiAssistant.ability.model.title', desc: 'aiAssistant.ability.model.desc', icon: 'MagicStick', color: '#8b5cf6', bg: 'rgba(139,92,246,0.12)' },
+]
 
-function handleTilt(e: MouseEvent) {
-  const card = visualCardRef.value
-  if (!card) return
-  const rect = card.getBoundingClientRect()
-  const centerX = rect.left + rect.width / 2
-  const centerY = rect.top + rect.height / 2
-  const mouseX = e.clientX - centerX
-  const mouseY = e.clientY - centerY
-  const rangeX = rect.width / 2
-  const rangeY = rect.height / 2
-  const maxAngle = 10
-  tiltX.value = -(mouseY / rangeY) * maxAngle
-  tiltY.value = (mouseX / rangeX) * maxAngle
-  tiltTransition.value = false
-}
+const scenes = [
+  { title: 'aiAssistant.scene.fault.title', desc: 'aiAssistant.scene.fault.desc', example: 'aiAssistant.scene.fault.example' },
+  { title: 'aiAssistant.scene.capacity.title', desc: 'aiAssistant.scene.capacity.desc', example: 'aiAssistant.scene.capacity.example' },
+  { title: 'aiAssistant.scene.report.title', desc: 'aiAssistant.scene.report.desc', example: 'aiAssistant.scene.report.example' },
+  { title: 'aiAssistant.scene.change.title', desc: 'aiAssistant.scene.change.desc', example: 'aiAssistant.scene.change.example' },
+]
 
-function handleTiltLeave() {
-  tiltX.value = 0
-  tiltY.value = 0
-  tiltTransition.value = true
-}
+const techSteps = [
+  { title: 'aiAssistant.tech.question.title', desc: 'aiAssistant.tech.question.desc', icon: 'ChatDotRound', bg: 'linear-gradient(135deg,#409eff,#337ecc)' },
+  { title: 'aiAssistant.tech.match.title', desc: 'aiAssistant.tech.match.desc', icon: 'Search', bg: 'linear-gradient(135deg,#67c23a,#36a86b)' },
+  { title: 'aiAssistant.tech.inject.title', desc: 'aiAssistant.tech.inject.desc', icon: 'DataAnalysis', bg: 'linear-gradient(135deg,#e6a23c,#d4842f)' },
+  { title: 'aiAssistant.tech.stream.title', desc: 'aiAssistant.tech.stream.desc', icon: 'MagicStick', bg: 'linear-gradient(135deg,#8b5cf6,#6366f1)' },
+]
 
-const tiltStyle = computed(() => ({
-  transform: `rotateX(${tiltX.value}deg) rotateY(${tiltY.value}deg)`,
-  transition: tiltTransition.value ? 'transform 0.5s ease' : 'transform 0.05s',
-}))
+const demoAnswer = t('aiAssistant.demoAnswer')
+const demoTokens = ref<string[]>([])
 
-// Periodic bar width animation
-const barWidths = ref([55, 45, 60, 50])
-
-function randomizeBars() {
-  barWidths.value = barWidths.value.map(() => 40 + Math.round(Math.random() * 50))
-}
-
-let barTimer: ReturnType<typeof setInterval>
 onMounted(() => {
-  barTimer = setInterval(randomizeBars, 10000)
+  const chars = demoAnswer.split('')
+  let idx = 0
+  const timer = setInterval(() => {
+    if (idx < chars.length) {
+      demoTokens.value.push(chars[idx])
+      idx++
+    } else {
+      clearInterval(timer)
+    }
+  }, 90)
+  onUnmounted(() => clearInterval(timer))
 })
-onUnmounted(() => {
-  clearInterval(barTimer)
-})
-
-const features = computed(() => [
-  {
-    title: t('home.autoDiscovery'),
-    desc: t('home.autoDiscoveryDesc'),
-    icon: 'Search',
-    color: '#409eff',
-    bg: 'rgba(64,158,255,0.12)',
-  },
-  {
-    title: t('home.realtimeMonitor'),
-    desc: t('home.realtimeMonitorDesc'),
-    icon: 'Monitor',
-    color: '#67c23a',
-    bg: 'rgba(103,194,58,0.12)',
-  },
-  {
-    title: t('home.smartDetection'),
-    desc: t('home.smartDetectionDesc'),
-    icon: 'WarningFilled',
-    color: '#e6a23c',
-    bg: 'rgba(230,162,60,0.12)',
-  },
-  {
-    title: t('home.multiAgent'),
-    desc: t('home.multiAgentDesc'),
-    icon: 'Connection',
-    color: '#8b5cf6',
-    bg: 'rgba(139,92,246,0.12)',
-  },
-  {
-    title: t('home.trendAnalysis'),
-    desc: t('home.trendAnalysisDesc'),
-    icon: 'TrendCharts',
-    color: '#f56c6c',
-    bg: 'rgba(245,108,108,0.12)',
-  },
-  {
-    title: t('home.cephIntegration'),
-    desc: t('home.cephIntegrationDesc'),
-    icon: 'DataAnalysis',
-    color: '#409eff',
-    bg: 'rgba(64,158,255,0.12)',
-  },
-])
-
-const steps = computed(() => [
-  {
-    title: t('home.step1'),
-    desc: t('home.step1Desc'),
-  },
-  {
-    title: t('home.step2'),
-    desc: t('home.step2Desc'),
-  },
-  {
-    title: t('home.step3'),
-    desc: t('home.step3Desc'),
-  },
-  {
-    title: t('home.step4'),
-    desc: t('home.step4Desc'),
-  },
-])
 </script>
 
 <style scoped>
-.home-page {
+.ai-page {
   min-height: 100vh;
   background: var(--bg-primary);
   color: var(--text-primary);
@@ -369,7 +283,7 @@ const steps = computed(() => [
 }
 
 .container {
-  max-width: 1100px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 0 24px;
 }
@@ -388,18 +302,7 @@ const steps = computed(() => [
   transition: all 0.4s;
 }
 .navbar.nav-scrolled {
-  border-bottom-color: transparent;
   box-shadow: 0 1px 8px rgba(0, 0, 0, 0.06);
-}
-:root .navbar.nav-scrolled {
-  border-bottom: 1px solid transparent;
-  background-image: linear-gradient(var(--bg-navbar), var(--bg-navbar)), linear-gradient(90deg, #409eff, #8b5cf6, #409eff);
-  background-origin: padding-box, border-box;
-  background-clip: padding-box, border-box;
-}
-.dark .navbar.nav-scrolled {
-  border-bottom-color: rgba(64, 158, 255, 0.12);
-  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.2);
 }
 .nav-container {
   display: flex;
@@ -407,7 +310,6 @@ const steps = computed(() => [
   justify-content: space-between;
   height: 64px;
 }
-
 .logo {
   display: flex;
   align-items: center;
@@ -424,14 +326,6 @@ const steps = computed(() => [
   justify-content: center;
   color: #fff;
   font-size: 20px;
-}
-.logo-text {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--text-heading);
-}
-.logo-accent {
-  color: #409eff;
 }
 .logo-wrapper {
   display: flex;
@@ -464,12 +358,6 @@ const steps = computed(() => [
   justify-content: center;
   color: #fff;
 }
-
-.nav-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
 .nav-links {
   display: flex;
   align-items: center;
@@ -496,13 +384,17 @@ const steps = computed(() => [
   background: rgba(64, 158, 255, 0.1);
   font-weight: 600;
 }
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .nav-user {
   font-size: 14px;
   color: var(--text-secondary);
   font-weight: 500;
   margin-right: 4px;
 }
-
 .theme-btn {
   width: 36px;
   height: 36px;
@@ -531,7 +423,6 @@ const steps = computed(() => [
   overflow: hidden;
   padding: 120px 0 80px;
 }
-
 .hero-bg {
   position: absolute;
   inset: 0;
@@ -552,7 +443,6 @@ const steps = computed(() => [
   background: radial-gradient(circle, #409eff40 0%, transparent 70%);
   top: -10%;
   left: -5%;
-  animation-delay: 0s;
 }
 .orb-2 {
   width: 400px;
@@ -575,7 +465,6 @@ const steps = computed(() => [
   33% { transform: translate(30px, -40px) scale(1.1); }
   66% { transform: translate(-20px, 20px) scale(0.9); }
 }
-
 .grid-pattern {
   position: absolute;
   inset: 0;
@@ -587,7 +476,6 @@ const steps = computed(() => [
   mask-image: radial-gradient(ellipse at 50% 60%, black 30%, transparent 70%);
   -webkit-mask-image: radial-gradient(ellipse at 50% 60%, black 30%, transparent 70%);
 }
-
 .hero-content {
   position: relative;
   z-index: 1;
@@ -596,25 +484,22 @@ const steps = computed(() => [
   gap: 60px;
   width: 100%;
 }
-
 .hero-text {
   flex: 1;
-  max-width: 580px;
+  max-width: 560px;
 }
-
 .badge {
   display: inline-flex;
   padding: 6px 16px;
   border-radius: 20px;
   font-size: 13px;
   font-weight: 500;
-  background: rgba(64, 158, 255, 0.1);
-  color: #409eff;
-  border: 1px solid rgba(64, 158, 255, 0.2);
+  background: rgba(139, 92, 246, 0.12);
+  color: #8b5cf6;
+  border: 1px solid rgba(139, 92, 246, 0.25);
   margin-bottom: 24px;
   letter-spacing: 0.3px;
 }
-
 .hero-title {
   margin-bottom: 20px;
 }
@@ -627,12 +512,11 @@ const steps = computed(() => [
   letter-spacing: -1px;
 }
 .title-line.accent {
-  background: linear-gradient(135deg, #409eff, #8b5cf6);
+  background: linear-gradient(135deg, #8b5cf6, #409eff);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
-
 .hero-subtitle {
   font-size: 17px;
   line-height: 1.8;
@@ -640,7 +524,6 @@ const steps = computed(() => [
   margin-bottom: 32px;
   max-width: 480px;
 }
-
 .hero-actions {
   display: flex;
   gap: 12px;
@@ -662,7 +545,6 @@ const steps = computed(() => [
   padding: 12px 24px !important;
   font-size: 16px !important;
 }
-
 .hero-stats {
   display: flex;
   align-items: center;
@@ -690,139 +572,142 @@ const steps = computed(() => [
   opacity: 0.4;
 }
 
-/* Hero Visual */
+/* Hero Visual: chat card */
 .hero-visual {
   flex: 1;
-  max-width: 420px;
+  max-width: 440px;
   perspective: 800px;
 }
-.visual-card {
-  background: rgba(255, 255, 255, 0.10);
+.chat-card {
+  background: rgba(255, 255, 255, 0.75);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.20);
+  border: 1px solid rgba(200, 210, 230, 0.4);
   border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.10);
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.08);
   transform: rotateY(-8deg) rotateX(4deg);
   transition: transform 0.4s;
 }
-.visual-card:hover {
+.chat-card:hover {
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.15);
 }
-.dark .visual-card {
+.dark .chat-card {
   background: rgba(255, 255, 255, 0.04);
   border-color: rgba(255, 255, 255, 0.08);
 }
-:root .visual-card {
-  background: rgba(255, 255, 255, 0.75);
-  border-color: rgba(200, 210, 230, 0.40);
-  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.08);
-}
-.vc-header {
+.cc-header {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 14px 18px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(200, 210, 230, 0.4);
 }
-.vc-dots {
+.dark .cc-header {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+.cc-dots {
   display: flex;
   gap: 6px;
 }
-.vc-dots span {
+.cc-dots span {
   width: 10px;
   height: 10px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.2);
 }
-.vc-dots span:first-child { background: #f56c6c; }
-.vc-dots span:nth-child(2) { background: #e6a23c; }
-.vc-dots span:last-child { background: #67c23a; }
-.vc-title {
+.cc-dots span:first-child { background: #f56c6c; }
+.cc-dots span:nth-child(2) { background: #e6a23c; }
+.cc-dots span:last-child { background: #67c23a; }
+.cc-title {
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.6);
-  font-weight: 500;
+  color: #4e5159;
+  font-weight: 600;
   letter-spacing: 0.5px;
+  flex: 1;
 }
-.dark .vc-title {
-  color: rgba(255, 255, 255, 0.5);
+.dark .cc-title {
+  color: rgba(255, 255, 255, 0.7);
 }
-.vc-body {
+.cc-live {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: #67c23a;
+  font-weight: 600;
+}
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #67c23a;
+  animation: pulse 2s infinite;
+}
+.cc-body {
   padding: 18px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-height: 200px;
 }
-.vc-row {
+.msg {
+  max-width: 85%;
+}
+.msg-user {
+  align-self: flex-end;
+  background: linear-gradient(135deg, #8b5cf6, #6366f1);
+  color: #fff;
+  border-radius: 14px 14px 4px 14px;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.msg-ai {
+  align-self: flex-start;
+}
+.ai-bubble {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 14px 14px 14px 4px;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--text-primary);
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 1px;
 }
-.vc-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #67c23a;
-  flex-shrink: 0;
+.dark .ai-bubble {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.08);
 }
-.vc-dot.warn { background: #e6a23c; }
-.vc-dot.ok { background: #67c23a; }
-.vc-bar {
-  height: 6px;
-  border-radius: 3px;
-  background: linear-gradient(90deg, #409eff, #8b5cf6);
-  opacity: 0.6;
-  transition: width 0.3s;
+.token {
+  animation: tokenIn 0.25s ease-out both;
+  animation-delay: var(--d);
 }
-.dark .vc-bar {
-  opacity: 0.8;
+@keyframes tokenIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
-:root .vc-bar {
-  opacity: 0.85;
-  background: linear-gradient(90deg, #409eff, #6d69d0);
+.typing-cursor {
+  width: 2px;
+  height: 14px;
+  background: #8b5cf6;
+  margin-left: 3px;
+  align-self: center;
+  animation: blink 0.8s infinite;
 }
-.vc-label {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.85);
-  font-weight: 600;
-  flex-shrink: 0;
-  letter-spacing: 0.3px;
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
 }
-:root .vc-label {
-  color: #3a3d4a;
-}
-:root .vc-title {
-  color: #4e5159;
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.2); }
 }
 
-/* ============ Features ============ */
-.features {
-  padding: 100px 0;
-  position: relative;
-}
-.features::before {
-  content: '';
-  position: absolute;
-  top: -60px;
-  left: 0;
-  right: 0;
-  height: 60px;
-  background: linear-gradient(180deg, transparent, var(--bg-primary));
-  pointer-events: none;
-  z-index: 1;
-}
-.features::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle at 15% 30%, rgba(64, 158, 255, 0.04) 0%, transparent 40%),
-    radial-gradient(circle at 85% 70%, rgba(139, 92, 246, 0.04) 0%, transparent 40%);
-  pointer-events: none;
-  z-index: 0;
-}
-
+/* ============ Section header ============ */
 .section-header {
   text-align: center;
   margin-bottom: 56px;
@@ -835,9 +720,9 @@ const steps = computed(() => [
   border-radius: 16px;
   font-size: 13px;
   font-weight: 500;
-  background: rgba(64, 158, 255, 0.1);
-  color: #409eff;
-  border: 1px solid rgba(64, 158, 255, 0.15);
+  background: rgba(139, 92, 246, 0.12);
+  color: #8b5cf6;
+  border: 1px solid rgba(139, 92, 246, 0.2);
   margin-bottom: 16px;
 }
 .section-title {
@@ -850,177 +735,90 @@ const steps = computed(() => [
 .section-desc {
   font-size: 16px;
   color: var(--text-muted);
+  max-width: 640px;
+  margin: 0 auto;
+  line-height: 1.7;
 }
 
-.feature-grid {
+/* ============ Ability ============ */
+.ability-section {
+  padding: 100px 0;
+  position: relative;
+}
+.ability-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 24px;
   position: relative;
   z-index: 1;
 }
-
-.feature-card {
+.ability-card {
   background: var(--bg-card);
-  border-radius: 16px;
-  padding: 32px 28px;
+  border-radius: 18px;
+  padding: 32px 26px;
   border: 1px solid var(--border-color);
   transition: all 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   animation: fadeUp 0.6s both;
-  animation-delay: calc(var(--i) * 0.08s);
+  animation-delay: calc(var(--i) * 0.1s);
 }
-@keyframes fadeUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.feature-card:hover {
+.ability-card:hover {
   transform: translateY(-6px);
   box-shadow: var(--card-hover-shadow);
-  border-color: rgba(64, 158, 255, 0.3);
+  border-color: rgba(139, 92, 246, 0.35);
 }
-
-.feature-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
+.ab-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 20px;
-  font-size: 24px;
+  margin-bottom: 18px;
 }
-.feature-card h3 {
+.ability-card h3 {
   font-size: 18px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-heading);
-  margin-bottom: 10px;
+  margin: 0 0 10px;
 }
-.feature-card p {
-  font-size: 14px;
-  line-height: 1.7;
+.ability-card p {
+  font-size: 13px;
   color: var(--text-secondary);
+  line-height: 1.7;
+  margin: 0;
 }
 
-/* ============ Remote Ops Service ============ */
-.remote-service {
+/* ============ Scenes ============ */
+.scene-section {
   padding: 100px 0;
   background: var(--bg-secondary);
   transition: background 0.3s;
   position: relative;
 }
-.remote-service::before {
-  content: '';
-  position: absolute;
-  top: -60px;
-  left: 0;
-  right: 0;
-  height: 60px;
-  background: linear-gradient(180deg, transparent, var(--bg-secondary));
-  pointer-events: none;
-  z-index: 1;
-}
-.service-cards {
+.scene-list {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 24px;
-  margin-top: 48px;
   position: relative;
   z-index: 1;
 }
-.service-card {
-  background: var(--card-bg);
-  border: 1px solid var(--border-color);
-  border-radius: 16px;
-  padding: 32px 24px;
-  text-align: center;
-  transition: all 0.3s;
-}
-.service-card:hover {
-  transform: translateY(-4px);
-  border-color: #409eff;
-  box-shadow: 0 12px 32px rgba(64, 158, 255, 0.12);
-}
-.service-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, rgba(64,158,255,0.12), rgba(139,92,246,0.12));
+.scene-card {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto 16px;
-  color: #409eff;
-}
-.service-card h3 {
-  font-size: 17px;
-  font-weight: 600;
-  color: var(--text-heading);
-  margin-bottom: 8px;
-}
-.service-card p {
-  font-size: 14px;
-  color: var(--text-muted);
-  line-height: 1.7;
-  margin: 0;
-}
-@media (max-width: 992px) {
-  .service-cards { grid-template-columns: repeat(2, 1fr); }
-}
-@media (max-width: 600px) {
-  .service-cards { grid-template-columns: 1fr; }
-}
-
-/* ============ How it works ============ */
-.how-it-works {
-  padding: 100px 0;
-  position: relative;
-}
-.how-it-works::before {
-  content: '';
-  position: absolute;
-  top: -60px;
-  left: 0;
-  right: 0;
-  height: 60px;
-  background: linear-gradient(180deg, transparent, var(--bg-primary));
-  pointer-events: none;
-  z-index: 1;
-}
-.dark .how-it-works {
-  background: transparent;
-}
-:root .how-it-works {
-  background: transparent;
-}
-
-.steps {
-  display: flex;
-  flex-direction: column;
   gap: 20px;
-  max-width: 720px;
-  margin: 0 auto;
-  position: relative;
-  z-index: 1;
-}
-
-.step-card {
-  display: flex;
-  align-items: flex-start;
-  gap: 24px;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 16px;
-  padding: 28px 32px;
-  transition: all 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  position: relative;
+  padding: 28px 26px;
+  transition: all 0.3s;
+  animation: fadeUp 0.5s both;
+  animation-delay: calc(var(--i) * 0.08s);
 }
-.step-card:hover {
-  border-color: #409eff;
-  box-shadow: 0 8px 28px rgba(64, 158, 255, 0.12);
-  transform: translateX(4px);
+.scene-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(139, 92, 246, 0.35);
+  box-shadow: 0 8px 24px rgba(139, 92, 246, 0.1);
 }
-
-.step-badge {
+.sc-number {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1031,64 +829,110 @@ const steps = computed(() => [
   font-size: 16px;
   font-weight: 700;
   color: #fff;
-  background: linear-gradient(135deg, #409eff, #7c5cfc);
-  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.25);
-  position: relative;
-  z-index: 1;
-}
-.step-card:nth-child(2) .step-badge {
-  background: linear-gradient(135deg, #67c23a, #36a86b);
-  box-shadow: 0 4px 12px rgba(103, 194, 58, 0.25);
-}
-.step-card:nth-child(3) .step-badge {
-  background: linear-gradient(135deg, #e6a23c, #d4842f);
-  box-shadow: 0 4px 12px rgba(230, 162, 60, 0.25);
-}
-.step-card:nth-child(4) .step-badge {
   background: linear-gradient(135deg, #8b5cf6, #6366f1);
   box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25);
 }
-:root .step-badge {
-  box-shadow: 0 4px 14px rgba(64, 158, 255, 0.18);
-}
-:root .step-card:nth-child(2) .step-badge {
-  box-shadow: 0 4px 14px rgba(103, 194, 58, 0.18);
-}
-:root .step-card:nth-child(3) .step-badge {
-  box-shadow: 0 4px 14px rgba(230, 162, 60, 0.18);
-}
-:root .step-card:nth-child(4) .step-badge {
-  box-shadow: 0 4px 14px rgba(139, 92, 246, 0.18);
-}
-
-.step-content {
-  flex: 1;
-  padding-top: 4px;
-}
-.step-content h3 {
-  font-size: 18px;
+.sc-body h4 {
+  font-size: 17px;
   font-weight: 600;
   color: var(--text-heading);
-  margin-bottom: 6px;
+  margin: 0 0 8px;
 }
-.step-content p {
-  font-size: 14px;
-  line-height: 1.7;
+.sc-body p {
+  font-size: 13px;
   color: var(--text-secondary);
-  margin: 0;
+  line-height: 1.7;
+  margin: 0 0 14px;
+}
+.sc-example {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--bg-secondary);
+  border: 1px dashed var(--border-color);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.sc-example-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #8b5cf6;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.sc-example-text {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  font-style: italic;
 }
 
-.step-connector {
-  position: absolute;
-  bottom: -20px;
-  left: 40px;
-  width: 2px;
-  height: 20px;
-  background: linear-gradient(180deg, #409eff, transparent);
-  opacity: 0.4;
+/* ============ Tech flow ============ */
+.tech-section {
+  padding: 100px 0;
+  position: relative;
 }
-.step-card:last-child .step-connector {
-  display: none;
+.tech-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  max-width: 760px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+.tech-step {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 20px 0;
+  position: relative;
+}
+.ts-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  position: relative;
+  z-index: 1;
+}
+.ts-content {
+  flex: 1;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 20px 24px;
+  transition: all 0.3s;
+}
+.ts-content:hover {
+  border-color: rgba(139, 92, 246, 0.35);
+  box-shadow: 0 8px 24px rgba(139, 92, 246, 0.1);
+}
+.ts-content h4 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-heading);
+  margin: 0 0 6px;
+}
+.ts-content p {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.7;
+  margin: 0;
+}
+.ts-connector {
+  position: absolute;
+  left: 24px;
+  top: 68px;
+  transform: translateX(-50%);
+  color: #8b5cf6;
+  opacity: 0.4;
+  z-index: 0;
 }
 
 /* ============ CTA ============ */
@@ -1098,23 +942,12 @@ const steps = computed(() => [
   background: var(--bg-secondary);
   transition: background 0.3s;
 }
-.cta-section::before {
-  content: '';
-  position: absolute;
-  top: -60px;
-  left: 0;
-  right: 0;
-  height: 60px;
-  background: linear-gradient(180deg, transparent, var(--bg-secondary));
-  pointer-events: none;
-  z-index: 1;
-}
 .cta-container {
   position: relative;
 }
 .cta-card {
   text-align: center;
-  background: linear-gradient(135deg, #1a3a6b, #2a1a5e);
+  background: linear-gradient(135deg, #2a1a5e, #1a3a6b);
   border-radius: 20px;
   padding: 64px 40px;
   color: #fff;
@@ -1186,18 +1019,24 @@ const steps = computed(() => [
   font-size: 13px;
 }
 
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* ============ Responsive ============ */
+@media (max-width: 1100px) {
+  .ability-grid { grid-template-columns: repeat(2, 1fr); }
+}
 @media (max-width: 900px) {
   .nav-links { display: none; }
-  .hero-content {
-    flex-direction: column;
-  }
+  .hero-content { flex-direction: column; }
   .hero-visual { display: none; }
   .title-line { font-size: 36px; }
-  .feature-grid { grid-template-columns: 1fr 1fr; }
+  .scene-list { grid-template-columns: 1fr; }
 }
 @media (max-width: 640px) {
-  .feature-grid { grid-template-columns: 1fr; }
+  .ability-grid { grid-template-columns: 1fr; }
   .hero-stats { flex-wrap: wrap; }
   .footer-top { flex-direction: column; gap: 32px; }
 }

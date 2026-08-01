@@ -1,5 +1,5 @@
 <template>
-  <div class="home-page">
+  <div class="features-page">
     <!-- Navbar -->
     <header class="navbar" :class="{ 'nav-scrolled': scrolled }">
       <div class="container nav-container">
@@ -11,8 +11,8 @@
           </div>
         </router-link>
         <nav class="nav-links">
-          <router-link to="/" class="nav-link" exact-active-class="active">{{ t('nav.home') }}</router-link>
-          <router-link to="/features" class="nav-link">{{ t('nav.monitorData') }}</router-link>
+          <router-link to="/" class="nav-link">{{ t('nav.home') }}</router-link>
+          <router-link to="/features" class="nav-link active">{{ t('nav.monitorData') }}</router-link>
           <router-link to="/ai-assistant" class="nav-link">{{ t('nav.aiAssistant') }}</router-link>
         </nav>
         <nav class="nav-actions">
@@ -42,19 +42,16 @@
       <div class="hero-bg">
         <div class="gradient-orb orb-1"></div>
         <div class="gradient-orb orb-2"></div>
-        <div class="gradient-orb orb-3"></div>
         <div class="grid-pattern"></div>
       </div>
       <div class="container hero-content">
         <div class="hero-text">
-          <div class="badge">{{ t('home.badge') }}</div>
+          <div class="badge">{{ t('features.badge') }}</div>
           <h1 class="hero-title">
-            <span class="title-line">{{ t('home.heroTitle1') }}</span>
-            <span class="title-line accent">{{ t('home.heroTitle2') }}</span>
+            <span class="title-line">{{ t('features.heroTitle1') }}</span>
+            <span class="title-line accent">{{ t('features.heroTitle2') }}</span>
           </h1>
-          <p class="hero-subtitle">
-            {{ t('home.heroDesc') }}
-          </p>
+          <p class="hero-subtitle">{{ t('features.heroDesc') }}</p>
           <div class="hero-actions">
             <router-link to="/dashboard">
               <el-button type="primary" size="large" round class="cta-btn">
@@ -62,35 +59,31 @@
                 <el-icon class="btn-arrow"><ArrowRight /></el-icon>
               </el-button>
             </router-link>
-            <router-link to="/login">
-              <el-button size="large" round plain class="login-btn">{{ t('home.hasAccount') }}</el-button>
+            <router-link to="/ai-assistant">
+              <el-button size="large" round plain class="login-btn">{{ t('features.learnAI') }}</el-button>
             </router-link>
           </div>
           <div class="hero-stats">
-            <div class="stat-item"><span class="stat-num">{{ t('home.zeroConfig') }}</span><span class="stat-label">{{ t('home.deployAgent') }}</span></div>
+            <div class="stat-item"><span class="stat-num">{{ t('features.statNodes') }}</span><span class="stat-label">{{ t('features.statNodesLabel') }}</span></div>
             <div class="stat-dot"></div>
-            <div class="stat-item"><span class="stat-num">{{ t('home.fullyAuto') }}</span><span class="stat-label">{{ t('home.dataCollection') }}</span></div>
+            <div class="stat-item"><span class="stat-num">{{ t('features.statLayers') }}</span><span class="stat-label">{{ t('features.statLayersLabel') }}</span></div>
             <div class="stat-dot"></div>
-            <div class="stat-item"><span class="stat-num">{{ t('home.intelligent') }}</span><span class="stat-label">{{ t('home.alertDetection') }}</span></div>
+            <div class="stat-item"><span class="stat-num">{{ t('features.statFields') }}</span><span class="stat-label">{{ t('features.statFieldsLabel') }}</span></div>
           </div>
         </div>
         <div class="hero-visual">
-          <div
-            class="visual-card"
-            ref="visualCardRef"
-            @mousemove="handleTilt"
-            @mouseleave="handleTiltLeave"
-            :style="tiltStyle"
-          >
-            <div class="vc-header">
-              <div class="vc-dots"><span></span><span></span><span></span></div>
-              <span class="vc-title">pve-cluster</span>
+          <div class="flow-card">
+            <div class="fc-header">
+              <div class="fc-dots"><span></span><span></span><span></span></div>
+              <span class="fc-title">{{ t('features.flowTitle') }}</span>
             </div>
-            <div class="vc-body">
-              <div class="vc-row" v-for="(w, i) in barWidths" :key="i">
-                <div class="vc-dot" :class="i === 1 ? 'warn' : i === 3 ? 'ok' : ''"></div>
-                <div class="vc-bar" :style="{ width: w + '%' }"></div>
-                <span class="vc-label">{{ ['pve-1', 'pve-2', 'pve-3', 'pve-4'][i] }}</span>
+            <div class="fc-body">
+              <div class="flow-item" v-for="(item, i) in dataFlowItems" :key="i" :style="{ '--delay': i * 0.18 }">
+                <div class="flow-icon" :style="{ background: item.bg }">
+                  <el-icon :size="18"><component :is="item.icon" /></el-icon>
+                </div>
+                <div class="flow-label">{{ t(item.label) }}</div>
+                <div class="flow-arrow" v-if="i < dataFlowItems.length - 1"><el-icon :size="14"><ArrowRight /></el-icon></div>
               </div>
             </div>
           </div>
@@ -98,75 +91,95 @@
       </div>
     </section>
 
-    <!-- Features -->
-    <section class="features" id="features">
+    <!-- 四大核心监控能力 -->
+    <section class="capability-section">
       <div class="container">
         <div class="section-header">
-          <span class="section-tag">{{ t('home.coreFeatures') }}</span>
-          <h2 class="section-title">{{ t('home.whyChoose') }}</h2>
-          <p class="section-desc">{{ t('home.whyChooseDesc') }}</p>
+          <span class="section-tag">{{ t('features.capabilityTag') }}</span>
+          <h2 class="section-title">{{ t('features.capabilityTitle') }}</h2>
+          <p class="section-desc">{{ t('features.capabilityDesc') }}</p>
         </div>
-        <div class="feature-grid">
-          <div v-for="(f, i) in features" :key="f.title" class="feature-card" :style="{ '--i': i }">
-            <div class="feature-icon" :style="{ background: f.bg, color: f.color }">
-              <el-icon :size="24"><component :is="f.icon" /></el-icon>
+        <div class="capability-grid">
+          <div v-for="(feature, i) in largeFeatures" :key="i" class="capability-card" :style="{ '--i': i }">
+            <div class="cc-icon" :style="{ background: feature.bg, color: feature.color }">
+              <el-icon :size="30"><component :is="feature.icon" /></el-icon>
             </div>
-            <h3>{{ f.title }}</h3>
-            <p>{{ f.desc }}</p>
+            <h3>{{ t(feature.title) }}</h3>
+            <p class="cc-desc">{{ t(feature.desc) }}</p>
+            <div class="cc-details">
+              <div class="cc-detail" v-for="(detail, j) in feature.details" :key="j">
+                <span class="detail-dot" :style="{ background: detail.color }"></span>
+                <span>{{ t(detail.text) }}</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- Remote Ops Service -->
-    <section class="remote-service">
+    <!-- 全量数据类型 -->
+    <section class="data-section">
       <div class="container">
         <div class="section-header">
-          <span class="section-tag">{{ t('home.service') }}</span>
-          <h2 class="section-title">{{ t('home.remoteOps') }}</h2>
-          <p class="section-desc">{{ t('home.remoteOpsDesc') }}</p>
+          <span class="section-tag">{{ t('features.dataTypes.tag') }}</span>
+          <h2 class="section-title">{{ t('features.dataTypes.title') }}</h2>
+          <p class="section-desc">{{ t('features.dataTypes.desc') }}</p>
         </div>
-        <div class="service-cards">
-          <div class="service-card">
-            <div class="service-icon"><el-icon :size="28"><Monitor /></el-icon></div>
-            <h3>{{ t('home.monitoring247') }}</h3>
-            <p>{{ t('home.monitoring247Desc') }}</p>
-          </div>
-          <div class="service-card">
-            <div class="service-icon"><el-icon :size="28"><WarningFilled /></el-icon></div>
-            <h3>{{ t('home.emergencyResponse') }}</h3>
-            <p>{{ t('home.emergencyResponseDesc') }}</p>
-          </div>
-          <div class="service-card">
-            <div class="service-icon"><el-icon :size="28"><Connection /></el-icon></div>
-            <h3>{{ t('home.securityPatch') }}</h3>
-            <p>{{ t('home.securityPatchDesc') }}</p>
-          </div>
-          <div class="service-card">
-            <div class="service-icon"><el-icon :size="28"><TrendCharts /></el-icon></div>
-            <h3>{{ t('home.healthReport') }}</h3>
-            <p>{{ t('home.healthReportDesc') }}</p>
+        <div class="data-grid">
+          <div v-for="(type, i) in dataTypes" :key="type.title" class="data-card" :style="{ '--i': i }">
+            <div class="dt-icon" :style="{ background: type.bg }">
+              <el-icon :size="26"><component :is="type.icon" /></el-icon>
+            </div>
+            <h4>{{ t(type.title) }}</h4>
+            <p>{{ t(type.desc) }}</p>
+            <div class="dt-fields">
+              <span class="dt-field" v-for="(field, j) in type.fields" :key="j">{{ field }}</span>
+            </div>
+            <div class="dt-indicator">
+              <span class="dt-pulse"></span>
+              <span>{{ t('features.dataTypes.live') }}</span>
+            </div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- How it works -->
-    <section class="how-it-works">
+    <!-- 特性补充 -->
+    <section class="extra-section">
       <div class="container">
         <div class="section-header">
-          <span class="section-tag">{{ t('home.workflow') }}</span>
-          <h2 class="section-title">{{ t('home.fourSteps') }}</h2>
-          <p class="section-desc">{{ t('home.fourStepsDesc') }}</p>
+          <span class="section-tag">{{ t('features.extraTag') }}</span>
+          <h2 class="section-title">{{ t('features.extraTitle') }}</h2>
+          <p class="section-desc">{{ t('features.extraDesc') }}</p>
+        </div>
+        <div class="extra-grid">
+          <div v-for="(feature, i) in smallFeatures" :key="feature.title" class="extra-card" :style="{ '--i': i }">
+            <div class="ex-icon" :style="{ background: feature.bg, color: feature.color }">
+              <el-icon :size="22"><component :is="feature.icon" /></el-icon>
+            </div>
+            <h4>{{ t(feature.title) }}</h4>
+            <p>{{ t(feature.desc) }}</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 数据流 / 接入流程 -->
+    <section class="flow-section">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-tag">{{ t('features.workflowTag') }}</span>
+          <h2 class="section-title">{{ t('features.workflowTitle') }}</h2>
+          <p class="section-desc">{{ t('features.workflowDesc') }}</p>
         </div>
         <div class="steps">
-          <div v-for="(step, i) in steps" :key="i" class="step-card">
+          <div v-for="(step, i) in workflowSteps" :key="i" class="step-card">
             <div class="step-badge">0{{ i + 1 }}</div>
             <div class="step-content">
-              <h3>{{ step.title }}</h3>
-              <p>{{ step.desc }}</p>
+              <h3>{{ t(step.title) }}</h3>
+              <p>{{ t(step.desc) }}</p>
             </div>
-            <div v-if="i < steps.length - 1" class="step-connector"></div>
+            <div v-if="i < workflowSteps.length - 1" class="step-connector"></div>
           </div>
         </div>
       </div>
@@ -176,9 +189,9 @@
     <section class="cta-section">
       <div class="container cta-container">
         <div class="cta-card">
-          <h2>{{ t('home.ctaTitle') }}</h2>
-          <p>{{ t('home.ctaDesc') }}</p>
-          <router-link to="/dashboard">
+          <h2>{{ t('features.ctaTitle') }}</h2>
+          <p>{{ t('features.ctaDesc') }}</p>
+          <router-link to="/register">
             <el-button type="primary" size="large" round class="cta-btn">
               {{ t('home.startNow') }}
               <el-icon class="btn-arrow"><ArrowRight /></el-icon>
@@ -203,13 +216,11 @@
             <p class="footer-desc">{{ t('home.footerDesc') }}</p>
           </div>
           <div class="footer-links">
-          <div class="footer-col">
-            <h4>{{ t('home.product') }}</h4>
-            <router-link to="/features">{{ t('nav.monitorData') }}</router-link>
-            <router-link to="/ai-assistant">{{ t('nav.aiAssistant') }}</router-link>
-            <a href="#features">{{ t('home.features') }}</a>
-            <a href="#">{{ t('home.pricing') }}</a>
-          </div>
+            <div class="footer-col">
+              <h4>{{ t('home.product') }}</h4>
+              <router-link to="/features">{{ t('nav.monitorData') }}</router-link>
+              <router-link to="/ai-assistant">{{ t('nav.aiAssistant') }}</router-link>
+            </div>
             <div class="footer-col">
               <h4>{{ t('home.support') }}</h4>
               <a href="#">{{ t('home.docs') }}</a>
@@ -247,121 +258,143 @@ onMounted(() => {
 })
 onUnmounted(() => window.removeEventListener('scroll', onScroll))
 
-  // Parallax tilt for visual console card
-const visualCardRef = ref<HTMLElement | null>(null)
-const tiltX = ref(0)
-const tiltY = ref(0)
-const tiltTransition = ref(true)
+const dataFlowItems = [
+  { label: 'features.flow.agent', icon: 'Connection', bg: 'linear-gradient(135deg,#409eff,#337ecc)' },
+  { label: 'features.flow.collect', icon: 'Monitor', bg: 'linear-gradient(135deg,#67c23a,#36a86b)' },
+  { label: 'features.flow.clean', icon: 'DataAnalysis', bg: 'linear-gradient(135deg,#e6a23c,#d4842f)' },
+  { label: 'features.flow.upload', icon: 'Upload', bg: 'linear-gradient(135deg,#f56c6c,#d03050)' },
+  { label: 'features.flow.store', icon: 'Coin', bg: 'linear-gradient(135deg,#8b5cf6,#6366f1)' },
+]
 
-function handleTilt(e: MouseEvent) {
-  const card = visualCardRef.value
-  if (!card) return
-  const rect = card.getBoundingClientRect()
-  const centerX = rect.left + rect.width / 2
-  const centerY = rect.top + rect.height / 2
-  const mouseX = e.clientX - centerX
-  const mouseY = e.clientY - centerY
-  const rangeX = rect.width / 2
-  const rangeY = rect.height / 2
-  const maxAngle = 10
-  tiltX.value = -(mouseY / rangeY) * maxAngle
-  tiltY.value = (mouseX / rangeX) * maxAngle
-  tiltTransition.value = false
-}
-
-function handleTiltLeave() {
-  tiltX.value = 0
-  tiltY.value = 0
-  tiltTransition.value = true
-}
-
-const tiltStyle = computed(() => ({
-  transform: `rotateX(${tiltX.value}deg) rotateY(${tiltY.value}deg)`,
-  transition: tiltTransition.value ? 'transform 0.5s ease' : 'transform 0.05s',
-}))
-
-// Periodic bar width animation
-const barWidths = ref([55, 45, 60, 50])
-
-function randomizeBars() {
-  barWidths.value = barWidths.value.map(() => 40 + Math.round(Math.random() * 50))
-}
-
-let barTimer: ReturnType<typeof setInterval>
-onMounted(() => {
-  barTimer = setInterval(randomizeBars, 10000)
-})
-onUnmounted(() => {
-  clearInterval(barTimer)
-})
-
-const features = computed(() => [
+const largeFeatures = [
   {
-    title: t('home.autoDiscovery'),
-    desc: t('home.autoDiscoveryDesc'),
-    icon: 'Search',
+    title: 'features.hardware.title',
+    desc: 'features.hardware.desc',
+    icon: 'Monitor',
     color: '#409eff',
     bg: 'rgba(64,158,255,0.12)',
+    details: [
+      { text: 'features.hardware.nodeInfo', color: '#409eff' },
+      { text: 'features.hardware.resource', color: '#67c23a' },
+      { text: 'features.hardware.ioDelay', color: '#e6a23c' },
+    ],
   },
   {
-    title: t('home.realtimeMonitor'),
-    desc: t('home.realtimeMonitorDesc'),
-    icon: 'Monitor',
+    title: 'features.virtual.title',
+    desc: 'features.virtual.desc',
+    icon: 'Cpu',
     color: '#67c23a',
     bg: 'rgba(103,194,58,0.12)',
+    details: [
+      { text: 'features.virtual.vms', color: '#67c23a' },
+      { text: 'features.virtual.lxc', color: '#409eff' },
+      { text: 'features.virtual.config', color: '#e6a23c' },
+    ],
   },
   {
-    title: t('home.smartDetection'),
-    desc: t('home.smartDetectionDesc'),
-    icon: 'WarningFilled',
+    title: 'features.storage.title',
+    desc: 'features.storage.desc',
+    icon: 'Coin',
     color: '#e6a23c',
     bg: 'rgba(230,162,60,0.12)',
+    details: [
+      { text: 'features.storage.ceph', color: '#e6a23c' },
+      { text: 'features.storage.local', color: '#409eff' },
+      { text: 'features.storage.shared', color: '#67c23a' },
+    ],
   },
   {
-    title: t('home.multiAgent'),
-    desc: t('home.multiAgentDesc'),
-    icon: 'Connection',
-    color: '#8b5cf6',
-    bg: 'rgba(139,92,246,0.12)',
-  },
-  {
-    title: t('home.trendAnalysis'),
-    desc: t('home.trendAnalysisDesc'),
-    icon: 'TrendCharts',
+    title: 'features.network.title',
+    desc: 'features.network.desc',
+    icon: 'Share',
     color: '#f56c6c',
     bg: 'rgba(245,108,108,0.12)',
+    details: [
+      { text: 'features.network.interface', color: '#f56c6c' },
+      { text: 'features.network.sdn', color: '#8b5cf6' },
+      { text: 'features.network.topology', color: '#409eff' },
+    ],
   },
-  {
-    title: t('home.cephIntegration'),
-    desc: t('home.cephIntegrationDesc'),
-    icon: 'DataAnalysis',
-    color: '#409eff',
-    bg: 'rgba(64,158,255,0.12)',
-  },
-])
+]
 
-const steps = computed(() => [
+const smallFeatures = [
+  { title: 'features.extra.ha.title', desc: 'features.extra.ha.desc', icon: 'Connection', color: '#f56c6c', bg: 'rgba(245,108,108,0.12)' },
+  { title: 'features.extra.sdn.title', desc: 'features.extra.sdn.desc', icon: 'Share', color: '#8b5cf6', bg: 'rgba(139,92,246,0.12)' },
+  { title: 'features.extra.alert.title', desc: 'features.extra.alert.desc', icon: 'Bell', color: '#e6a23c', bg: 'rgba(230,162,60,0.12)' },
+  { title: 'features.extra.report.title', desc: 'features.extra.report.desc', icon: 'Files', color: '#409eff', bg: 'rgba(64,158,255,0.12)' },
+  { title: 'features.extra.backup.title', desc: 'features.extra.backup.desc', icon: 'FolderOpened', color: '#67c23a', bg: 'rgba(103,194,58,0.12)' },
+  { title: 'features.extra.trend.title', desc: 'features.extra.trend.desc', icon: 'TrendCharts', color: '#f56c6c', bg: 'rgba(245,108,108,0.12)' },
+]
+
+const dataTypes = [
   {
-    title: t('home.step1'),
-    desc: t('home.step1Desc'),
+    title: 'features.dataTypes.node',
+    desc: 'features.dataTypes.nodeDesc',
+    icon: 'Monitor',
+    bg: 'linear-gradient(135deg,#409eff,#337ecc)',
+    fields: ['node_name', 'cpu_load', 'memory_used_mb', 'disk_io_delay_ms'],
   },
   {
-    title: t('home.step2'),
-    desc: t('home.step2Desc'),
+    title: 'features.dataTypes.vm',
+    desc: 'features.dataTypes.vmDesc',
+    icon: 'Cpu',
+    bg: 'linear-gradient(135deg,#67c23a,#36a86b)',
+    fields: ['vmid', 'cpu_cores', 'memory_total_mb', 'disk_read_iops'],
   },
   {
-    title: t('home.step3'),
-    desc: t('home.step3Desc'),
+    title: 'features.dataTypes.lxc',
+    desc: 'features.dataTypes.lxcDesc',
+    icon: 'Box',
+    bg: 'linear-gradient(135deg,#e6a23c,#d4842f)',
+    fields: ['vmid', 'cpu_limit', 'memory_limit_mb', 'disk_write_iops'],
   },
   {
-    title: t('home.step4'),
-    desc: t('home.step4Desc'),
+    title: 'features.dataTypes.storage',
+    desc: 'features.dataTypes.storageDesc',
+    icon: 'Coin',
+    bg: 'linear-gradient(135deg,#8b5cf6,#6366f1)',
+    fields: ['storage', 'total_gb', 'used_gb', 'shared'],
   },
+  {
+    title: 'features.dataTypes.network',
+    desc: 'features.dataTypes.networkDesc',
+    icon: 'Connection',
+    bg: 'linear-gradient(135deg,#409eff,#8b5cf6)',
+    fields: ['iface', 'address', 'gateway', 'speed_mbps'],
+  },
+  {
+    title: 'features.dataTypes.ceph',
+    desc: 'features.dataTypes.cephDesc',
+    icon: 'DataAnalysis',
+    bg: 'linear-gradient(135deg,#f56c6c,#409eff)',
+    fields: ['health', 'osd_nr', 'pg_bytes', 'max_avail_gb'],
+  },
+  {
+    title: 'features.dataTypes.ha',
+    desc: 'features.dataTypes.haDesc',
+    icon: 'Connection',
+    bg: 'linear-gradient(135deg,#e6a23c,#409eff)',
+    fields: ['sid', 'resource_type', 'status', 'ha_group'],
+  },
+  {
+    title: 'features.dataTypes.sdn',
+    desc: 'features.dataTypes.sdnDesc',
+    icon: 'Share',
+    bg: 'linear-gradient(135deg,#409eff,#67c23a)',
+    fields: ['zone', 'vnet', 'subnet', 'vlan'],
+  },
+]
+
+const workflowSteps = computed(() => [
+  { title: t('home.step1'), desc: t('home.step1Desc') },
+  { title: t('home.step2'), desc: t('home.step2Desc') },
+  { title: t('features.workflow.step3'), desc: t('features.workflow.step3Desc') },
+  { title: t('features.workflow.step4'), desc: t('features.workflow.step4Desc') },
 ])
 </script>
 
 <style scoped>
-.home-page {
+.features-page {
   min-height: 100vh;
   background: var(--bg-primary);
   color: var(--text-primary);
@@ -369,7 +402,7 @@ const steps = computed(() => [
 }
 
 .container {
-  max-width: 1100px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 0 24px;
 }
@@ -388,18 +421,7 @@ const steps = computed(() => [
   transition: all 0.4s;
 }
 .navbar.nav-scrolled {
-  border-bottom-color: transparent;
   box-shadow: 0 1px 8px rgba(0, 0, 0, 0.06);
-}
-:root .navbar.nav-scrolled {
-  border-bottom: 1px solid transparent;
-  background-image: linear-gradient(var(--bg-navbar), var(--bg-navbar)), linear-gradient(90deg, #409eff, #8b5cf6, #409eff);
-  background-origin: padding-box, border-box;
-  background-clip: padding-box, border-box;
-}
-.dark .navbar.nav-scrolled {
-  border-bottom-color: rgba(64, 158, 255, 0.12);
-  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.2);
 }
 .nav-container {
   display: flex;
@@ -407,7 +429,6 @@ const steps = computed(() => [
   justify-content: space-between;
   height: 64px;
 }
-
 .logo {
   display: flex;
   align-items: center;
@@ -424,14 +445,6 @@ const steps = computed(() => [
   justify-content: center;
   color: #fff;
   font-size: 20px;
-}
-.logo-text {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--text-heading);
-}
-.logo-accent {
-  color: #409eff;
 }
 .logo-wrapper {
   display: flex;
@@ -464,12 +477,6 @@ const steps = computed(() => [
   justify-content: center;
   color: #fff;
 }
-
-.nav-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
 .nav-links {
   display: flex;
   align-items: center;
@@ -496,13 +503,17 @@ const steps = computed(() => [
   background: rgba(64, 158, 255, 0.1);
   font-weight: 600;
 }
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .nav-user {
   font-size: 14px;
   color: var(--text-secondary);
   font-weight: 500;
   margin-right: 4px;
 }
-
 .theme-btn {
   width: 36px;
   height: 36px;
@@ -531,7 +542,6 @@ const steps = computed(() => [
   overflow: hidden;
   padding: 120px 0 80px;
 }
-
 .hero-bg {
   position: absolute;
   inset: 0;
@@ -552,7 +562,6 @@ const steps = computed(() => [
   background: radial-gradient(circle, #409eff40 0%, transparent 70%);
   top: -10%;
   left: -5%;
-  animation-delay: 0s;
 }
 .orb-2 {
   width: 400px;
@@ -562,20 +571,11 @@ const steps = computed(() => [
   right: 10%;
   animation-delay: -7s;
 }
-.orb-3 {
-  width: 300px;
-  height: 300px;
-  background: radial-gradient(circle, #67c23a30 0%, transparent 70%);
-  top: 40%;
-  left: 50%;
-  animation-delay: -14s;
-}
 @keyframes orbFloat {
   0%, 100% { transform: translate(0, 0) scale(1); }
   33% { transform: translate(30px, -40px) scale(1.1); }
   66% { transform: translate(-20px, 20px) scale(0.9); }
 }
-
 .grid-pattern {
   position: absolute;
   inset: 0;
@@ -587,7 +587,6 @@ const steps = computed(() => [
   mask-image: radial-gradient(ellipse at 50% 60%, black 30%, transparent 70%);
   -webkit-mask-image: radial-gradient(ellipse at 50% 60%, black 30%, transparent 70%);
 }
-
 .hero-content {
   position: relative;
   z-index: 1;
@@ -596,12 +595,10 @@ const steps = computed(() => [
   gap: 60px;
   width: 100%;
 }
-
 .hero-text {
   flex: 1;
-  max-width: 580px;
+  max-width: 560px;
 }
-
 .badge {
   display: inline-flex;
   padding: 6px 16px;
@@ -614,7 +611,6 @@ const steps = computed(() => [
   margin-bottom: 24px;
   letter-spacing: 0.3px;
 }
-
 .hero-title {
   margin-bottom: 20px;
 }
@@ -632,7 +628,6 @@ const steps = computed(() => [
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
-
 .hero-subtitle {
   font-size: 17px;
   line-height: 1.8;
@@ -640,7 +635,6 @@ const steps = computed(() => [
   margin-bottom: 32px;
   max-width: 480px;
 }
-
 .hero-actions {
   display: flex;
   gap: 12px;
@@ -662,7 +656,6 @@ const steps = computed(() => [
   padding: 12px 24px !important;
   font-size: 16px !important;
 }
-
 .hero-stats {
   display: flex;
   align-items: center;
@@ -690,139 +683,105 @@ const steps = computed(() => [
   opacity: 0.4;
 }
 
-/* Hero Visual */
+/* Hero Visual: data flow card */
 .hero-visual {
   flex: 1;
   max-width: 420px;
   perspective: 800px;
 }
-.visual-card {
-  background: rgba(255, 255, 255, 0.10);
+.flow-card {
+  background: rgba(255, 255, 255, 0.75);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.20);
+  border: 1px solid rgba(200, 210, 230, 0.4);
   border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.10);
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.08);
   transform: rotateY(-8deg) rotateX(4deg);
   transition: transform 0.4s;
 }
-.visual-card:hover {
+.flow-card:hover {
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.15);
 }
-.dark .visual-card {
+.dark .flow-card {
   background: rgba(255, 255, 255, 0.04);
   border-color: rgba(255, 255, 255, 0.08);
 }
-:root .visual-card {
-  background: rgba(255, 255, 255, 0.75);
-  border-color: rgba(200, 210, 230, 0.40);
-  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.08);
-}
-.vc-header {
+.fc-header {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 14px 18px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(200, 210, 230, 0.4);
 }
-.vc-dots {
+.dark .fc-header {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+.fc-dots {
   display: flex;
   gap: 6px;
 }
-.vc-dots span {
+.fc-dots span {
   width: 10px;
   height: 10px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.2);
 }
-.vc-dots span:first-child { background: #f56c6c; }
-.vc-dots span:nth-child(2) { background: #e6a23c; }
-.vc-dots span:last-child { background: #67c23a; }
-.vc-title {
+.fc-dots span:first-child { background: #f56c6c; }
+.fc-dots span:nth-child(2) { background: #e6a23c; }
+.fc-dots span:last-child { background: #67c23a; }
+.fc-title {
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.6);
+  color: #4e5159;
   font-weight: 500;
   letter-spacing: 0.5px;
 }
-.dark .vc-title {
+.dark .fc-title {
   color: rgba(255, 255, 255, 0.5);
 }
-.vc-body {
+.fc-body {
   padding: 18px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
-.vc-row {
+.flow-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
+  animation: flowIn 0.5s ease-out both;
+  animation-delay: var(--delay);
 }
-.vc-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #67c23a;
+@keyframes flowIn {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.flow-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
   flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
-.vc-dot.warn { background: #e6a23c; }
-.vc-dot.ok { background: #67c23a; }
-.vc-bar {
-  height: 6px;
-  border-radius: 3px;
-  background: linear-gradient(90deg, #409eff, #8b5cf6);
-  opacity: 0.6;
-  transition: width 0.3s;
-}
-.dark .vc-bar {
-  opacity: 0.8;
-}
-:root .vc-bar {
-  opacity: 0.85;
-  background: linear-gradient(90deg, #409eff, #6d69d0);
-}
-.vc-label {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.85);
-  font-weight: 600;
-  flex-shrink: 0;
-  letter-spacing: 0.3px;
-}
-:root .vc-label {
+.flow-label {
+  font-size: 14px;
   color: #3a3d4a;
+  font-weight: 600;
+  flex: 1;
 }
-:root .vc-title {
-  color: #4e5159;
+.dark .flow-label {
+  color: rgba(255, 255, 255, 0.85);
 }
-
-/* ============ Features ============ */
-.features {
-  padding: 100px 0;
-  position: relative;
-}
-.features::before {
-  content: '';
-  position: absolute;
-  top: -60px;
-  left: 0;
-  right: 0;
-  height: 60px;
-  background: linear-gradient(180deg, transparent, var(--bg-primary));
-  pointer-events: none;
-  z-index: 1;
-}
-.features::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle at 15% 30%, rgba(64, 158, 255, 0.04) 0%, transparent 40%),
-    radial-gradient(circle at 85% 70%, rgba(139, 92, 246, 0.04) 0%, transparent 40%);
-  pointer-events: none;
-  z-index: 0;
+.flow-arrow {
+  color: var(--text-muted);
+  opacity: 0.5;
 }
 
+/* ============ Section header ============ */
 .section-header {
   text-align: center;
   margin-bottom: 56px;
@@ -850,149 +809,223 @@ const steps = computed(() => [
 .section-desc {
   font-size: 16px;
   color: var(--text-muted);
+  max-width: 640px;
+  margin: 0 auto;
+  line-height: 1.7;
 }
 
-.feature-grid {
+/* ============ Capability ============ */
+.capability-section {
+  padding: 100px 0;
+  position: relative;
+}
+.capability-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 28px;
+  position: relative;
+  z-index: 1;
+}
+.capability-card {
+  background: var(--bg-card);
+  border-radius: 20px;
+  padding: 36px 32px;
+  border: 1px solid var(--border-color);
+  transition: all 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  animation: fadeUp 0.6s both;
+  animation-delay: calc(var(--i) * 0.1s);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+}
+.capability-card:hover {
+  transform: translateY(-6px);
+  box-shadow: var(--card-hover-shadow);
+  border-color: rgba(64, 158, 255, 0.3);
+}
+.cc-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+.cc-icon :deep(.el-icon) {
+  color: inherit;
+}
+.capability-card h3 {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-heading);
+  margin: 0 0 12px;
+}
+.cc-desc {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.8;
+  margin: 0 0 20px;
+}
+.cc-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cc-detail {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.detail-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ============ Data types ============ */
+.data-section {
+  padding: 100px 0;
+  background: var(--bg-secondary);
+  transition: background 0.3s;
+  position: relative;
+}
+.data-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  position: relative;
+  z-index: 1;
+}
+.data-card {
+  background: var(--bg-card);
+  border-radius: 16px;
+  border: 1px solid var(--border-color);
+  padding: 26px 22px;
+  transition: all 0.3s;
+  animation: fadeUp 0.5s both;
+  animation-delay: calc(var(--i) * 0.06s);
+  display: flex;
+  flex-direction: column;
+}
+.data-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08);
+  border-color: rgba(64, 158, 255, 0.2);
+}
+.dt-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  margin-bottom: 16px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+}
+.data-card h4 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-heading);
+  margin: 0 0 8px;
+}
+.data-card p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.7;
+  margin: 0 0 14px;
+  flex: 1;
+}
+.dt-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.dt-field {
+  font-size: 11px;
+  font-family: 'SF Mono', 'Menlo', monospace;
+  background: var(--bg-secondary);
+  padding: 3px 8px;
+  border-radius: 6px;
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+}
+.dt-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #67c23a;
+  font-weight: 500;
+}
+.dt-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #67c23a;
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.2); }
+}
+
+/* ============ Extra features ============ */
+.extra-section {
+  padding: 100px 0;
+  position: relative;
+}
+.extra-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 24px;
   position: relative;
   z-index: 1;
 }
-
-.feature-card {
+.extra-card {
   background: var(--bg-card);
   border-radius: 16px;
-  padding: 32px 28px;
+  padding: 28px 26px;
   border: 1px solid var(--border-color);
-  transition: all 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  animation: fadeUp 0.6s both;
+  transition: all 0.3s;
+  animation: fadeUp 0.5s both;
   animation-delay: calc(var(--i) * 0.08s);
 }
-@keyframes fadeUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
+.extra-card:hover {
+  transform: translateY(-4px);
+  border-color: #409eff;
+  box-shadow: 0 8px 24px rgba(64, 158, 255, 0.08);
 }
-.feature-card:hover {
-  transform: translateY(-6px);
-  box-shadow: var(--card-hover-shadow);
-  border-color: rgba(64, 158, 255, 0.3);
-}
-
-.feature-icon {
-  width: 48px;
-  height: 48px;
+.ex-icon {
+  width: 46px;
+  height: 46px;
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 20px;
-  font-size: 24px;
+  margin-bottom: 16px;
 }
-.feature-card h3 {
-  font-size: 18px;
+.extra-card h4 {
+  font-size: 16px;
   font-weight: 600;
   color: var(--text-heading);
-  margin-bottom: 10px;
+  margin: 0 0 8px;
 }
-.feature-card p {
-  font-size: 14px;
-  line-height: 1.7;
-  color: var(--text-secondary);
-}
-
-/* ============ Remote Ops Service ============ */
-.remote-service {
-  padding: 100px 0;
-  background: var(--bg-secondary);
-  transition: background 0.3s;
-  position: relative;
-}
-.remote-service::before {
-  content: '';
-  position: absolute;
-  top: -60px;
-  left: 0;
-  right: 0;
-  height: 60px;
-  background: linear-gradient(180deg, transparent, var(--bg-secondary));
-  pointer-events: none;
-  z-index: 1;
-}
-.service-cards {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 24px;
-  margin-top: 48px;
-  position: relative;
-  z-index: 1;
-}
-.service-card {
-  background: var(--card-bg);
-  border: 1px solid var(--border-color);
-  border-radius: 16px;
-  padding: 32px 24px;
-  text-align: center;
-  transition: all 0.3s;
-}
-.service-card:hover {
-  transform: translateY(-4px);
-  border-color: #409eff;
-  box-shadow: 0 12px 32px rgba(64, 158, 255, 0.12);
-}
-.service-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, rgba(64,158,255,0.12), rgba(139,92,246,0.12));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto 16px;
-  color: #409eff;
-}
-.service-card h3 {
-  font-size: 17px;
-  font-weight: 600;
-  color: var(--text-heading);
-  margin-bottom: 8px;
-}
-.service-card p {
-  font-size: 14px;
+.extra-card p {
+  font-size: 13px;
   color: var(--text-muted);
   line-height: 1.7;
   margin: 0;
 }
-@media (max-width: 992px) {
-  .service-cards { grid-template-columns: repeat(2, 1fr); }
-}
-@media (max-width: 600px) {
-  .service-cards { grid-template-columns: 1fr; }
-}
 
-/* ============ How it works ============ */
-.how-it-works {
+/* ============ Workflow steps ============ */
+.flow-section {
   padding: 100px 0;
   position: relative;
 }
-.how-it-works::before {
-  content: '';
-  position: absolute;
-  top: -60px;
-  left: 0;
-  right: 0;
-  height: 60px;
-  background: linear-gradient(180deg, transparent, var(--bg-primary));
-  pointer-events: none;
-  z-index: 1;
-}
-.dark .how-it-works {
-  background: transparent;
-}
-:root .how-it-works {
-  background: transparent;
-}
-
 .steps {
   display: flex;
   flex-direction: column;
@@ -1002,7 +1035,6 @@ const steps = computed(() => [
   position: relative;
   z-index: 1;
 }
-
 .step-card {
   display: flex;
   align-items: flex-start;
@@ -1019,7 +1051,6 @@ const steps = computed(() => [
   box-shadow: 0 8px 28px rgba(64, 158, 255, 0.12);
   transform: translateX(4px);
 }
-
 .step-badge {
   display: flex;
   align-items: center;
@@ -1048,19 +1079,6 @@ const steps = computed(() => [
   background: linear-gradient(135deg, #8b5cf6, #6366f1);
   box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25);
 }
-:root .step-badge {
-  box-shadow: 0 4px 14px rgba(64, 158, 255, 0.18);
-}
-:root .step-card:nth-child(2) .step-badge {
-  box-shadow: 0 4px 14px rgba(103, 194, 58, 0.18);
-}
-:root .step-card:nth-child(3) .step-badge {
-  box-shadow: 0 4px 14px rgba(230, 162, 60, 0.18);
-}
-:root .step-card:nth-child(4) .step-badge {
-  box-shadow: 0 4px 14px rgba(139, 92, 246, 0.18);
-}
-
 .step-content {
   flex: 1;
   padding-top: 4px;
@@ -1077,7 +1095,6 @@ const steps = computed(() => [
   color: var(--text-secondary);
   margin: 0;
 }
-
 .step-connector {
   position: absolute;
   bottom: -20px;
@@ -1097,17 +1114,6 @@ const steps = computed(() => [
   position: relative;
   background: var(--bg-secondary);
   transition: background 0.3s;
-}
-.cta-section::before {
-  content: '';
-  position: absolute;
-  top: -60px;
-  left: 0;
-  right: 0;
-  height: 60px;
-  background: linear-gradient(180deg, transparent, var(--bg-secondary));
-  pointer-events: none;
-  z-index: 1;
 }
 .cta-container {
   position: relative;
@@ -1186,18 +1192,26 @@ const steps = computed(() => [
   font-size: 13px;
 }
 
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* ============ Responsive ============ */
+@media (max-width: 1100px) {
+  .data-grid { grid-template-columns: repeat(2, 1fr); }
+  .extra-grid { grid-template-columns: repeat(2, 1fr); }
+}
 @media (max-width: 900px) {
   .nav-links { display: none; }
-  .hero-content {
-    flex-direction: column;
-  }
+  .hero-content { flex-direction: column; }
   .hero-visual { display: none; }
   .title-line { font-size: 36px; }
-  .feature-grid { grid-template-columns: 1fr 1fr; }
+  .capability-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 640px) {
-  .feature-grid { grid-template-columns: 1fr; }
+  .data-grid { grid-template-columns: 1fr; }
+  .extra-grid { grid-template-columns: 1fr; }
   .hero-stats { flex-wrap: wrap; }
   .footer-top { flex-direction: column; gap: 32px; }
 }

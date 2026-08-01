@@ -27,6 +27,18 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '找回密码', titleKey: 'nav.forgotPassword', noAuth: true },
   },
   {
+    path: '/features',
+    name: 'Features',
+    component: () => import('@/views/features/index.vue'),
+    meta: { title: '监控数据', titleKey: 'nav.monitorData', noAuth: true },
+  },
+  {
+    path: '/ai-assistant',
+    name: 'AIAssistant',
+    component: () => import('@/views/ai-assistant/index.vue'),
+    meta: { title: 'AI 助手', titleKey: 'nav.aiAssistant', noAuth: true },
+  },
+  {
     path: '/',
     redirect: '/dashboard',
   },
