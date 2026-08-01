@@ -1,0 +1,17 @@
+services:
+  app:
+    build: .
+    container_name: pcs-app
+    environment:
+      DB_ENGINE: sqlite           # 默认 SQLite（数据存放在 /app/data/db.sqlite3）
+      DB_PATH: /app/data/db.sqlite3
+      PYTHONUNBUFFERED: "1"
+    ports:
+      - "8066:8066"
+    volumes:
+      - app_data:/app/data
+      - app_media:/app/media
+
+volumes:
+  app_data:
+  app_media:

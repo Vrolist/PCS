@@ -1,0 +1,35 @@
+# docker + postgresql 部署覆盖文件
+# 用法: docker compose -f docker-compose.yml -f docker-compose.postgres.yml up -d --build
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: pcs-postgres
+    environment:
+      POSTGRES_DB: pve_cluster_scan
+      POSTGRES_USER: pcs
+      POSTGRES_PASSWORD: pcs_pass
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pcs -d pve_cluster_scan"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+  app:
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_ENGINE: postgres
+      DB_HOST: postgres
+      DB_NAME: pve_cluster_scan
+      DB_USER: pcs
+      DB_PASSWORD: pcs_pass
+      DB_PORT: "5432"
+
+volumes:
+  pg_data:

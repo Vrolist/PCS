@@ -78,6 +78,10 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 
 # Database
+# 通过环境变量 DB_ENGINE 选择数据库后端：sqlite / mysql / postgres（默认 sqlite）
+# MySQL/PostgreSQL 连接参数：DB_NAME / DB_USER / DB_PASSWORD / DB_HOST / DB_PORT
+
+DB_ENGINE = os.environ.get('DB_ENGINE', 'sqlite')
 
 DATABASES = {
     'default': {
@@ -85,6 +89,30 @@ DATABASES = {
         'NAME': os.environ.get('DB_PATH', str(BASE_DIR / 'db.sqlite3')),
     }
 }
+
+if DB_ENGINE == 'mysql':
+    DATABASES['default'] = {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': os.environ.get('DB_NAME', 'pve_cluster_scan'),
+        'USER': os.environ.get('DB_USER', 'pcs'),
+        'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+        'HOST': os.environ.get('DB_HOST', '127.0.0.1'),
+        'PORT': os.environ.get('DB_PORT', '3306'),
+        'OPTIONS': {
+            'charset': 'utf8mb4',
+        },
+        'CONN_MAX_AGE': 60,
+    }
+elif DB_ENGINE == 'postgres':
+    DATABASES['default'] = {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.environ.get('DB_NAME', 'pve_cluster_scan'),
+        'USER': os.environ.get('DB_USER', 'pcs'),
+        'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+        'HOST': os.environ.get('DB_HOST', '127.0.0.1'),
+        'PORT': os.environ.get('DB_PORT', '5432'),
+        'CONN_MAX_AGE': 60,
+    }
 
 
 # Custom User Model

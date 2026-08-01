@@ -1,0 +1,39 @@
+# docker + mysql 部署覆盖文件
+# 用法: docker compose -f docker-compose.yml -f docker-compose.mysql.yml up -d --build
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: pcs-mysql
+    environment:
+      MYSQL_DATABASE: pve_cluster_scan
+      MYSQL_USER: pcs
+      MYSQL_PASSWORD: pcs_pass
+      MYSQL_ROOT_PASSWORD: root_pass
+    ports:
+      - "3306:3306"
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot_pass"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  app:
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_ENGINE: mysql
+      DB_HOST: mysql
+      DB_NAME: pve_cluster_scan
+      DB_USER: pcs
+      DB_PASSWORD: pcs_pass
+      DB_PORT: "3306"
+
+volumes:
+  mysql_data:
