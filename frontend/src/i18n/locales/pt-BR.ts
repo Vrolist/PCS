@@ -164,6 +164,44 @@ export default {
     footerDesc: 'Plataforma de monitoramento de clusters PVE',
   },
 
+  // Rodapé
+  footer: {
+    contact: 'Fale conosco',
+    privacy: 'Política de Privacidade',
+    brand: 'buladou',
+    allRights: 'Todos os direitos reservados',
+  },
+
+  // Política de Privacidade
+  privacy: {
+    badge: 'Proteção de privacidade',
+    title: 'Política de Privacidade',
+    subtitle: 'Respeitamos e protegemos sua privacidade. Esta política explica como coletamos, usamos e protegemos as informações.',
+    lastUpdated: 'Última atualização: agosto de 2026',
+    intro: 'Esta Política de Privacidade aplica-se à plataforma de varredura e gerenciamento de clusters PVE (PCS). Ao usar a plataforma, você concorda com as práticas de informação descritas nesta política.',
+    collect: {
+      title: 'Informações que coletamos',
+      desc: 'Informações da conta: o nome de usuário e o endereço de e-mail fornecidos no registro, usados para autenticação e recuperação de senha.\nDados do cluster: dados de monitoramento dos clusters PVE que você conecta, usados apenas para monitoramento, análise e exibição de alertas.\nLogs de operações: registros de logins e mudanças de configuração, usados para auditoria de segurança e solução de problemas.',
+    },
+    use: {
+      title: 'Como usamos as informações',
+      desc: 'As informações da conta são usadas para autenticação, recuperação de senha e notificações de serviço.\nOs dados do cluster são usados apenas para exibir resultados de monitoramento, gerar relatórios e fornecer sugestões de análise de IA.\nNunca vendemos, alugamos ou compartilhamos seus dados com terceiros, exceto quando exigido por lei.',
+    },
+    security: {
+      title: 'Segurança dos dados',
+      desc: 'Os dados são transmitidos e armazenados criptografados, com autenticação por token JWT em APIs críticas.\nMelhoramos continuamente as medidas de segurança, mas nenhuma transmissão pela internet é absolutamente segura. Guarde suas credenciais de conta e tokens de agente com cuidado.',
+    },
+    rights: {
+      title: 'Seus direitos',
+      desc: 'Você tem o direito de visualizar, exportar ou excluir suas informações de conta a qualquer momento.\nVocê pode desativar ou excluir clusters e agentes conectados; os dados associados serão limpos automaticamente conforme a política de retenção.',
+    },
+    contact: {
+      title: 'Fale conosco',
+      desc: 'Se tiver dúvidas ou sugestões sobre esta política, entre em contato pelos seguintes canais.',
+      emailLabel: 'E-mail de contato',
+    },
+  },
+
   // Dados de monitoramento
   features: {
     badge: 'Coleta completa de dados',

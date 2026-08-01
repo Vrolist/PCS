@@ -171,6 +171,44 @@ export default {
     footerDesc: 'PVE Cluster Monitoring Platform',
   },
 
+  // Footer
+  footer: {
+    contact: 'Contact Us',
+    privacy: 'Privacy Policy',
+    brand: 'buladou',
+    allRights: 'All rights reserved',
+  },
+
+  // Privacy Policy
+  privacy: {
+    badge: 'Privacy Protection',
+    title: 'Privacy Policy',
+    subtitle: 'We respect and protect your privacy. This policy explains how we collect, use, and protect information.',
+    lastUpdated: 'Last updated: August 2026',
+    intro: 'This Privacy Policy applies to the PVE Cluster Scan and Management Platform (PCS). By using the platform, you agree to the information practices described in this policy.',
+    collect: {
+      title: 'Information We Collect',
+      desc: 'Account information: the username and email address you provide at registration, used for authentication and password recovery.\nCluster data: monitoring data from PVE clusters you connect, used solely for monitoring, analysis, and alert display.\nOperation logs: records of logins and configuration changes, used for security auditing and troubleshooting.',
+    },
+    use: {
+      title: 'How We Use Information',
+      desc: 'Account information is used for login authentication, password recovery, and service notifications.\nCluster data is used only to show you monitoring results, generate reports, and provide AI analysis suggestions.\nWe never sell, rent, or share your data with third parties unless required by law.',
+    },
+    security: {
+      title: 'Data Security',
+      desc: 'Data is transmitted and stored encrypted, with JWT token authentication on critical APIs.\nWe continuously improve security measures, but no internet transmission is absolutely secure. Please safeguard your account credentials and Agent tokens.',
+    },
+    rights: {
+      title: 'Your Rights',
+      desc: 'You have the right to view, export, or delete your account information at any time.\nYou can deactivate or delete connected clusters and agents; related data will be cleaned automatically per retention policy.',
+    },
+    contact: {
+      title: 'Contact Us',
+      desc: 'If you have any questions or suggestions about this Privacy Policy, please contact us through the following channels.',
+      emailLabel: 'Contact Email',
+    },
+  },
+
   // Monitor Data
   features: {
     badge: 'Full Data Collection',

@@ -39,6 +39,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: 'AI 助手', titleKey: 'nav.aiAssistant', noAuth: true },
   },
   {
+    path: '/privacy',
+    name: 'Privacy',
+    component: () => import('@/views/privacy/index.vue'),
+    meta: { title: '隐私政策', titleKey: 'footer.privacy', noAuth: true },
+  },
+  {
     path: '/',
     redirect: '/dashboard',
   },

@@ -164,6 +164,44 @@ export default {
     footerDesc: 'Plateforme de monitoring de cluster PVE',
   },
 
+  // Pied de page
+  footer: {
+    contact: 'Nous contacter',
+    privacy: 'Politique de confidentialité',
+    brand: 'buladou',
+    allRights: 'Tous droits réservés',
+  },
+
+  // Politique de confidentialité
+  privacy: {
+    badge: 'Protection de la vie privée',
+    title: 'Politique de confidentialité',
+    subtitle: 'Nous respectons et protégeons votre vie privée. Cette politique explique comment nous collectons, utilisons et protégeons les informations.',
+    lastUpdated: 'Dernière mise à jour : août 2026',
+    intro: 'Cette politique de confidentialité s\'applique à la plateforme de scan et de gestion de clusters PVE (PCS). En utilisant la plateforme, vous acceptez les pratiques décrites dans cette politique.',
+    collect: {
+      title: 'Informations que nous collectons',
+      desc: 'Informations de compte : le nom d\'utilisateur et l\'adresse e-mail fournis à l\'inscription, utilisés pour l\'authentification et la récupération du mot de passe.\nDonnées de cluster : les données de monitoring des clusters PVE que vous connectez, utilisées uniquement pour le monitoring, l\'analyse et l\'affichage des alertes.\nJournaux d\'opérations : enregistrements des connexions et modifications de configuration, pour l\'audit de sécurité et le dépannage.',
+    },
+    use: {
+      title: 'Comment nous utilisons les informations',
+      desc: 'Les informations de compte servent à l\'authentification, à la récupération de mot de passe et aux notifications de service.\nLes données de cluster ne servent qu\'à afficher les résultats de monitoring, générer des rapports et fournir des suggestions d\'analyse IA.\nNous ne vendons, ne louons et ne partageons jamais vos données avec des tiers, sauf si la loi l\'exige.',
+    },
+    security: {
+      title: 'Sécurité des données',
+      desc: 'Les données sont transmises et stockées de manière chiffrée, avec authentification par jeton JWT sur les API critiques.\nNous améliorons en permanence les mesures de sécurité, mais aucune transmission sur Internet n\'est absolument sûre. Protégez vos identifiants et vos jetons d\'agent.',
+    },
+    rights: {
+      title: 'Vos droits',
+      desc: 'Vous avez le droit de consulter, exporter ou supprimer vos informations de compte à tout moment.\nVous pouvez désactiver ou supprimer les clusters et agents connectés ; les données associées seront nettoyées automatiquement selon la politique de rétention.',
+    },
+    contact: {
+      title: 'Nous contacter',
+      desc: 'Si vous avez des questions ou suggestions concernant cette politique, contactez-nous via les canaux suivants.',
+      emailLabel: 'E-mail de contact',
+    },
+  },
+
   // Données de monitoring
   features: {
     badge: 'Collecte complète des données',

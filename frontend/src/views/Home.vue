@@ -189,39 +189,7 @@
     </section>
 
     <!-- Footer -->
-    <footer class="footer">
-      <div class="container">
-        <div class="footer-top">
-          <div class="footer-brand">
-            <div class="logo">
-              <div class="logo-icon-footer"><ServerIcon size="28" /></div>
-              <div class="logo-wrapper">
-                <span class="logo-main">PCS</span>
-                <span class="logo-sub"><span class="accent-l">P</span>ve<span class="accent-l">C</span>luster<span class="accent-l">S</span>can</span>
-              </div>
-            </div>
-            <p class="footer-desc">{{ t('home.footerDesc') }}</p>
-          </div>
-          <div class="footer-links">
-          <div class="footer-col">
-            <h4>{{ t('home.product') }}</h4>
-            <router-link to="/features">{{ t('nav.monitorData') }}</router-link>
-            <router-link to="/ai-assistant">{{ t('nav.aiAssistant') }}</router-link>
-            <a href="#features">{{ t('home.features') }}</a>
-            <a href="#">{{ t('home.pricing') }}</a>
-          </div>
-            <div class="footer-col">
-              <h4>{{ t('home.support') }}</h4>
-              <a href="#">{{ t('home.docs') }}</a>
-              <a href="#">API</a>
-            </div>
-          </div>
-        </div>
-        <div class="footer-bottom">
-          <p>&copy; 2026 pve-cluster-scan. All rights reserved.</p>
-        </div>
-      </div>
-    </footer>
+    <AppFooter />
   </div>
 </template>
 
@@ -230,6 +198,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useThemeStore } from '@/stores/theme'
 import { useAuthStore } from '@/stores/auth'
+import AppFooter from '@/components/AppFooter.vue'
 
 const { t } = useI18n()
 const themeStore = useThemeStore()
@@ -453,16 +422,6 @@ const steps = computed(() => [
   font-size: 14px;
   font-weight: 700;
   color: #409eff;
-}
-.logo-icon-footer {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #409eff, #337ecc);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
 }
 
 .nav-actions {
@@ -1130,62 +1089,6 @@ const steps = computed(() => [
   margin-bottom: 32px;
 }
 
-/* ============ Footer ============ */
-.footer {
-  padding: 60px 0 32px;
-  background: var(--footer-bg);
-  color: #909399;
-  transition: background 0.3s;
-}
-.footer-top {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 40px;
-}
-.footer-brand .logo {
-  margin-bottom: 12px;
-}
-.footer-brand .logo-main {
-  color: #e0e0f0;
-}
-.footer-brand .logo-sub {
-  color: #8080a0;
-}
-.footer-brand .accent-l {
-  color: #60b0ff;
-}
-.footer-desc {
-  font-size: 14px;
-  color: #707090;
-}
-.footer-links {
-  display: flex;
-  gap: 48px;
-}
-.footer-col h4 {
-  font-size: 14px;
-  font-weight: 600;
-  color: #c0c0d0;
-  margin-bottom: 12px;
-}
-.footer-col a {
-  display: block;
-  font-size: 14px;
-  color: #707090;
-  text-decoration: none;
-  margin-bottom: 8px;
-  transition: color 0.2s;
-}
-.footer-col a:hover {
-  color: #409eff;
-}
-.footer-bottom {
-  padding-top: 24px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  text-align: center;
-  font-size: 13px;
-}
-
 /* ============ Responsive ============ */
 @media (max-width: 900px) {
   .nav-links { display: none; }
@@ -1199,6 +1102,5 @@ const steps = computed(() => [
 @media (max-width: 640px) {
   .feature-grid { grid-template-columns: 1fr; }
   .hero-stats { flex-wrap: wrap; }
-  .footer-top { flex-direction: column; gap: 32px; }
 }
 </style>

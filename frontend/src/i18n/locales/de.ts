@@ -164,6 +164,44 @@ export default {
     footerDesc: 'PVE Cluster-Überwachungsplattform',
   },
 
+  // Fußzeile
+  footer: {
+    contact: 'Kontakt',
+    privacy: 'Datenschutzerklärung',
+    brand: 'buladou',
+    allRights: 'Alle Rechte vorbehalten',
+  },
+
+  // Datenschutzerklärung
+  privacy: {
+    badge: 'Datenschutz',
+    title: 'Datenschutzerklärung',
+    subtitle: 'Wir respektieren und schützen Ihre Privatsphäre. Diese Erklärung beschreibt, wie wir Informationen sammeln, verwenden und schützen.',
+    lastUpdated: 'Zuletzt aktualisiert: August 2026',
+    intro: 'Diese Datenschutzerklärung gilt für die PVE-Cluster-Scan- und -Verwaltungsplattform (PCS). Mit der Nutzung der Plattform stimmen Sie der in dieser Erklärung beschriebenen Datenverarbeitung zu.',
+    collect: {
+      title: 'Welche Informationen wir sammeln',
+      desc: 'Kontoinformationen: der bei der Registrierung angegebene Benutzername und die E-Mail-Adresse, verwendet für Authentifizierung und Passwort-Wiederherstellung.\nClusterdaten: Überwachungsdaten der verbundenen PVE-Cluster, ausschließlich für Überwachung, Analyse und Alarmanzeige.\nBetriebsprotokolle: Aufzeichnungen über Anmeldungen und Konfigurationsänderungen, für Sicherheitsaudits und Fehlerbehebung.',
+    },
+    use: {
+      title: 'Wie wir Informationen verwenden',
+      desc: 'Kontoinformationen werden für Anmeldeauthentifizierung, Passwort-Wiederherstellung und Service-Benachrichtigungen verwendet.\nClusterdaten werden nur zur Anzeige von Überwachungsergebnissen, zur Berichtserstellung und zur Bereitstellung von KI-Analysevorschlägen verwendet.\nWir verkaufen, vermieten oder teilen Ihre Daten niemals mit Dritten, außer gesetzlich vorgeschrieben.',
+    },
+    security: {
+      title: 'Datensicherheit',
+      desc: 'Daten werden verschlüsselt übertragen und gespeichert, kritische APIs verwenden JWT-Token-Authentifizierung.\nWir verbessern Sicherheitsmaßnahmen kontinuierlich, aber keine Internetübertragung ist absolut sicher. Bewahren Sie Ihre Anmeldeinformationen und Agent-Tokens sicher auf.',
+    },
+    rights: {
+      title: 'Ihre Rechte',
+      desc: 'Sie haben das Recht, Ihre Kontoinformationen jederzeit einzusehen, zu exportieren oder zu löschen.\nSie können verbundene Cluster und Agents deaktivieren oder löschen; zugehörige Daten werden gemäß Aufbewahrungsrichtlinie automatisch bereinigt.',
+    },
+    contact: {
+      title: 'Kontakt',
+      desc: 'Bei Fragen oder Vorschlägen zu dieser Datenschutzerklärung kontaktieren Sie uns bitte über die folgenden Kanäle.',
+      emailLabel: 'Kontakt-E-Mail',
+    },
+  },
+
   // Überwachungsdaten
   features: {
     badge: 'Volldatenerfassung',
