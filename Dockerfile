@@ -1,7 +1,7 @@
 # ============================================================
 # Stage 1: 前端构建
 # ============================================================
-FROM node:20-alpine AS frontend-build
+FROM node:24-alpine AS frontend-build
 WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm install --ignore-scripts --no-audit --no-fund
