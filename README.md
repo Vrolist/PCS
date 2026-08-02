@@ -76,6 +76,92 @@ curl -fsSL 'http://platform:8066/api/agent/install.sh?agent=1' -o agent.py
 python3 agent.py install     # 交互式配置 + 注册 + 安装 systemd
 ```
 
+## Docker 部署
+
+PCS 镜像发布在 GitHub Container Registry (ghcr.io)，支持多架构（amd64/arm64）。
+
+### 快速开始（SQLite）
+
+1. 拉取镜像
+
+```bash
+docker pull ghcr.io/vrolist/pcs:latest
+```
+
+2. 启动（SQLite 默认，数据存在卷中）
+
+```bash
+docker run -d --name pcs \
+  -p 8066:8066 \
+  -e DB_ENGINE=sqlite \
+  -v pcs_data:/app/data \
+  -v pcs_media:/app/media \
+  ghcr.io/vrolist/pcs:latest
+```
+
+3. 访问 `http://<服务器IP>:8066`
+   默认管理员：`pcs` / `123456`（首次启动自动创建）
+
+### 使用 docker compose（推荐）
+
+```yaml
+services:
+  app:
+    image: ghcr.io/vrolist/pcs:latest
+    container_name: pcs-app
+    environment:
+      DB_ENGINE: sqlite
+      DB_PATH: /app/data/db.sqlite3
+    ports:
+      - "8066:8066"
+    volumes:
+      - app_data:/app/data
+      - app_media:/app/media
+
+volumes:
+  app_data:
+  app_media:
+```
+
+### 中国大陆加速拉取
+
+由于 ghcr.io 在大陆直连不稳定，可使用国内镜像前缀替代：
+
+**南京大学镜像（推荐）**
+
+```bash
+docker pull ghcr.nju.edu.cn/vrolist/pcs:latest
+```
+
+**或 DockerProxy 镜像**
+
+```bash
+docker pull ghcr.dockerproxy.com/vrolist/pcs:latest
+```
+
+使用镜像站拉取后，如需保留原始标签，可重新打标签：
+
+```bash
+docker tag ghcr.nju.edu.cn/vrolist/pcs:latest ghcr.io/vrolist/pcs:latest
+```
+
+### 更新到最新版本
+
+一条命令：拉取最新镜像并重建容器（数据保留）
+
+```bash
+docker compose up -d --pull always --force-recreate
+```
+
+或手动两步
+
+```bash
+docker pull ghcr.io/vrolist/pcs:latest
+docker compose up -d
+```
+
+> ⚠️ 更新不会丢失数据（SQLite 数据在命名卷中）。不要使用 `docker compose down -v`，它会删除数据卷。
+
 ## 项目结构
 
 ```

@@ -76,6 +76,70 @@ curl -fsSL 'http://platform:8066/api/agent/install.sh?agent=1' -o agent.py
 python3 agent.py install     # Interactive config + register + systemd install
 ```
 
+## Docker Deployment
+
+PCS images are published on GitHub Container Registry (ghcr.io), supporting multi-arch (amd64/arm64).
+
+### Quick Start (SQLite)
+
+1. Pull the image
+
+```bash
+docker pull ghcr.io/vrolist/pcs:latest
+```
+
+2. Run (SQLite by default, data stored in volumes)
+
+```bash
+docker run -d --name pcs \
+  -p 8066:8066 \
+  -e DB_ENGINE=sqlite \
+  -v pcs_data:/app/data \
+  -v pcs_media:/app/media \
+  ghcr.io/vrolist/pcs:latest
+```
+
+3. Visit `http://<server-ip>:8066`
+   Default admin: `pcs` / `123456` (auto-created on first start)
+
+### Using docker compose (recommended)
+
+```yaml
+services:
+  app:
+    image: ghcr.io/vrolist/pcs:latest
+    container_name: pcs-app
+    environment:
+      DB_ENGINE: sqlite
+      DB_PATH: /app/data/db.sqlite3
+    ports:
+      - "8066:8066"
+    volumes:
+      - app_data:/app/data
+      - app_media:/app/media
+
+volumes:
+  app_data:
+  app_media:
+```
+
+### Updating to the Latest Version
+
+One-liner: pull the latest image and recreate the container (data preserved)
+
+```bash
+docker compose up -d --pull always --force-recreate
+```
+
+Or manually in two steps
+
+```bash
+docker pull ghcr.io/vrolist/pcs:latest
+docker compose up -d
+```
+
+> ⚠️ Updates preserve your data (SQLite lives in named volumes). Never use `docker compose down -v` — it deletes the data volumes.
+
 ## Project Structure
 
 ```
