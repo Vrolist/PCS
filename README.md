@@ -332,6 +332,12 @@ python manage.py test apps.accounts.tests_llm --verbosity=1
 
 ![微信加好友](screenshots/wechat-add-friend.jpg)
 
+**关注公众号**
+
+PCS 项目的开发相关信息会在公众号中逐步更新，例如分析功能、AI 能力、PVE 集群数据等。
+
+![微信公众号](screenshots/wechat-gongzhonghao.jpg)
+
 ## 许可证
 
 本项目采用 [GNU Affero General Public License v3.0](LICENSE) 协议。

@@ -310,6 +310,12 @@ If you find this project useful, feel free to scan the QR codes below to support
 
 ![WeChat Contact](screenshots/wechat-add-friend.jpg)
 
+**Follow Our WeChat Official Account**
+
+Development updates about the PCS project will be gradually published on our WeChat Official Account, such as analytics features, AI capabilities, and PVE cluster data.
+
+![WeChat Official Account](screenshots/wechat-gongzhonghao.jpg)
+
 ## License
 
 This project is licensed under the [GNU Affero General Public License v3.0](LICENSE).
