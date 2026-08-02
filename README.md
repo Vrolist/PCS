@@ -316,6 +316,22 @@ python manage.py test apps.agent_api apps.clusters apps.dashboard --verbosity=2
 python manage.py test apps.accounts.tests_llm --verbosity=1
 ```
 
+## 支持我们
+
+如果你觉得这个项目有用，欢迎扫描下方二维码支持我们 ❤️
+
+**微信赞赏**
+
+![微信赞赏](screenshots/wechat-pay.jpg)
+
+**支付宝赞赏**
+
+![支付宝赞赏](screenshots/zhifubao-pay.jpg)
+
+**添加微信好友交流**
+
+![微信加好友](screenshots/wechat-add-friend.jpg)
+
 ## 许可证
 
 本项目采用 [GNU Affero General Public License v3.0](LICENSE) 协议。

@@ -294,6 +294,22 @@ python manage.py test apps.agent_api apps.clusters apps.dashboard --verbosity=2
 python manage.py test apps.accounts.tests_llm --verbosity=1
 ```
 
+## Support Us
+
+If you find this project useful, feel free to scan the QR codes below to support us ❤️
+
+**WeChat Donation**
+
+![WeChat Donation](screenshots/wechat-pay.jpg)
+
+**Alipay Donation**
+
+![Alipay Donation](screenshots/zhifubao-pay.jpg)
+
+**Add Me on WeChat**
+
+![WeChat Contact](screenshots/wechat-add-friend.jpg)
+
 ## License
 
 This project is licensed under the [GNU Affero General Public License v3.0](LICENSE).
