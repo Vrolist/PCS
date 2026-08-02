@@ -123,13 +123,92 @@ volumes:
   app_media:
 ```
 
-### Auf die neueste Version aktualisieren
+### Auf die neueste Version aktualisieren (alle drei Datenbanken)
 
-Ein Befehl: neuestes Image laden und Container neu erstellen (Daten bleiben erhalten)
+Ein einziger Befehl:
 
 ```bash
 docker compose up -d --pull always --force-recreate
 ```
+
+| Flag | Funktion |
+|:-----|:---------|
+| `up -d` | Dienst starten (im Hintergrund) |
+| `--pull always` | Neuestes Image erzwungen laden (überschreibt lokalen Cache) |
+| `--force-recreate` | Container erzwungen neu erstellen (mit dem neuen Image) |
+| Benannte Volumes unangetastet | Daten bleiben erhalten ✅ |
+
+Vollständige Befehle pro Datenbank:
+
+| Datenbank | Befehl | Datenpfad |
+|:----------|:-------|:----------|
+| SQLite | `cd /opt/pcs-test && docker compose up -d --pull always --force-recreate` | `app_data`-Volume → `/app/data/db.sqlite3` ✅ |
+| MySQL | `cd /opt/pcs-mysql && docker compose up -d --pull always --force-recreate` | `mysql_data`-Volume → MySQL-Datenverzeichnis ✅ |
+| PostgreSQL | `cd /opt/pcs-postgres && docker compose up -d --pull always --force-recreate` | `pg_data`-Volume → PostgreSQL-Datenverzeichnis ✅ |
+
+> ⚠️ **Warum Ihre Daten sicher sind**: `docker compose up -d --pull always --force-recreate` berührt nur die Image- und Container-Ebenen, **niemals die benannten Volumes** (`app_data` / `mysql_data` / `pg_data`). Der alte Container wird entfernt → der neue Container mountet dasselbe Volume → die Daten bleiben vollständig.
+
+| Volume | Datenbank | Inhalt |
+|:-------|:----------|:-------|
+| `app_data` | SQLite | db.sqlite3 |
+| `mysql_data` | MySQL | MySQL-Datendateien |
+| `pg_data` | PostgreSQL | PG-Datendateien |
+
+> 🚫 **Niemals verwenden (löscht Daten)**: `docker compose down -v` (`-v` entfernt benannte Volumes = alle Daten weg); `docker volume rm xxx` (manuelles Löschen von Volumes).
+
+**Ein-Klick-Skript (für alle Datenbanken, empfehlenswert im Projekt zu hinterlegen):**
+
+```bash
+#!/bin/bash
+# update_pcs.sh - PCS-Image aktualisieren und neu starten (Daten bleiben erhalten)
+set -e
+
+# In das Compose-Verzeichnis wechseln (Argument oder automatische Erkennung)
+COMPOSE_DIR="${1:-.}"
+cd "$COMPOSE_DIR"
+
+echo "=== PCS-Image wird aktualisiert ==="
+docker compose pull          # neuestes Image laden
+
+echo "=== Container wird neu erstellt (Daten bleiben erhalten) ==="
+docker compose up -d --force-recreate
+
+echo "=== Überprüfung ==="
+docker compose ps
+echo "✅ Update abgeschlossen, Daten unangetastet"
+```
+
+Verwendung:
+
+```bash
+./update_pcs.sh /opt/pcs-test      # SQLite
+./update_pcs.sh /opt/pcs-mysql     # MySQL
+./update_pcs.sh /opt/pcs-postgres  # PostgreSQL
+```
+
+**Überprüfung nach dem Update:**
+
+```bash
+# 1. Neues Image ist aktiv
+docker compose ps
+
+# 2. Dienst-Zustand
+curl -s -o /dev/null -w "HTTP %{http_code}\n" http://localhost:8066/
+
+# 3. Daten sind noch da (der pcs-Superuser sollte existieren)
+docker compose exec app python3 manage.py shell -c \
+  "from apps.accounts.models import User; print(f'Benutzeranzahl: {User.objects.count()}')"
+
+# 4. Datenbanktabellen sind noch da
+docker compose exec mysql mysql -uroot -p* -e "USE pveclusterscan; SHOW TABLES;" 2>/dev/null | head -5
+```
+
+| Anforderung | Erfüllt |
+|:------------|:-------:|
+| Ein Befehl für Update + Neustart | ✅ `docker compose up -d --pull always --force-recreate` |
+| Unterstützt alle drei Datenbanken | ✅ Einfach in jedem Compose-Verzeichnis ausführen |
+| Keine Datenverluste | ✅ Benannte Volumes unangetastet, nur Image und Container ersetzt |
+| Funktioniert auch bei Ersterstellung | ✅ Befehl ist mit dem ersten Start kompatibel |
 
 Oder manuell in zwei Schritten
 

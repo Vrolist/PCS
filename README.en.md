@@ -123,13 +123,92 @@ volumes:
   app_media:
 ```
 
-### Updating to the Latest Version
+### Updating to the Latest Version (all three databases)
 
-One-liner: pull the latest image and recreate the container (data preserved)
+One command does it all:
 
 ```bash
 docker compose up -d --pull always --force-recreate
 ```
+
+| Flag | Purpose |
+|:-----|:--------|
+| `up -d` | Start services (background) |
+| `--pull always` | Force pull the latest image (overrides local cache) |
+| `--force-recreate` | Force recreate the container (with the new image) |
+| Named volumes untouched | Data preserved ✅ |
+
+Per-database complete commands:
+
+| Database | Command | Data location |
+|:---------|:--------|:--------------|
+| SQLite | `cd /opt/pcs-test && docker compose up -d --pull always --force-recreate` | `app_data` volume → `/app/data/db.sqlite3` ✅ |
+| MySQL | `cd /opt/pcs-mysql && docker compose up -d --pull always --force-recreate` | `mysql_data` volume → MySQL data directory ✅ |
+| PostgreSQL | `cd /opt/pcs-postgres && docker compose up -d --pull always --force-recreate` | `pg_data` volume → PostgreSQL data directory ✅ |
+
+> ⚠️ **Why your data is safe**: `docker compose up -d --pull always --force-recreate` only touches the image and container layers, **never the named volumes** (`app_data` / `mysql_data` / `pg_data`). The old container is removed → the new container mounts the same volume → data stays intact.
+
+| Volume | Database | Contents |
+|:-------|:---------|:---------|
+| `app_data` | SQLite | db.sqlite3 |
+| `mysql_data` | MySQL | MySQL data files |
+| `pg_data` | PostgreSQL | PG data files |
+
+> 🚫 **Never use (it deletes data)**: `docker compose down -v` (`-v` removes named volumes = all data gone); `docker volume rm xxx` (manually deleting volumes).
+
+**One-click script (for all databases, recommended to keep in your project):**
+
+```bash
+#!/bin/bash
+# update_pcs.sh - Update the PCS image and restart (data preserved)
+set -e
+
+# Enter the compose directory (accept an argument or auto-detect)
+COMPOSE_DIR="${1:-.}"
+cd "$COMPOSE_DIR"
+
+echo "=== Updating PCS image ==="
+docker compose pull          # pull the latest image
+
+echo "=== Recreating container (data preserved) ==="
+docker compose up -d --force-recreate
+
+echo "=== Verifying ==="
+docker compose ps
+echo "✅ Update complete, data untouched"
+```
+
+Usage:
+
+```bash
+./update_pcs.sh /opt/pcs-test      # SQLite
+./update_pcs.sh /opt/pcs-mysql     # MySQL
+./update_pcs.sh /opt/pcs-postgres  # PostgreSQL
+```
+
+**Verification after updating:**
+
+```bash
+# 1. New image is in effect
+docker compose ps
+
+# 2. Service health
+curl -s -o /dev/null -w "HTTP %{http_code}\n" http://localhost:8066/
+
+# 3. Data still there (the pcs superuser should still exist)
+docker compose exec app python3 manage.py shell -c \
+  "from apps.accounts.models import User; print(f'User count: {User.objects.count()}')"
+
+# 4. Database tables still there
+docker compose exec mysql mysql -uroot -p* -e "USE pveclusterscan; SHOW TABLES;" 2>/dev/null | head -5
+```
+
+| Requirement | Satisfied |
+|:------------|:---------:|
+| One command to update + restart | ✅ `docker compose up -d --pull always --force-recreate` |
+| Supports all three databases | ✅ Just run it in each compose directory |
+| Data not lost | ✅ Named volumes untouched, only image and container replaced |
+| Also works for first deployment | ✅ The command is compatible with first start |
 
 Or manually in two steps
 

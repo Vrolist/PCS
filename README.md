@@ -145,13 +145,92 @@ docker pull ghcr.dockerproxy.com/vrolist/pcs:latest
 docker tag ghcr.nju.edu.cn/vrolist/pcs:latest ghcr.io/vrolist/pcs:latest
 ```
 
-### 更新到最新版本
+### 更新到最新版本（三数据库通用）
 
-一条命令：拉取最新镜像并重建容器（数据保留）
+核心命令（一条搞定）：
 
 ```bash
 docker compose up -d --pull always --force-recreate
 ```
+
+| 参数 | 作用 |
+|:----|:-----|
+| `up -d` | 启动服务（后台） |
+| `--pull always` | 强制拉取最新镜像（覆盖本地缓存） |
+| `--force-recreate` | 强制重建容器（用新镜像替换） |
+| 命名卷不动 | 数据保留 ✅ |
+
+三种数据库各自的完整命令：
+
+| 数据库 | 命令 | 数据位置 |
+|:-------|:-----|:---------|
+| SQLite | `cd /opt/pcs-test && docker compose up -d --pull always --force-recreate` | `app_data` 卷 → `/app/data/db.sqlite3` ✅ |
+| MySQL | `cd /opt/pcs-mysql && docker compose up -d --pull always --force-recreate` | `mysql_data` 卷 → MySQL 数据目录 ✅ |
+| PostgreSQL | `cd /opt/pcs-postgres && docker compose up -d --pull always --force-recreate` | `pg_data` 卷 → PostgreSQL 数据目录 ✅ |
+
+> ⚠️ **为什么数据不会丢**：`docker compose up -d --pull always --force-recreate` 只动镜像和容器层，**不动命名卷**（`app_data` / `mysql_data` / `pg_data`）。旧容器删除 → 新容器挂载同一个卷 → 数据完整。
+
+| 卷 | 对应数据库 | 数据内容 |
+|:---|:---------|:---------|
+| `app_data` | SQLite | db.sqlite3 |
+| `mysql_data` | MySQL | MySQL 数据文件 |
+| `pg_data` | PostgreSQL | PG 数据文件 |
+
+> 🚫 **千万别用（会删数据）**：`docker compose down -v`（`-v` 会删除命名卷 = 数据全没）；`docker volume rm xxx`（手动删卷）。
+
+**一键脚本（三库通用，推荐放项目里）：**
+
+```bash
+#!/bin/bash
+# update_pcs.sh - 更新 PCS 镜像并重启（数据保留）
+set -e
+
+# 进入 compose 目录（支持参数传入或自动检测）
+COMPOSE_DIR="${1:-.}"
+cd "$COMPOSE_DIR"
+
+echo "=== 更新 PCS 镜像 ==="
+docker compose pull          # 拉取最新镜像
+
+echo "=== 重建容器（数据保留）==="
+docker compose up -d --force-recreate
+
+echo "=== 验证 ==="
+docker compose ps
+echo "✅ 更新完成，数据未动"
+```
+
+用法：
+
+```bash
+./update_pcs.sh /opt/pcs-test      # SQLite
+./update_pcs.sh /opt/pcs-mysql     # MySQL
+./update_pcs.sh /opt/pcs-postgres  # PostgreSQL
+```
+
+**更新后验证：**
+
+```bash
+# 1. 新镜像生效
+docker compose ps
+
+# 2. 服务健康
+curl -s -o /dev/null -w "HTTP %{http_code}\n" http://localhost:8066/
+
+# 3. 数据还在（超级用户 pcs 应该还在）
+docker compose exec app python3 manage.py shell -c \
+  "from apps.accounts.models import User; print(f'用户数: {User.objects.count()}')"
+
+# 4. 数据库表还在
+docker compose exec mysql mysql -uroot -p* -e "USE pveclusterscan; SHOW TABLES;" 2>/dev/null | head -5
+```
+
+| 需求 | 满足 |
+|:----|:----:|
+| 一条命令更新+重启 | ✅ `docker compose up -d --pull always --force-recreate` |
+| 支持三数据库 | ✅ 各自 compose 目录执行即可 |
+| 数据不丢失 | ✅ 命名卷不动，只换镜像和容器 |
+| 首次部署也适用 | ✅ 命令兼容首次启动 |
 
 或手动两步
 
