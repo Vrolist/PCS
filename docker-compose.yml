@@ -9,6 +9,15 @@ services:
       SUPERUSER_EMAIL: 1121031509@qq.com
       SUPERUSER_PASSWORD: "123456"
       PYTHONUNBUFFERED: "1"
+      
+      # LDAP 认证配置（可选）
+      # 设置为 "True" 启用 LDAP，"False" 或不设置则禁用
+      LDAP_ENABLED: "False"
+      # LDAP_SERVER_URI: "ldap://ldap.example.com:389"
+      # LDAP_BIND_DN: "cn=admin,dc=example,dc=com"
+      # LDAP_BIND_PASSWORD: "admin_password"
+      # LDAP_USER_SEARCH_BASE: "ou=users,dc=example,dc=com"
+      # LDAP_USER_SEARCH_FILTER: "(uid=%(user)s)"
     ports:
       - "8066:8066"
     volumes:

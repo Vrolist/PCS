@@ -21,9 +21,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # ============================================================
 FROM python:3.12-slim
 
-# 系统依赖
+# 系统依赖（包含 LDAP 开发库以支持 python-ldap）
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    sqlite3 curl && \
+    sqlite3 curl \
+    libldap2-dev libsasl2-dev && \
     rm -rf /var/lib/apt/lists/*
 
 # 复制 Python 依赖
