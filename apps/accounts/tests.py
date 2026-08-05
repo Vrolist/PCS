@@ -1,4 +1,4 @@
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
 from .models import User, PasswordResetCode
@@ -303,3 +303,162 @@ class IntegrationFlowTest(TestCase):
         user_info = self.client.get("/api/auth/user/", HTTP_AUTHORIZATION=f"Bearer {token}")
         self.assertEqual(user_info.status_code, 200)
         self.assertEqual(user_info.data["username"], "flowuser")
+
+
+class LDAPLoginTest(TestCase):
+    """测试 LDAP 认证登录功能（Issue #2 实现）"""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.url = "/api/auth/login/"
+        
+        # 创建本地用户
+        self.local_user = User.objects.create_user(
+            username="localuser",
+            email="local@example.com",
+            password="LocalPass123!",
+        )
+
+    @override_settings(LDAP_ENABLED=False)
+    def test_login_local_only(self):
+        """LDAP 禁用时，仅使用本地认证"""
+        resp = self.client.post(self.url, {
+            "username": "localuser",
+            "password": "LocalPass123!",
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("access", resp.data)
+        self.assertEqual(resp.data["user"]["username"], "localuser")
+
+    @override_settings(LDAP_ENABLED=False)
+    def test_login_local_wrong_password(self):
+        """LDAP 禁用时，本地认证失败应返回 400"""
+        resp = self.client.post(self.url, {
+            "username": "localuser",
+            "password": "wrongpassword",
+        })
+        self.assertEqual(resp.status_code, 400)
+
+    @override_settings(LDAP_ENABLED=False)
+    def test_login_nonexistent_user(self):
+        """LDAP 禁用时，不存在的用户应返回 400"""
+        resp = self.client.post(self.url, {
+            "username": "nonexistent",
+            "password": "anypassword",
+        })
+        self.assertEqual(resp.status_code, 400)
+
+    @override_settings(LDAP_ENABLED=True)
+    def test_login_with_ldap_enabled_local_success(self):
+        """LDAP 启用时，本地用户仍可正常登录"""
+        resp = self.client.post(self.url, {
+            "username": "localuser",
+            "password": "LocalPass123!",
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("access", resp.data)
+
+    @override_settings(LDAP_ENABLED=True)
+    def test_login_serializer_passes_none_for_ldap(self):
+        """LDAP 启用时，本地认证失败应返回 user=None（不抛异常）"""
+        from apps.accounts.serializers import LoginSerializer
+        
+        serializer = LoginSerializer(data={
+            "username": "nonexistent",
+            "password": "anypassword",
+        })
+        
+        # 验证 serializer 不会抛出异常
+        result = serializer.is_valid()
+        self.assertTrue(result)
+        
+        # 验证返回的 user 为 None
+        self.assertIsNone(serializer.validated_data.get("user"))
+
+    @override_settings(LDAP_ENABLED=True)
+    def test_login_with_email_ldap_enabled(self):
+        """LDAP 启用时，邮箱登录不存在的用户不报错"""
+        resp = self.client.post(self.url, {
+            "username": "nonexistent@example.com",
+            "password": "anypassword",
+        })
+        # 由于 LDAP 未真正连接，会返回 401
+        self.assertEqual(resp.status_code, 401)
+
+
+class LDAPBackendTest(TestCase):
+    """测试 LDAP 后端基本功能"""
+
+    def test_ldap_backend_import(self):
+        """测试 LDAP 后端模块可以正常导入"""
+        try:
+            from apps.accounts.ldap_backend import LDAPBackend
+            backend = LDAPBackend()
+            self.assertIsNotNone(backend)
+        except ImportError:
+            self.fail("无法导入 LDAPBackend")
+
+    def test_ldap_backend_authenticate_without_ldap_enabled(self):
+        """LDAP 未启用时，后端应返回 None"""
+        from apps.accounts.ldap_backend import LDAPBackend
+        from django.test import RequestFactory
+        
+        backend = LDAPBackend()
+        factory = RequestFactory()
+        request = factory.post('/login/')
+        
+        # 创建用户以确保 authenticate 不会因为用户不存在而失败
+        User.objects.create_user(
+            username="testuser",
+            password="testpass",
+        )
+        
+        with override_settings(LDAP_ENABLED=False):
+            result = backend.authenticate(request, username="testuser", password="testpass")
+            self.assertIsNone(result)
+
+    def test_ldap_backend_get_user(self):
+        """测试 get_user 方法"""
+        from apps.accounts.ldap_backend import LDAPBackend
+        
+        backend = LDAPBackend()
+        
+        # 创建用户
+        user = User.objects.create_user(
+            username="testuser2",
+            password="testpass",
+        )
+        
+        # 测试获取存在的用户
+        found_user = backend.get_user(user.id)
+        self.assertEqual(found_user, user)
+        
+        # 测试获取不存在的用户
+        not_found = backend.get_user(99999)
+        self.assertIsNone(not_found)
+
+
+class LDAPSettingsTest(TestCase):
+    """测试 LDAP 配置解析"""
+
+    @override_settings(LDAP_ENABLED=False)
+    def test_ldap_disabled_authentication_backends(self):
+        """LDAP 禁用时，应使用默认认证后端"""
+        from django.conf import settings
+        
+        # 验证 AUTHENTICATION_BACKENDS 包含默认后端
+        self.assertIn(
+            'django.contrib.auth.backends.ModelBackend',
+            settings.AUTHENTICATION_BACKENDS
+        )
+
+    def test_ldap_backend_class_path(self):
+        """测试 LDAP 后端类路径配置正确"""
+        from apps.accounts.ldap_backend import LDAPBackend
+        
+        # 验证后端类可以实例化
+        backend = LDAPBackend()
+        
+        # 验证必要的方法存在
+        self.assertTrue(hasattr(backend, 'authenticate'))
+        self.assertTrue(hasattr(backend, 'get_user'))

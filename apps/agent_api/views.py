@@ -1506,6 +1506,18 @@ class AgentInstallScriptView(APIView):
     """返回一键安装脚本或 agent.py 源码"""
     permission_classes = [AllowAny]
 
+    def _get_scheme(self, request):
+        """检测请求协议，支持反向代理场景"""
+        # 优先检查 X-Forwarded-Proto 头（Nginx/Apache 反向代理标准头）
+        forwarded_proto = request.META.get('HTTP_X_FORWARDED_PROTO', '')
+        if forwarded_proto:
+            return forwarded_proto.split(',')[0].strip()
+        # 其次检查 X-Forwarded-Ssl 头
+        if request.META.get('HTTP_X_FORWARDED_SSL', '').lower() == 'on':
+            return 'https'
+        # 最后使用 Django 的 is_secure()
+        return 'https' if request.is_secure() else 'http'
+
     def get(self, request):
         # ?agent=1 → 返回 agent.py 源码（供 install.sh 下载）
         if request.query_params.get("agent") == "1":
@@ -1514,7 +1526,7 @@ class AgentInstallScriptView(APIView):
         token = request.query_params.get("token", "")
         # platform_url 从请求中自动推导，不再需要参数
         host = request.get_host()
-        scheme = "https" if request.is_secure() else "http"
+        scheme = self._get_scheme(request)
         platform_url = f"{scheme}://{host}"
         uninstall = "uninstall" in request.query_params
 
@@ -1601,7 +1613,7 @@ echo "已下载: $INSTALL_DIR/agent.py"
 
 # 5. 从平台查询 PVE 连接信息
 echo "查询 PVE 信息..."
-PVE_INFO=$(curl -s "$PLATFORM_URL/api/agent/pve-info/?token=$TOKEN")
+PVE_INFO=$(curl -fsSL "$PLATFORM_URL/api/agent/pve-info/?token=$TOKEN")
 
 PVE_ENDPOINT=$(echo "$PVE_INFO" | python3 -c "import sys,json; print(json.load(sys.stdin).get('pve_endpoint',''))" 2>/dev/null || true)
 PVE_USER=$(echo "$PVE_INFO" | python3 -c "import sys,json; print(json.load(sys.stdin).get('pve_username','root@pam'))" 2>/dev/null || true)

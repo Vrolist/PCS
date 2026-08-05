@@ -194,3 +194,55 @@ SIMPLE_JWT = {
     'REFRESH_TOKEN_LIFETIME': timedelta(days=2),
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
+
+
+# ============================================================
+# LDAP 认证配置
+# ============================================================
+
+LDAP_ENABLED = os.environ.get('LDAP_ENABLED', 'False').lower() == 'true'
+
+if LDAP_ENABLED:
+    import ldap
+    from django_auth_ldap.config import LDAPSearch, GroupOfNamesType
+
+    # LDAP 服务器配置
+    AUTH_LDAP_SERVER_URI = os.environ.get('LDAP_SERVER_URI', 'ldap://ldap.example.com:389')
+    AUTH_LDAP_BIND_DN = os.environ.get('LDAP_BIND_DN', '')
+    AUTH_LDAP_BIND_PASSWORD = os.environ.get('LDAP_BIND_PASSWORD', '')
+    
+    # 用户搜索配置
+    AUTH_LDAP_USER_SEARCH = LDAPSearch(
+        os.environ.get('LDAP_USER_SEARCH_BASE', 'ou=users,dc=example,dc=com'),
+        ldap.SCOPE_SUBTREE,
+        os.environ.get('LDAP_USER_SEARCH_FILTER', '(uid=%(user)s)'),
+    )
+    
+    # 用户属性映射
+    AUTH_LDAP_USER_ATTR_MAP = {
+        "username": "uid",
+        "first_name": "givenName",
+        "last_name": "sn",
+        "email": "mail",
+    }
+    
+    # 可选：组搜索配置
+    LDAP_GROUP_SEARCH_BASE = os.environ.get('LDAP_GROUP_SEARCH_BASE', '')
+    if LDAP_GROUP_SEARCH_BASE:
+        AUTH_LDAP_GROUP_SEARCH = LDAPSearch(
+            LDAP_GROUP_SEARCH_BASE,
+            ldap.SCOPE_SUBTREE,
+            "(objectClass=groupOfNames)",
+        )
+        AUTH_LDAP_GROUP_TYPE = GroupOfNamesType()
+    
+    # 认证后端顺序：先 LDAP，后本地
+    AUTHENTICATION_BACKENDS = [
+        'apps.accounts.ldap_backend.LDAPBackend',
+        'django.contrib.auth.backends.ModelBackend',
+    ]
+else:
+    # 默认使用本地认证
+    AUTHENTICATION_BACKENDS = [
+        'django.contrib.auth.backends.ModelBackend',
+    ]

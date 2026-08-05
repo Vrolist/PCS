@@ -1,18 +1,22 @@
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
+from django.conf import settings
 from rest_framework import serializers
 
 from .models import User, PasswordResetCode, UserLog, UserLLMConfig, ChatConversation, ChatMessage, UserSystemPrompt
 
 
 class LoginSerializer(serializers.Serializer):
-    """支持用户名或邮箱登录"""
+    """支持用户名或邮箱登录，支持 LDAP 认证"""
     username = serializers.CharField(label="用户名/邮箱")
     password = serializers.CharField(label="密码", write_only=True)
 
     def validate(self, data):
         username = data["username"]
         password = data["password"]
+        
+        # 保存原始用户名用于 LDAP 认证
+        data["original_username"] = username
 
         # 判断是邮箱还是用户名
         if "@" in username:
@@ -20,9 +24,18 @@ class LoginSerializer(serializers.Serializer):
                 user_obj = User.objects.get(email=username)
                 username = user_obj.username
             except User.DoesNotExist:
-                raise serializers.ValidationError("该邮箱未注册")
+                # 如果启用了 LDAP，不立即报错，让 LDAP 尝试认证
+                if not getattr(settings, 'LDAP_ENABLED', False):
+                    raise serializers.ValidationError("该邮箱未注册")
 
+        # 尝试本地认证
         user = authenticate(username=username, password=password)
+        
+        # 如果本地认证失败且启用了 LDAP，返回 user=None，让 view 层处理 LDAP 认证
+        if not user and getattr(settings, 'LDAP_ENABLED', False):
+            data["user"] = None
+            return data
+        
         if not user:
             raise serializers.ValidationError("用户名/邮箱或密码错误")
         if not user.is_active:

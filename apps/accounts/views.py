@@ -80,9 +80,31 @@ def index(request):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def login_view(request):
+    from django.conf import settings
+    
     serializer = LoginSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
+    
+    # 获取验证后的用户（已通过本地认证）
     user = serializer.validated_data["user"]
+    
+    # 如果本地认证失败且启用了 LDAP，尝试 LDAP 认证
+    if not user and getattr(settings, 'LDAP_ENABLED', False):
+        username = serializer.validated_data.get('username')
+        password = serializer.validated_data.get('password')
+        
+        if username and password:
+            from django.contrib.auth import authenticate
+            user = authenticate(request=request, username=username, password=password)
+            
+            if user:
+                logger.info(f"LDAP 认证成功: {username}")
+            else:
+                logger.debug(f"LDAP 认证也失败: {username}")
+    
+    if not user:
+        return Response({"detail": "用户名或密码错误"}, status=status.HTTP_401_UNAUTHORIZED)
+    
     refresh = RefreshToken.for_user(user)
     log_user_action(user, "login", request=request)
     return Response({

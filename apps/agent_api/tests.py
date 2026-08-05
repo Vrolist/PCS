@@ -978,3 +978,112 @@ class AgentDeletedClusterTest(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.agent.refresh_from_db()
         self.assertEqual(self.agent.version, "0.2.0")
+
+
+class InstallScriptSchemeTest(TestCase):
+    """测试安装脚本的协议检测逻辑（Issue #1 修复）"""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.cluster = Cluster.objects.create(
+            name="test-cluster",
+            agent_token="test-token-scheme",
+        )
+
+    def test_get_scheme_with_x_forwarded_proto_https(self):
+        """测试 X-Forwarded-Proto 头为 https 时"""
+        from apps.agent_api.views import AgentInstallScriptView
+        view = AgentInstallScriptView()
+        
+        # 模拟带有 X-Forwarded-Proto 的请求
+        class MockRequest:
+            META = {'HTTP_X_FORWARDED_PROTO': 'https'}
+            def is_secure(self):
+                return False
+        
+        request = MockRequest()
+        scheme = view._get_scheme(request)
+        self.assertEqual(scheme, 'https')
+
+    def test_get_scheme_with_x_forwarded_proto_http(self):
+        """测试 X-Forwarded-Proto 头为 http 时"""
+        from apps.agent_api.views import AgentInstallScriptView
+        view = AgentInstallScriptView()
+        
+        class MockRequest:
+            META = {'HTTP_X_FORWARDED_PROTO': 'http'}
+            def is_secure(self):
+                return True
+        
+        request = MockRequest()
+        scheme = view._get_scheme(request)
+        self.assertEqual(scheme, 'http')
+
+    def test_get_scheme_with_x_forwarded_ssl_on(self):
+        """测试 X-Forwarded-Ssl 头为 on 时"""
+        from apps.agent_api.views import AgentInstallScriptView
+        view = AgentInstallScriptView()
+        
+        class MockRequest:
+            META = {'HTTP_X_FORWARDED_SSL': 'on'}
+            def is_secure(self):
+                return False
+        
+        request = MockRequest()
+        scheme = view._get_scheme(request)
+        self.assertEqual(scheme, 'https')
+
+    def test_get_scheme_with_is_secure_true(self):
+        """测试 is_secure() 返回 True 时"""
+        from apps.agent_api.views import AgentInstallScriptView
+        view = AgentInstallScriptView()
+        
+        class MockRequest:
+            META = {}
+            def is_secure(self):
+                return True
+        
+        request = MockRequest()
+        scheme = view._get_scheme(request)
+        self.assertEqual(scheme, 'https')
+
+    def test_get_scheme_with_is_secure_false(self):
+        """测试 is_secure() 返回 False 时（默认 http）"""
+        from apps.agent_api.views import AgentInstallScriptView
+        view = AgentInstallScriptView()
+        
+        class MockRequest:
+            META = {}
+            def is_secure(self):
+                return False
+        
+        request = MockRequest()
+        scheme = view._get_scheme(request)
+        self.assertEqual(scheme, 'http')
+
+    def test_install_script_contains_curl_fsSL(self):
+        """测试安装脚本中 curl 命令使用 -fsSL 参数"""
+        resp = self.client.get(
+            f"/api/agent/install.sh?token={self.cluster.agent_token}"
+        )
+        self.assertEqual(resp.status_code, 200)
+        content = resp.content.decode('utf-8')
+        
+        # 验证安装脚本中的 curl 命令使用 -fsSL
+        self.assertIn('curl -fsSL "$PLATFORM_URL/api/agent/pve-info/?token=$TOKEN"', content)
+        
+        # 验证下载 agent.py 的命令也使用 -fsSL
+        self.assertIn('curl -fsSL "$PLATFORM_URL/api/agent/install.sh?agent=1"', content)
+
+    def test_install_script_uses_get_scheme(self):
+        """测试安装脚本使用 _get_scheme 方法生成正确的 platform_url"""
+        resp = self.client.get(
+            f"/api/agent/install.sh?token={self.cluster.agent_token}",
+            HTTP_X_FORWARDED_PROTO='https',
+            HTTP_HOST='pve.example.com',
+        )
+        self.assertEqual(resp.status_code, 200)
+        content = resp.content.decode('utf-8')
+        
+        # 验证 platform_url 使用 https
+        self.assertIn('PLATFORM_URL="https://pve.example.com"', content)
