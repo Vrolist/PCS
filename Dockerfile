@@ -13,6 +13,12 @@ RUN npx vite build
 # ============================================================
 FROM python:3.12-slim AS backend-deps
 WORKDIR /app
+
+# 安装编译依赖（python-ldap 需要 libldap2-dev 和 libsasl2-dev）
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libldap2-dev libsasl2-dev gcc && \
+    rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
