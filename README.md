@@ -14,7 +14,7 @@ PVE 集群扫描与管理平台 — 基于 Django 5 + Vue 3 的全栈解决方�
 - **Agent 自动更新**：平台下发更新指令，Agent 自动升级并重启
 - **网络拓扑可视化**：SVG 交互式节点-网络连接图
 - **依赖链路可视化**：SVG 可拖拽缩放的依赖图（VM/LXC → 节点 → 存储 → 网络）
-- **用户认证**：JWT 登录/注册/密码重置，操作日志审计
+- **用户认证**：JWT 登录/注册/密码重置，操作日志审计，支持 LDAP 外部认证
 - **亮暗主题**：默认暗色，支持一键切换，偏好持久化
 
 ## 截图预览
@@ -29,7 +29,7 @@ PVE 集群扫描与管理平台 — 基于 Django 5 + Vue 3 的全栈解决方�
 
 | 层 | 技术 |
 |----|------|
-| 后端 | Python 3.12 + Django 5.0 + DRF + SimpleJWT |
+| 后端 | Python 3.12 + Django 5.0 + DRF + SimpleJWT + django-auth-ldap |
 | 前端 | Vue 3 + TypeScript + Vite + Element Plus + Pinia |
 | 图表 | ECharts + vue-echarts |
 | AI | LangChain + LangChain-OpenAI（LLM 流式 + Tool Calling） |
@@ -298,7 +298,7 @@ AI 助手使用 **LangChain Tool Calling** 按需查询数据，而非静态注�
 
 | 模块 | 端点 | 说明 |
 |------|------|------|
-| 认证 | `/api/auth/` | 登录/注册/密码重置/用户信息/操作日志 |
+| 认证 | `/api/auth/` | 登录/注册/密码重置/用户信息/操作日志/LDAP管理 |
 | Agent | `/api/agent/` | 注册/心跳/扫描上传/任务/版本/安装脚本 |
 | 仪表盘 | `/api/dashboard/` | 统计/告警/趋势/节点状态 |
 | 集群 | `/api/clusters/` | 集群 CRUD + Agent 列表 |
