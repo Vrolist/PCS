@@ -21,6 +21,10 @@ urlpatterns = [
     path("admin/users/<int:user_id>/change-password/", views.admin_change_password_view, name="admin-change-password"),
     path("admin/users/<int:user_id>/toggle-active/", views.admin_toggle_user_active_view, name="admin-toggle-active"),
     
+    # LDAP 状态检查（管理员专用）
+    path("ldap/status/", views.ldap_status_view, name="auth-ldap-status"),
+    path("ldap/test-connection/", views.ldap_test_connection_view, name="auth-ldap-test-connection"),
+    
     # LLM 配置
     path("llm-configs/", views.llm_config_list_view, name="auth-llm-configs"),
     path("llm-configs/<int:pk>/", views.llm_config_detail_view, name="auth-llm-config-detail"),

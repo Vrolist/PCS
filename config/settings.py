@@ -200,48 +200,97 @@ SIMPLE_JWT = {
 # LDAP 认证配置
 # ============================================================
 
+def _validate_ldap_config():
+    """验证 LDAP 配置，返回错误列表"""
+    errors = []
+    
+    if not LDAP_ENABLED:
+        return errors
+    
+    # 检查必需配置
+    server_uri = os.environ.get('LDAP_SERVER_URI', '')
+    if not server_uri or server_uri == 'ldap://ldap.example.com:389':
+        errors.append("LDAP_SERVER_URI 未配置或使用了默认示例值")
+    
+    bind_dn = os.environ.get('LDAP_BIND_DN', '')
+    bind_password = os.environ.get('LDAP_BIND_PASSWORD', '')
+    
+    if bind_dn and not bind_password:
+        errors.append("配置了 LDAP_BIND_DN 但未配置 LDAP_BIND_PASSWORD")
+    
+    user_search_base = os.environ.get('LDAP_USER_SEARCH_BASE', '')
+    if not user_search_base or user_search_base == 'ou=users,dc=example,dc=com':
+        errors.append("LDAP_USER_SEARCH_BASE 未配置或使用了默认示例值")
+    
+    return errors
+
+
 LDAP_ENABLED = os.environ.get('LDAP_ENABLED', 'False').lower() == 'true'
 
 if LDAP_ENABLED:
-    import ldap
-    from django_auth_ldap.config import LDAPSearch, GroupOfNamesType
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # 验证配置
+    config_errors = _validate_ldap_config()
+    if config_errors:
+        logger.warning(f"LDAP 配置警告: {config_errors}")
+        logger.warning("LDAP 认证将不可用，请检查环境变量配置")
+        # 配置有误时禁用 LDAP，避免启动失败
+        LDAP_ENABLED = False
+    
+    if LDAP_ENABLED:
+        try:
+            import ldap
+            from django_auth_ldap.config import LDAPSearch, GroupOfNamesType
 
-    # LDAP 服务器配置
-    AUTH_LDAP_SERVER_URI = os.environ.get('LDAP_SERVER_URI', 'ldap://ldap.example.com:389')
-    AUTH_LDAP_BIND_DN = os.environ.get('LDAP_BIND_DN', '')
-    AUTH_LDAP_BIND_PASSWORD = os.environ.get('LDAP_BIND_PASSWORD', '')
-    
-    # 用户搜索配置
-    AUTH_LDAP_USER_SEARCH = LDAPSearch(
-        os.environ.get('LDAP_USER_SEARCH_BASE', 'ou=users,dc=example,dc=com'),
-        ldap.SCOPE_SUBTREE,
-        os.environ.get('LDAP_USER_SEARCH_FILTER', '(uid=%(user)s)'),
-    )
-    
-    # 用户属性映射
-    AUTH_LDAP_USER_ATTR_MAP = {
-        "username": "uid",
-        "first_name": "givenName",
-        "last_name": "sn",
-        "email": "mail",
-    }
-    
-    # 可选：组搜索配置
-    LDAP_GROUP_SEARCH_BASE = os.environ.get('LDAP_GROUP_SEARCH_BASE', '')
-    if LDAP_GROUP_SEARCH_BASE:
-        AUTH_LDAP_GROUP_SEARCH = LDAPSearch(
-            LDAP_GROUP_SEARCH_BASE,
-            ldap.SCOPE_SUBTREE,
-            "(objectClass=groupOfNames)",
-        )
-        AUTH_LDAP_GROUP_TYPE = GroupOfNamesType()
-    
-    # 认证后端顺序：先 LDAP，后本地
-    AUTHENTICATION_BACKENDS = [
-        'apps.accounts.ldap_backend.LDAPBackend',
-        'django.contrib.auth.backends.ModelBackend',
-    ]
-else:
+            # LDAP 服务器配置
+            AUTH_LDAP_SERVER_URI = os.environ.get('LDAP_SERVER_URI', '')
+            AUTH_LDAP_BIND_DN = os.environ.get('LDAP_BIND_DN', '')
+            AUTH_LDAP_BIND_PASSWORD = os.environ.get('LDAP_BIND_PASSWORD', '')
+            
+            # 用户搜索配置
+            AUTH_LDAP_USER_SEARCH = LDAPSearch(
+                os.environ.get('LDAP_USER_SEARCH_BASE', ''),
+                ldap.SCOPE_SUBTREE,
+                os.environ.get('LDAP_USER_SEARCH_FILTER', '(uid=%(user)s)'),
+            )
+            
+            # 用户属性映射
+            AUTH_LDAP_USER_ATTR_MAP = {
+                "username": "uid",
+                "first_name": "givenName",
+                "last_name": "sn",
+                "email": "mail",
+            }
+            
+            # 可选：组搜索配置
+            LDAP_GROUP_SEARCH_BASE = os.environ.get('LDAP_GROUP_SEARCH_BASE', '')
+            if LDAP_GROUP_SEARCH_BASE:
+                AUTH_LDAP_GROUP_SEARCH = LDAPSearch(
+                    LDAP_GROUP_SEARCH_BASE,
+                    ldap.SCOPE_SUBTREE,
+                    "(objectClass=groupOfNames)",
+                )
+                AUTH_LDAP_GROUP_TYPE = GroupOfNamesType()
+            
+            # 认证后端顺序：先 LDAP，后本地
+            AUTHENTICATION_BACKENDS = [
+                'apps.accounts.ldap_backend.LDAPBackend',
+                'django.contrib.auth.backends.ModelBackend',
+            ]
+            
+            logger.info(f"LDAP 认证已启用: {AUTH_LDAP_SERVER_URI}")
+            
+        except ImportError as e:
+            logger.error(f"LDAP 依赖库导入失败: {e}")
+            logger.error("请确保已安装 python-ldap 和 django-auth-ldap")
+            LDAP_ENABLED = False
+        except Exception as e:
+            logger.error(f"LDAP 配置异常: {e}")
+            LDAP_ENABLED = False
+
+if not LDAP_ENABLED:
     # 默认使用本地认证
     AUTHENTICATION_BACKENDS = [
         'django.contrib.auth.backends.ModelBackend',

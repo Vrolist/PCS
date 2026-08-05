@@ -81,29 +81,61 @@ def index(request):
 @permission_classes([AllowAny])
 def login_view(request):
     from django.conf import settings
+    from .ldap_utils import validate_ldap_config, get_login_error_message
     
     serializer = LoginSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     
     # 获取验证后的用户（已通过本地认证）
     user = serializer.validated_data["user"]
+    username = serializer.validated_data.get('username', '')
     
     # 如果本地认证失败且启用了 LDAP，尝试 LDAP 认证
     if not user and getattr(settings, 'LDAP_ENABLED', False):
-        username = serializer.validated_data.get('username')
         password = serializer.validated_data.get('password')
         
         if username and password:
-            from django.contrib.auth import authenticate
-            user = authenticate(request=request, username=username, password=password)
+            # 先验证 LDAP 配置
+            is_valid, errors, warnings = validate_ldap_config()
+            if not is_valid:
+                logger.warning(f"LDAP 配置错误: {errors}")
+                return Response({
+                    "detail": get_login_error_message("ldap_config_error"),
+                    "ldap_errors": errors,
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
-            if user:
-                logger.info(f"LDAP 认证成功: {username}")
-            else:
-                logger.debug(f"LDAP 认证也失败: {username}")
+            # 尝试 LDAP 认证
+            try:
+                from django.contrib.auth import authenticate
+                user = authenticate(request=request, username=username, password=password)
+                
+                if user:
+                    logger.info(f"LDAP 认证成功: {username}")
+                else:
+                    logger.debug(f"LDAP 认证失败: {username}")
+                    return Response({
+                        "detail": get_login_error_message("ldap_auth_failed", username),
+                        "ldap_enabled": True,
+                    }, status=status.HTTP_401_UNAUTHORIZED)
+                    
+            except Exception as e:
+                logger.error(f"LDAP 认证异常: {username} - {e}")
+                return Response({
+                    "detail": get_login_error_message("ldap_connection_failed"),
+                    "error": str(e),
+                }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
     
     if not user:
-        return Response({"detail": "用户名或密码错误"}, status=status.HTTP_401_UNAUTHORIZED)
+        if getattr(settings, 'LDAP_ENABLED', False):
+            return Response({
+                "detail": get_login_error_message("local_auth_failed"),
+                "ldap_enabled": True,
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        else:
+            return Response({
+                "detail": get_login_error_message("local_auth_failed"),
+                "ldap_enabled": False,
+            }, status=status.HTTP_401_UNAUTHORIZED)
     
     refresh = RefreshToken.for_user(user)
     log_user_action(user, "login", request=request)
@@ -505,6 +537,58 @@ def system_prompt_detail_view(request, pk):
     serializer.is_valid(raise_exception=True)
     serializer.save()
     return Response(serializer.data)
+
+
+# ============================================================
+# LDAP 状态检查
+# ============================================================
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def ldap_status_view(request):
+    """
+    GET /api/auth/ldap/status/
+    获取 LDAP 配置状态和连接测试结果（仅管理员可用）
+    """
+    if not request.user.is_superuser:
+        return Response({"detail": "需要管理员权限"}, status=status.HTTP_403_FORBIDDEN)
+    
+    from .ldap_utils import get_ldap_status
+    status_data = get_ldap_status()
+    return Response(status_data)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def ldap_test_connection_view(request):
+    """
+    POST /api/auth/ldap/test-connection/
+    测试 LDAP 连接（仅管理员可用）
+    """
+    if not request.user.is_superuser:
+        return Response({"detail": "需要管理员权限"}, status=status.HTTP_403_FORBIDDEN)
+    
+    from .ldap_utils import test_ldap_connection, validate_ldap_config
+    
+    # 先验证配置
+    is_valid, errors, warnings = validate_ldap_config()
+    if not is_valid:
+        return Response({
+            "success": False,
+            "message": "LDAP 配置错误",
+            "errors": errors,
+            "warnings": warnings,
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    # 测试连接
+    success, message, details = test_ldap_connection()
+    
+    return Response({
+        "success": success,
+        "message": message,
+        "details": details,
+        "warnings": warnings,
+    })
 
 
 # ============================================================
